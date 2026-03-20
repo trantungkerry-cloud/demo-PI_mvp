@@ -42,7 +42,7 @@ type SidebarGroup = {
   title: string;
   open?: boolean;
   active?: boolean;
-  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "settings";
+  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "reports" | "settings";
   items?: { label: string; icon: SidebarIconName; active?: boolean }[];
 };
 
@@ -144,6 +144,7 @@ const sidebarGroups: SidebarGroup[] = [
   },
   { title: "Nhập khẩu", icon: "import" },
   { title: "Module tính phí", icon: "pricing" },
+  { title: "Báo cáo", icon: "reports" },
   {
     title: "Quản lý khách hàng",
     icon: "customers",
@@ -888,6 +889,10 @@ function SidebarGroupIcon({
 
   if (icon === "services") {
     return <Wrench className={common} strokeWidth={1.8} />;
+  }
+
+  if (icon === "reports") {
+    return <FileText className={common} strokeWidth={1.8} />;
   }
 
   return <Settings2 className={common} strokeWidth={1.8} />;
