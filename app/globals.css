@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sidebar: #f0f0f0;
+  --sidebar-foreground: #666666;
+  --sidebar-primary: #18181b;
+  --sidebar-border: #cbccc9;
+  --sidebar-accent: #cbccc9;
+  --sidebar-accent-foreground: #18181b;
+  --background: #f7f7f7;
+  --foreground: #111111;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --primary: #ff8400;
+  --secondary: #e7e8e5;
+  --muted: #f2f3f0;
+  --muted-foreground: #666666;
+  --border: #cbccc9;
+  --input: #cbccc9;
+  --radius-pill: 999px;
+  --radius-m: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-geist), sans-serif;
+}
+
+#__next {
+  background: var(--background);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ui-hover-card,
+.ui-hover-bg,
+.ui-hover-soft,
+.ui-hover-sidebar,
+.ui-hover-row-cell {
+  transition: background-color 160ms ease;
+}
+
+.ui-hover-card:hover,
+.ui-hover-card:active {
+  background: var(--card);
+}
+
+.ui-hover-bg:hover,
+.ui-hover-bg:active {
+  background: var(--background);
+}
+
+.ui-hover-soft:hover,
+.ui-hover-soft:active {
+  background: #f7f7f5;
+}
+
+.ui-hover-sidebar:hover,
+.ui-hover-sidebar:active {
+  background: #dcddda;
+}
+
+.ui-hover-row:hover .ui-hover-row-cell,
+.ui-hover-row:active .ui-hover-row-cell {
+  background: #b6e1ff;
+}
