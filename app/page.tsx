@@ -1,13 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
+  ArrowDownWideNarrow,
   BadgeDollarSign,
   Calculator,
-  Bell,
   Boxes,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Download,
   Eye,
@@ -17,6 +20,9 @@ import {
   History,
   Info,
   ListFilter,
+  Lock,
+  LockOpen,
+  Mail,
   MessagesSquare,
   MapPin,
   MoreVertical,
@@ -25,10 +31,12 @@ import {
   Plus,
   Route,
   Search,
+  Settings,
   Settings2,
   UsersRound,
   ShieldPlus,
   Copy,
+  Star,
   Truck,
   Trash2,
   Upload,
@@ -107,8 +115,14 @@ type CustomerListFilterConfig = {
 };
 type CustomerListFilterState = Record<CustomerListFilterKey, string[]>;
 type CustomerAccountStatus = "draft" | "active" | "locked";
-type CustomerSubPage = "list" | "contracts" | "services";
-type CustomerService = "Xuất khẩu/ nhập khẩu" | "Vận chuyển/ kho bãi" | "Default pickup/ delivery location";
+type CustomerSubPage = "list" | "contracts" | "services" | "create" | "create-contract";
+type CustomerService =
+  | "Ocean FCL"
+  | "Ocean LCL"
+  | "Air Freight"
+  | "Trucking"
+  | "Warehouse"
+  | "Custom Clearance";
 type ServiceConfigStatus = "draft" | "active";
 
 type ServiceConfigRow = {
@@ -125,6 +139,32 @@ type ServiceConfigFormState = {
   status: ServiceConfigStatus;
 };
 
+type CustomerCreateFormState = {
+  customerName: string;
+  englishName: string;
+  taxId: string;
+  customerGroup: string;
+  customerType: string;
+  services: string[];
+  priority: string;
+  salesperson: string;
+  source: string;
+  responsibleCompanies: string[];
+  phone: string;
+  email: string;
+  website: string;
+  tags: string[];
+  status: CustomerAccountStatus;
+  contractCode: string;
+};
+
+type CustomerCreateField = keyof CustomerCreateFormState | "services";
+type CustomerCreateFormErrors = Partial<Record<CustomerCreateField, string>>;
+type ToastState = {
+  kind: "success" | "error";
+  message: string;
+} | null;
+
 type ContractRow = {
   code: string;
   customer: string;
@@ -132,9 +172,138 @@ type ContractRow = {
   services: CustomerService[];
   contractType: string;
   term: string;
-  status: "draft" | "active" | "expired";
+  status: "draft" | "pending" | "accepted" | "active" | "expiring_soon" | "expired" | "terminated";
   signedAt: string;
 };
+
+type ContractCreateFormState = {
+  code: string;
+  customer: string;
+  contractCompany: string;
+  contractType: string;
+  signedAt: string;
+  validFrom: string;
+  validTo: string;
+  status: ContractRow["status"];
+  services: CustomerService[];
+  notes: string;
+};
+
+type CustomerAddressFormState = {
+  line1: string;
+  line2: string;
+  country: string;
+  city: string;
+  postalCode: string;
+  addressType: string;
+};
+
+type CustomerContactFormState = {
+  fullName: string;
+  role: string;
+  phone: string;
+  email: string;
+  department: string;
+  isPrimary: boolean;
+  notes: string;
+};
+
+type CustomerRouteFormState = {
+  shippingDirection: string;
+  transportMode: string;
+  incoterm: string;
+  cargoGroup: string;
+  cargoDescription: string;
+  hsCode: string;
+  exportCountry: string;
+  importCountry: string;
+  pol: string;
+  pod: string;
+  containerType: string;
+  estimatedVolume: string;
+  estimatedWeight: string;
+  otherRequirements: string;
+};
+
+function buildCustomerDetailWebsite(customerName: string) {
+  const slug = customerName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+
+  return slug ? `https://${slug.slice(0, 32)}.com` : "";
+}
+
+function buildEnglishCustomerName(customerName: string) {
+  const normalizedName = customerName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/Đ/g, "D")
+    .replace(/đ/g, "d");
+
+  const replacements: Array<[RegExp, string]> = [
+    [/\bCông ty TNHH\b/gi, "Limited Liability Company"],
+    [/\bCong ty TNHH\b/gi, "Limited Liability Company"],
+    [/\bCông ty Cổ phần\b/gi, "Joint Stock Company"],
+    [/\bCong ty Co phan\b/gi, "Joint Stock Company"],
+    [/\bCông ty CP\b/gi, "Joint Stock Company"],
+    [/\bCong ty CP\b/gi, "Joint Stock Company"],
+    [/\bCTCP\b/g, "Joint Stock Company"],
+    [/\bCông ty Liên doanh\b/gi, "Joint Venture Company"],
+    [/\bCong ty Lien doanh\b/gi, "Joint Venture Company"],
+    [/\bTập đoàn\b/gi, "Group"],
+    [/\bTap doan\b/gi, "Group"],
+    [/\bTổng công ty\b/gi, "Corporation"],
+    [/\bTong cong ty\b/gi, "Corporation"],
+    [/\bThương Mại Quốc Tế\b/gi, "International Trading"],
+    [/\bThuong Mai Quoc Te\b/gi, "International Trading"],
+    [/\bXuất Nhập Khẩu\b/gi, "Import Export"],
+    [/\bXuat Nhap Khau\b/gi, "Import Export"],
+    [/\bChuỗi Cung Ứng\b/gi, "Supply Chain"],
+    [/\bChuoi Cung Ung\b/gi, "Supply Chain"],
+    [/\bPhân phối Hàng tiêu dùng\b/gi, "Consumer Goods Distribution"],
+    [/\bPhan phoi Hang tieu dung\b/gi, "Consumer Goods Distribution"],
+    [/\bSản xuất Công nghiệp\b/gi, "Industrial Manufacturing"],
+    [/\bSan xuat Cong nghiep\b/gi, "Industrial Manufacturing"],
+    [/\bNông sản Toàn cầu\b/gi, "Global Agriculture"],
+    [/\bNong san Toan cau\b/gi, "Global Agriculture"],
+    [/\bThiết bị Y tế\b/gi, "Medical Devices"],
+    [/\bThiet bi Y te\b/gi, "Medical Devices"],
+    [/\bBán lẻ Đa kênh\b/gi, "Omnichannel Retail"],
+    [/\bBan le Da kenh\b/gi, "Omnichannel Retail"],
+    [/\bKho vận Miền Nam\b/gi, "Southern Warehousing"],
+    [/\bKho van Mien Nam\b/gi, "Southern Warehousing"],
+    [/\bThương Mại Dịch Vụ\b/gi, "Trading Service"],
+    [/\bThuong Mai Dich Vu\b/gi, "Trading Service"],
+    [/\bVận Tải Biển\b/gi, "Ocean Transport"],
+    [/\bVan Tai Bien\b/gi, "Ocean Transport"],
+    [/\bVận Tải\b/gi, "Transport"],
+    [/\bVan Tai\b/gi, "Transport"],
+    [/\bBiển Đông\b/gi, "East Sea"],
+    [/\bBien Dong\b/gi, "East Sea"],
+    [/\bViệt Nam\b/gi, "Vietnam"],
+    [/\bViet Nam\b/gi, "Vietnam"],
+    [/\bMiền Bắc\b/gi, "Northern Region"],
+    [/\bMien Bac\b/gi, "Northern Region"],
+    [/\bMiền Trung\b/gi, "Central Region"],
+    [/\bMien Trung\b/gi, "Central Region"],
+    [/\bMiền Nam\b/gi, "Southern Region"],
+    [/\bMien Nam\b/gi, "Southern Region"],
+    [/\bĐông Dương\b/gi, "Indochina"],
+    [/\bDong Duong\b/gi, "Indochina"],
+    [/\bToàn Cầu\b/gi, "Global"],
+    [/\bToan Cau\b/gi, "Global"]
+  ];
+
+  const translatedName = replacements.reduce(
+    (currentName, [pattern, replacement]) => currentName.replace(pattern, replacement),
+    normalizedName
+  );
+
+  return translatedName.replace(/\s+/g, " ").trim();
+}
 
 const sidebarGroups: SidebarGroup[] = [
   {
@@ -148,9 +317,9 @@ const sidebarGroups: SidebarGroup[] = [
     title: "Quản lý khách hàng",
     icon: "customers",
     items: [
-      { label: "Danh sách khách hàng", icon: "folder" },
-      { label: "Quản lý hợp đồng", icon: "description" },
-      { label: "Cấu hình dịch vụ", icon: "settings" }
+      { label: "Khách hàng", icon: "folder" },
+      { label: "Hợp đồng", icon: "description" },
+      { label: "Dịch vụ", icon: "settings" }
     ]
   },
   { title: "Cài đặt", icon: "settings" }
@@ -158,12 +327,180 @@ const sidebarGroups: SidebarGroup[] = [
 
 const tabs = ["Nháp", "Đang chờ xác nhận", "Đã xác nhận"];
 const desktopTableColumns = "176px minmax(0, 1.45fr) minmax(180px, 1.05fr) 120px 180px 150px 120px 49px";
-const customerTableColumns = "minmax(330px,1.65fr) minmax(159px,0.83fr) minmax(260px,1.25fr) 208px minmax(210px,1.05fr) 49px";
+const customerTableColumns =
+  "44px minmax(180px,0.92fr) minmax(320px,1.7fr) minmax(190px,1fr) minmax(180px,0.95fr) 208px";
 const contractTableColumns =
-  "minmax(148px,1.1fr) minmax(330px,2.15fr) minmax(110px,0.72fr) minmax(260px,1.25fr) minmax(186px,0.95fr) minmax(214px,1.05fr) 49px";
+  "minmax(158px,1.08fr) minmax(231px,1.5fr) minmax(180px,1.05fr) minmax(110px,0.72fr) minmax(151px,0.72fr) minmax(118px,0.63fr) minmax(130px,0.67fr) minmax(214px,1.05fr)";
 const serviceConfigTableColumns =
   "minmax(260px,1.45fr) minmax(360px,2.1fr) 180px 180px 160px 49px";
 const CREATE_BOOKING_CODE = "__create__";
+const customerCreateStatusOptions: SelectOption[] = [
+  { label: "Nháp", value: "draft" },
+  { label: "Đang hoạt động", value: "active" },
+  { label: "Tạm khóa", value: "locked" }
+];
+const customerContractCompanyOptions: SelectOption[] = [
+  { label: "Chọn công ty ký hợp đồng", value: "" },
+  { label: "PI Log", value: "PI Log" },
+  { label: "TDB", value: "TDB" }
+];
+const customerGroupOptions: SelectOption[] = [
+  { label: "Chọn nhóm KH", value: "" },
+  { label: "Corporate", value: "Corporate" },
+  { label: "Individual", value: "Individual" },
+  { label: "Government", value: "Government" },
+  { label: "SOE", value: "SOE" }
+];
+const customerTypeOptions: SelectOption[] = [
+  { label: "Chọn loại KH", value: "" },
+  { label: "Shipper", value: "Shipper" },
+  { label: "Consignee", value: "Consignee" },
+  { label: "Agent", value: "Agent" },
+  { label: "Co-loader", value: "Co-loader" },
+  { label: "Both (Shipper+Consignee)", value: "Both (Shipper+Consignee)" }
+];
+const customerCreateServiceOptions = [
+  "Ocean FCL",
+  "Ocean LCL",
+  "Air Freight",
+  "Trucking",
+  "Warehouse",
+  "Custom Clearance"
+] as const;
+const customerPriorityOptions = [
+  { value: "0", label: "Thường" },
+  { value: "1", label: "Quan trọng" },
+  { value: "2", label: "Ưu tiên cao" },
+  { value: "3", label: "VIP" }
+] as const;
+const customerSalespersonOptions: SelectOption[] = [
+  { label: "Chọn nhân viên KD", value: "" },
+  { label: "An Phạm", value: "An Phạm" },
+  { label: "Nguyễn Minh Châu", value: "Nguyễn Minh Châu" },
+  { label: "Trần Gia Hưng", value: "Trần Gia Hưng" },
+  { label: "Lê Bảo Trân", value: "Lê Bảo Trân" }
+];
+const customerSourceOptions: SelectOption[] = [
+  { label: "Chọn nguồn KH", value: "" },
+  { label: "Referral", value: "Referral" },
+  { label: "Cold Call", value: "Cold Call" },
+  { label: "Exhibition", value: "Exhibition" },
+  { label: "Website", value: "Website" },
+  { label: "Partnership", value: "Partnership" }
+];
+const customerResponsibleCompanyOptions = ["PIL", "TDB"] as const;
+const customerAddressCountryOptions: SelectOption[] = [
+  { label: "Việt Nam", value: "Việt Nam" },
+  { label: "Singapore", value: "Singapore" },
+  { label: "China", value: "China" }
+];
+const customerAddressProvinceOptions: Record<string, SelectOption[]> = {
+  "Việt Nam": [
+    { label: "Hồ Chí Minh", value: "Hồ Chí Minh" },
+    { label: "Hà Nội", value: "Hà Nội" },
+    { label: "Hải Phòng", value: "Hải Phòng" },
+    { label: "Bình Dương", value: "Bình Dương" }
+  ],
+  Singapore: [
+    { label: "Central Singapore", value: "Central Singapore" },
+    { label: "North East", value: "North East" }
+  ],
+  China: [
+    { label: "Shanghai", value: "Shanghai" },
+    { label: "Shenzhen", value: "Shenzhen" }
+  ]
+};
+const customerAddressTypeOptions: SelectOption[] = [
+  { label: "Head Office", value: "Head Office" },
+  { label: "Branch", value: "Branch" },
+  { label: "Warehouse", value: "Warehouse" },
+  { label: "Factory", value: "Factory" }
+];
+const customerContactRoleOptions: SelectOption[] = [
+  { label: "Sales Contact", value: "Sales Contact" },
+  { label: "Accounting", value: "Accounting" },
+  { label: "Operations", value: "Operations" },
+  { label: "Director", value: "Director" },
+  { label: "Other", value: "Other" }
+];
+const customerRouteDirectionOptions: SelectOption[] = [
+  { label: "Export (Xuất)", value: "Export (Xuất)" },
+  { label: "Import (Nhập)", value: "Import (Nhập)" },
+  { label: "Cross Trade", value: "Cross Trade" }
+];
+const customerRouteTransportModeOptions: SelectOption[] = [
+  { label: "FCL", value: "FCL" },
+  { label: "Ocean LCL", value: "Ocean LCL" },
+  { label: "Air", value: "Air" },
+  { label: "Truck", value: "Truck" },
+  { label: "Multimodal", value: "Multimodal" }
+];
+const customerRouteIncotermOptions: SelectOption[] = [
+  { label: "FOB", value: "FOB" },
+  { label: "CIF", value: "CIF" },
+  { label: "EXW", value: "EXW" },
+  { label: "DAP", value: "DAP" },
+  { label: "DDP", value: "DDP" },
+  { label: "CFR", value: "CFR" }
+];
+const customerRouteCargoGroupOptions: SelectOption[] = [
+  { label: "General Cargo", value: "General Cargo" },
+  { label: "Dangerous Goods", value: "Dangerous Goods" },
+  { label: "Reefer", value: "Reefer" },
+  { label: "OOG", value: "OOG" },
+  { label: "Hazardous", value: "Hazardous" }
+];
+const customerRouteCountryOptions: SelectOption[] = [
+  { label: "Việt Nam", value: "Việt Nam" },
+  { label: "Singapore", value: "Singapore" },
+  { label: "Hong Kong", value: "Hong Kong" },
+  { label: "China", value: "China" }
+];
+const customerRoutePolOptions: SelectOption[] = [
+  { label: "Cát Lái", value: "Cát Lái" },
+  { label: "Hải Phòng", value: "Hải Phòng" },
+  { label: "Đà Nẵng", value: "Đà Nẵng" },
+  { label: "Singapore", value: "Singapore" },
+  { label: "HKG", value: "HKG" }
+];
+const customerRoutePodOptions: SelectOption[] = [
+  { label: "Singapore", value: "Singapore" },
+  { label: "HKG", value: "HKG" },
+  { label: "Shanghai", value: "Shanghai" },
+  { label: "Los Angeles", value: "Los Angeles" }
+];
+const customerRouteContainerTypeOptions: SelectOption[] = [
+  { label: "20GP", value: "20GP" },
+  { label: "40GP", value: "40GP" },
+  { label: "40HC", value: "40HC" },
+  { label: "45HC", value: "45HC" },
+  { label: "20RF", value: "20RF" },
+  { label: "LCL", value: "LCL" },
+  { label: "ULD", value: "ULD" }
+];
+const customerSegmentOptions = [
+  "VIP",
+  "Strategic",
+  "SME",
+  "New Customer",
+  "Government",
+  "Export-focused"
+] as const;
+const contractTypeOptions: SelectOption[] = [
+  { label: "Chọn loại hợp đồng", value: "" },
+  { label: "Khung năm", value: "Khung năm" },
+  { label: "Theo chuyến", value: "Theo chuyến" },
+  { label: "Dịch vụ logistics", value: "Dịch vụ logistics" }
+];
+const contractStatusCreateOptions: SelectOption[] = [
+  { label: "Nháp", value: "draft" },
+  { label: "Chờ duyệt", value: "pending" },
+  { label: "Đã chấp thuận", value: "accepted" },
+  { label: "Đang hiệu lực", value: "active" },
+  { label: "Sắp hết hạn", value: "expiring_soon" },
+  { label: "Hết hiệu lực", value: "expired" },
+  { label: "Đã chấm dứt", value: "terminated" }
+];
 const createQuoteOptions = ["SQ-2026-0005", "SQ-2026-0012", "SQ-2026-0018", "SQ-2026-0024"];
 const bookingStatuses: BookingStatus[] = ["draft", "pending", "confirmed", "canceled"];
 const bookingStatusMeta: Record<
@@ -172,7 +509,7 @@ const bookingStatusMeta: Record<
 > = {
   draft: {
     label: "Nháp",
-    className: "bg-[#4A4A4A] text-white"
+    className: "bg-[#E5E7EB] text-black"
   },
   pending: {
     label: "Chờ xác nhận",
@@ -240,6 +577,10 @@ function getStatusFromCode(code: string): BookingStatus {
 function parseDisplayDate(date: string) {
   const [day, month, year] = date.split("/").map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1).getTime();
+}
+
+function arraysEqual<T>(left: T[], right: T[]) {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
 }
 
 function formatDateTimeDisplay(date: Date) {
@@ -363,7 +704,7 @@ const customerAccountStatusMeta: Record<
 > = {
   draft: {
     label: "Nháp",
-    className: "bg-[#4A4A4A] text-white"
+    className: "bg-[#E5E7EB] text-black"
   },
   active: {
     label: "Đang hoạt động",
@@ -909,7 +1250,7 @@ function RouteCell({
 
 function HeaderIconButton({ children }: { children: React.ReactNode }) {
   return (
-    <button className="ui-hover-card flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-border bg-background text-foreground shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] transition">
+    <button className="ui-hover-card flex h-8 w-8 items-center justify-center rounded-full border border-[#D7D7D7] bg-white text-foreground transition hover:bg-[#fafafa]">
       {children}
     </button>
   );
@@ -955,15 +1296,31 @@ function CustomerAccountStatusTag({ status }: { status: CustomerAccountStatus })
 const contractStatusMeta: Record<ContractRow["status"], { label: string; className: string }> = {
   draft: {
     label: "Nháp",
-    className: "bg-[#4A4A4A] text-white"
+    className: "bg-[#E5E7EB] text-black"
+  },
+  pending: {
+    label: "Chờ duyệt",
+    className: "bg-[#FEF3C7] text-[#92400E]"
+  },
+  accepted: {
+    label: "Đã chấp thuận",
+    className: "bg-[#DBEAFE] text-[#1D4ED8]"
   },
   active: {
-    label: "Còn hiệu lực",
+    label: "Đang hiệu lực",
     className: "bg-[#0879C9] text-white"
+  },
+  expiring_soon: {
+    label: "Sắp hết hạn",
+    className: "bg-[#F59E0B] text-white"
   },
   expired: {
     label: "Hết hiệu lực",
     className: "bg-[#F33233] text-white"
+  },
+  terminated: {
+    label: "Đã chấm dứt",
+    className: "bg-[#6B7280] text-white"
   }
 };
 const contractStatusFilterOptions = (Object.entries(contractStatusMeta) as [
@@ -988,10 +1345,31 @@ function ContractStatusTag({ status }: { status: ContractRow["status"] }) {
   );
 }
 
+function getContractExpiryTextClass(row: ContractRow) {
+  if (row.status === "draft") {
+    return "text-foreground";
+  }
+
+  const today = new Date();
+  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  const expiryTimestamp = parseDisplayDate(row.term.split(" - ")[1] ?? row.term);
+  const daysUntilExpiry = Math.ceil((expiryTimestamp - startOfToday) / (1000 * 60 * 60 * 24));
+
+  if (daysUntilExpiry < 30) {
+    return "text-[#F33233]";
+  }
+
+  if (daysUntilExpiry < 60) {
+    return "text-[#C58A00]";
+  }
+
+  return "text-foreground";
+}
+
 function CustomerServiceTag({
   service
 }: {
-  service: "Xuất khẩu/ nhập khẩu" | "Vận chuyển/ kho bãi" | "Default pickup/ delivery location";
+  service: CustomerService;
 }) {
   return (
     <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-3 py-2 text-[13px] font-medium leading-none text-foreground">
@@ -1129,7 +1507,13 @@ function FormField({
   options,
   type = "text",
   multiline = false,
-  readOnly = false
+  readOnly = false,
+  error,
+  placeholder,
+  variant = "default",
+  allowWrapWhenReadOnly = false,
+  autoSelectFirstOption = true,
+  matchDropdownWidth = false
 }: {
   label: string;
   value: string;
@@ -1138,63 +1522,519 @@ function FormField({
   type?: "text" | "number" | "date";
   multiline?: boolean;
   readOnly?: boolean;
+  error?: string;
+  placeholder?: string;
+  variant?: "default" | "inlineUnderline";
+  allowWrapWhenReadOnly?: boolean;
+  autoSelectFirstOption?: boolean;
+  matchDropdownWidth?: boolean;
 }) {
+  const isInlineUnderline = variant === "inlineUnderline";
+  const [isCustomSelectOpen, setIsCustomSelectOpen] = useState(false);
+  const customSelectRef = useRef<HTMLDivElement | null>(null);
+  const dateInputRef = useRef<HTMLInputElement | null>(null);
   const baseClassName =
-    "min-h-[46px] w-full rounded-2xl border border-input bg-card px-4 text-base text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]";
+    `min-h-[46px] w-full rounded-2xl border bg-card px-4 text-base text-foreground outline-none transition placeholder:text-muted-foreground ${
+      error
+        ? readOnly
+          ? "border-[#F33233]"
+          : "border-[#F33233] focus:border-[#F33233] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
+        : readOnly
+          ? "border-input"
+          : "border-input focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
+    }`;
+  const inlineBaseClassName = `min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2] focus:border-0 focus:border-b-0 ${
+    readOnly ? "cursor-default" : ""
+  }`;
   const inputPlaceholder =
-    type === "date"
-      ? "dd/mm/yyyy"
+    placeholder ??
+    (type === "date"
+      ? "Chọn ngày"
       : type === "number"
         ? "Nhập số liệu"
-        : `Nhập ${label.toLowerCase()}`;
+        : `Nhập ${label.toLowerCase()}`);
+  const visibleDropdownOptions = options?.filter((option) => option.value !== "") ?? [];
+  const openDatePicker = () => {
+    if (type !== "date" || readOnly) {
+      return;
+    }
+
+    try {
+      dateInputRef.current?.focus();
+      dateInputRef.current?.showPicker?.();
+    } catch {
+      // Some browsers restrict showPicker to direct user gestures only.
+      dateInputRef.current?.focus();
+    }
+  };
+
+  useEffect(() => {
+    if (!isCustomSelectOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customSelectRef.current?.contains(event.target as Node)) {
+        setIsCustomSelectOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isCustomSelectOpen]);
+
+  useEffect(() => {
+    if (!options || readOnly || value || !autoSelectFirstOption) {
+      return;
+    }
+
+    const firstSelectableOption = options.find((option) => option.value !== "") ?? options[0];
+    if (firstSelectableOption) {
+      onChange?.(firstSelectableOption.value);
+    }
+  }, [autoSelectFirstOption, onChange, options, readOnly, value]);
+
+  const renderControl = () =>
+    multiline ? (
+      <textarea
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        readOnly={readOnly}
+        placeholder={inputPlaceholder}
+        className={
+          isInlineUnderline
+            ? `${inlineBaseClassName} min-h-[72px] resize-none py-2 leading-6`
+            : `${baseClassName} resize-none py-3 leading-6`
+        }
+        rows={isInlineUnderline ? 2 : 3}
+      />
+    ) : options ? (
+      <div ref={customSelectRef} className="group relative">
+        <button
+          type="button"
+          onClick={() => {
+            if (!readOnly) {
+              setIsCustomSelectOpen(true);
+            }
+          }}
+          onFocus={() => {
+            if (!readOnly) {
+              setIsCustomSelectOpen(true);
+            }
+          }}
+          className={
+            isInlineUnderline
+              ? `${inlineBaseClassName} flex items-center justify-between gap-3 text-left`
+              : `${baseClassName} flex items-center justify-between gap-3 text-left`
+          }
+        >
+          <span
+            className={
+              value
+                ? "text-foreground"
+                : isInlineUnderline
+                  ? "text-[#C0C5D2]"
+                  : "text-muted-foreground"
+            }
+          >
+            {options.find((option) => option.value === value)?.label ?? inputPlaceholder}
+          </span>
+          <ChevronDown
+            className={`shrink-0 text-muted-foreground transition-opacity ${
+              isCustomSelectOpen ? "opacity-100" : readOnly ? "opacity-0" : "opacity-0 group-focus-within:opacity-100"
+            } ${isInlineUnderline ? "h-4 w-4" : "h-4 w-4"}`}
+            strokeWidth={1.8}
+          />
+        </button>
+        {isCustomSelectOpen ? (
+          <div
+            className={`absolute left-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-[14px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)] ${
+              matchDropdownWidth ? "w-full min-w-full" : "min-w-[220px] w-[50%]"
+            }`}
+          >
+            {visibleDropdownOptions.map((option, index) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    onChange?.(option.value);
+                    setIsCustomSelectOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-[14px] transition-colors hover:bg-[#B6E1FF] ${
+                    index === 0 ? "" : "border-t border-[#E7E6E9]"
+                  }`}
+                >
+                  <span className={isSelected ? "font-semibold text-[#2054a3]" : "text-foreground"}>
+                    {option.label}
+                  </span>
+                  {isSelected ? <Check className="h-4 w-4 shrink-0 text-[#2054a3]" strokeWidth={2} /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+        <ChevronDown
+          className="hidden"
+          strokeWidth={1.8}
+        />
+      </div>
+    ) : readOnly && isInlineUnderline && allowWrapWhenReadOnly ? (
+      <div className="min-h-[36px] w-full bg-transparent py-1 text-[15px] leading-5 text-foreground whitespace-normal break-words">
+        {value || inputPlaceholder}
+      </div>
+    ) : type === "date" ? (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={openDatePicker}
+          className={`${isInlineUnderline ? inlineBaseClassName : baseClassName} flex items-center text-left`}
+        >
+          <span className={value ? "text-foreground" : isInlineUnderline ? "text-[#C0C5D2]" : "text-muted-foreground"}>
+            {value || inputPlaceholder}
+          </span>
+        </button>
+        <input
+          ref={dateInputRef}
+          type="date"
+          value={value}
+          onChange={(event) => onChange?.(event.target.value)}
+          className="pointer-events-none absolute inset-0 opacity-0"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+      </div>
+    ) : (
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+        readOnly={readOnly}
+        placeholder={inputPlaceholder}
+        className={isInlineUnderline ? inlineBaseClassName : baseClassName}
+      />
+    );
+
+  if (isInlineUnderline) {
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-[144px_minmax(0,1fr)] items-center gap-4 px-0 py-0">
+          <div className="py-2 pr-4 text-[15px] font-semibold text-foreground">
+            {label}
+          </div>
+          <div className={`min-w-0 border-b border-transparent transition-colors ${readOnly ? "" : "focus-within:border-black"}`}>
+            {renderControl()}
+          </div>
+        </div>
+        {error ? <p className="text-xs text-[#F33233]">{error}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
       <div className="text-sm font-medium text-foreground">{label}</div>
-      {multiline ? (
-        <textarea
-          value={value}
-          onChange={(event) => onChange?.(event.target.value)}
-          readOnly={readOnly}
-          placeholder={inputPlaceholder}
-          className={`${baseClassName} resize-none py-3 leading-6`}
-          rows={3}
-        />
-      ) : options ? (
-        <div className="relative">
-          <select
-            value={value}
-            onChange={(event) => onChange?.(event.target.value)}
-            disabled={readOnly}
-            className={`${baseClassName} appearance-none pr-10`}
-          >
-            {options.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+      {renderControl()}
+      {error ? <p className="text-xs text-[#F33233]">{error}</p> : null}
+    </div>
+  );
+}
+
+function InlineFieldShell({
+  label,
+  error,
+  children,
+  readOnly = false
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+  readOnly?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-[144px_minmax(0,1fr)] items-center gap-4 px-0 py-0">
+        <div className="py-2 pr-4 text-[15px] font-semibold text-foreground">{label}</div>
+        <div className={`min-w-0 border-b border-transparent transition-colors ${readOnly ? "" : "focus-within:border-black"}`}>
+          {children}
+        </div>
+      </div>
+      {error ? <p className="text-xs text-[#F33233]">{error}</p> : null}
+    </div>
+  );
+}
+
+function InlineDropdownField({
+  label,
+  values,
+  options,
+  onToggle,
+  error,
+  readOnly = false
+}: {
+  label: string;
+  values: string[];
+  options: readonly string[];
+  onToggle: (value: string) => void;
+  error?: string;
+  readOnly?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isOpen]);
+
+  const selectedLabel = values.length > 0 ? values.join(", ") : "Chọn";
+
+  return (
+    <InlineFieldShell label={label} error={error} readOnly={readOnly}>
+      <div ref={containerRef} className="relative">
+        <button
+          type="button"
+          onClick={() => {
+            if (!readOnly) {
+              setIsOpen((current) => !current);
+            }
+          }}
+          className="flex min-h-[40px] w-full items-center justify-between gap-3 bg-transparent px-0 text-left text-[15px] text-foreground outline-none"
+        >
+          <span className={values.length > 0 ? "text-foreground" : "text-[#C0C5D2]"}>{selectedLabel}</span>
           <ChevronDown
-            className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className={`h-4 w-4 shrink-0 text-muted-foreground transition-opacity ${
+              isOpen ? "opacity-100" : "opacity-0"
+            }`}
             strokeWidth={1.8}
           />
+        </button>
+
+        {isOpen && !readOnly ? (
+          <div className="absolute left-0 top-full z-20 mt-1 max-h-64 min-w-[220px] w-[50%] overflow-y-auto rounded-[14px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)]">
+            {options.map((option, index) => {
+              const selected = values.includes(option);
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => onToggle(option)}
+                  className={`flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-[14px] text-foreground transition-colors hover:bg-[#B6E1FF] ${
+                    index === 0 ? "" : "border-t border-[#E7E6E9]"
+                  }`}
+                >
+                  <span className={selected ? "font-semibold text-[#2054a3]" : ""}>{option}</span>
+                  {selected ? <Check className="h-4 w-4 shrink-0 text-[#2054a3]" strokeWidth={2} /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    </InlineFieldShell>
+  );
+}
+
+function TableDropdownField({
+  value,
+  options,
+  onChange,
+  placeholder = "Chọn",
+  textSizeClass = "text-[15px]",
+  heightClass = "h-7"
+}: {
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  textSizeClass?: string;
+  heightClass?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className={`flex ${heightClass} w-full items-center justify-between gap-2 border-0 px-0 text-left ${textSizeClass} text-foreground transition-colors`}
+      >
+        <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>
+          {options.find((option) => option.value === value)?.label ?? placeholder}
+        </span>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-opacity ${isOpen ? "opacity-100" : "opacity-0"}`} strokeWidth={1.8} />
+      </button>
+
+      {isOpen ? (
+        <div className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-[180px] w-[50%] overflow-y-auto rounded-[12px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)]">
+          {options.map((option, index) => {
+            const isSelected = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setIsOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-[14px] transition-colors hover:bg-[#B6E1FF] ${
+                  index === 0 ? "" : "border-t border-[#E7E6E9]"
+                }`}
+              >
+                <span className={isSelected ? "font-semibold text-[#2054a3]" : "text-foreground"}>{option.label}</span>
+                {isSelected ? <Check className="h-4 w-4 shrink-0 text-[#2054a3]" strokeWidth={2} /> : null}
+              </button>
+            );
+          })}
         </div>
-      ) : (
-        <input
-          type={type}
-          value={value}
-          onChange={(event) => onChange?.(event.target.value)}
-          readOnly={readOnly}
-          placeholder={inputPlaceholder}
-          className={baseClassName}
-        />
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+function InlineCompactField({
+  label,
+  children
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <div className="grid grid-cols-[145px_minmax(0,1fr)] items-center gap-5 px-0 py-0">
+        <div className="whitespace-nowrap py-0.5 pr-4 text-[13px] font-semibold text-foreground">{label}</div>
+        <div className="min-w-0 border-b border-transparent transition-colors focus-within:border-black">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
 
 function HelperText({ children }: { children: React.ReactNode }) {
   return <p className="mt-2 text-xs text-muted-foreground">{children}</p>;
+}
+
+function resolveSelectOptionLabel(options: SelectOption[], value: string) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
+
+function getAvatarColorClass(name: string) {
+  const palette = [
+    "bg-[#5B8DEF]",
+    "bg-[#6C63FF]",
+    "bg-[#0F9D8A]",
+    "bg-[#E67E22]",
+    "bg-[#D35454]",
+    "bg-[#7E57C2]",
+    "bg-[#1F8A70]",
+    "bg-[#3B82F6]"
+  ] as const;
+  const hash = Array.from(name).reduce((total, char) => total + char.charCodeAt(0), 0);
+  return palette[hash % palette.length];
+}
+
+function TiptapRichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  readOnly = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  readOnly?: boolean;
+}) {
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: value || "",
+    editable: !readOnly,
+    immediatelyRender: false,
+    onUpdate: ({ editor: currentEditor }) => {
+      onChange(currentEditor.getHTML());
+    },
+    editorProps: {
+      attributes: {
+        class:
+          "tiptap-content min-h-[160px] px-4 py-3 text-[14px] text-foreground outline-none"
+      }
+    }
+  });
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const currentHtml = editor.getHTML();
+    if (currentHtml !== value) {
+      editor.commands.setContent(value || "", { emitUpdate: false });
+    }
+  }, [editor, value]);
+
+  return (
+    <div className="overflow-hidden rounded-[14px] border border-[#E7E6E9] bg-white">
+      <div className="flex items-center gap-1 border-b border-[#E7E6E9] bg-[#FAFAFA] px-3 py-2">
+        {[
+          { label: "B", action: () => editor?.chain().focus().toggleBold().run(), isActive: editor?.isActive("bold") },
+          { label: "I", action: () => editor?.chain().focus().toggleItalic().run(), isActive: editor?.isActive("italic") },
+          { label: "H1", action: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(), isActive: editor?.isActive("heading", { level: 1 }) },
+          { label: "• List", action: () => editor?.chain().focus().toggleBulletList().run(), isActive: editor?.isActive("bulletList") },
+          { label: "1. List", action: () => editor?.chain().focus().toggleOrderedList().run(), isActive: editor?.isActive("orderedList") },
+          { label: "Quote", action: () => editor?.chain().focus().toggleBlockquote().run(), isActive: editor?.isActive("blockquote") },
+          { label: "Undo", action: () => editor?.chain().focus().undo().run(), isActive: false, disabled: !editor?.can().chain().focus().undo().run() },
+          { label: "Redo", action: () => editor?.chain().focus().redo().run(), isActive: false, disabled: !editor?.can().chain().focus().redo().run() }
+        ].map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            onClick={item.action}
+            disabled={readOnly || item.disabled}
+            className={`inline-flex h-7 items-center rounded-[8px] px-2 text-[13px] font-medium transition ${
+              item.isActive ? "bg-[#EAF1FF] text-[#2054a3]" : "text-foreground hover:bg-[#EEF3FF]"
+            } ${readOnly || item.disabled ? "cursor-not-allowed opacity-40" : ""}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="relative">
+        {editor?.isEmpty ? (
+          <div className="pointer-events-none absolute left-4 top-3 text-[14px] text-[#9CA3AF]">
+            {placeholder}
+          </div>
+        ) : null}
+        <EditorContent editor={editor} />
+      </div>
+    </div>
+  );
 }
 
 function AdvancedMultiSelectFilter({
@@ -1410,6 +2250,7 @@ function AdvancedMultiSelectFilter({
 }
 
 export default function Page() {
+  const currentUserName = "An Phạm";
   const desktopTableShellRef = useRef<HTMLDivElement | null>(null);
   const desktopTableBodyRef = useRef<HTMLDivElement | null>(null);
   const customerTableBodyRef = useRef<HTMLDivElement | null>(null);
@@ -1419,6 +2260,12 @@ export default function Page() {
   const detailsIntroCardRef = useRef<HTMLDivElement | null>(null);
   const bookingConfirmationInputRef = useRef<HTMLInputElement | null>(null);
   const contractScanInputRef = useRef<HTMLInputElement | null>(null);
+  const contractCreateUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const contractImportInputRef = useRef<HTMLInputElement | null>(null);
+  const customerImportInputRef = useRef<HTMLInputElement | null>(null);
+  const customerAddressInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const customerContactInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const customerRouteInlineFormRef = useRef<HTMLDivElement | null>(null);
   const statusFilterRef = useRef<HTMLDivElement | null>(null);
   const customerStatusFilterRef = useRef<HTMLDivElement | null>(null);
   const contractStatusFilterRef = useRef<HTMLDivElement | null>(null);
@@ -1426,11 +2273,13 @@ export default function Page() {
   const contractExpiryFromInputRef = useRef<HTMLInputElement | null>(null);
   const contractExpiryToInputRef = useRef<HTMLInputElement | null>(null);
   const rowActionMenuRef = useRef<HTMLDivElement | null>(null);
-  const customerRowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const contractRowActionMenuRef = useRef<HTMLDivElement | null>(null);
   const detailsActionMenuRef = useRef<HTMLDivElement | null>(null);
-  const customerCreateMenuRef = useRef<HTMLDivElement | null>(null);
+  const customerTitleMenuRef = useRef<HTMLDivElement | null>(null);
+  const customerBulkActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const globalSearchMenuRef = useRef<HTMLDivElement | null>(null);
   const customerSearchRef = useRef<HTMLDivElement | null>(null);
+  const customerCreateContractRef = useRef<HTMLDivElement | null>(null);
   const originPortSearchRef = useRef<HTMLDivElement | null>(null);
   const destinationPortSearchRef = useRef<HTMLDivElement | null>(null);
   const [desktopRowsHeight, setDesktopRowsHeight] = useState<number | null>(null);
@@ -1460,19 +2309,38 @@ export default function Page() {
   const [draftContractExpiryRange, setDraftContractExpiryRange] = useState(getCurrentYearDateRange());
   const [isContractExpiryFilterOpen, setIsContractExpiryFilterOpen] = useState(false);
   const [openRowActionCode, setOpenRowActionCode] = useState<string | null>(null);
-  const [openCustomerRowActionKey, setOpenCustomerRowActionKey] = useState<string | null>(null);
   const [openContractRowActionCode, setOpenContractRowActionCode] = useState<string | null>(null);
   const [isDetailsActionMenuOpen, setIsDetailsActionMenuOpen] = useState(false);
-  const [isCustomerCreateMenuOpen, setIsCustomerCreateMenuOpen] = useState(false);
+  const [isCustomerTitleMenuOpen, setIsCustomerTitleMenuOpen] = useState(false);
+  const [isCustomerBulkActionMenuOpen, setIsCustomerBulkActionMenuOpen] = useState(false);
+  const [isGlobalSearchMenuOpen, setIsGlobalSearchMenuOpen] = useState(false);
+  const [customerStatusOverrides, setCustomerStatusOverrides] = useState<Record<string, CustomerAccountStatus>>({});
+  const [deletedCustomerKeys, setDeletedCustomerKeys] = useState<string[]>([]);
+  const [selectedSearchFilters, setSelectedSearchFilters] = useState<Record<string, string[]>>({});
+  const [selectedSearchGroupOptions, setSelectedSearchGroupOptions] = useState<string[]>([]);
+  const [isCustomerImportModalOpen, setIsCustomerImportModalOpen] = useState(false);
+  const [isContractImportModalOpen, setIsContractImportModalOpen] = useState(false);
   const [isServiceConfigModalOpen, setIsServiceConfigModalOpen] = useState(false);
   const [selectedRowCodes, setSelectedRowCodes] = useState<string[]>([]);
+  const [selectedCustomerRowKeys, setSelectedCustomerRowKeys] = useState<string[]>([]);
   const [destinationOpenSignal, setDestinationOpenSignal] = useState(0);
   const [openRoutePortMenu, setOpenRoutePortMenu] = useState<"origin" | "destination" | null>(null);
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
+  const [isCustomerCreateContractOpen, setIsCustomerCreateContractOpen] = useState(false);
+  const [customerCreateContractSearch, setCustomerCreateContractSearch] = useState("");
+  const [bookingListPageNumber, setBookingListPageNumber] = useState(1);
+  const [customerListPageNumber, setCustomerListPageNumber] = useState(1);
+  const [contractListPageNumber, setContractListPageNumber] = useState(1);
+  const [serviceConfigListPageNumber, setServiceConfigListPageNumber] = useState(1);
   const [customerShipmentPage, setCustomerShipmentPage] = useState(1);
   const [contractScanFileName, setContractScanFileName] = useState("");
+  const [contractCreateUploadFileName, setContractCreateUploadFileName] = useState("");
+  const [customerImportFileName, setCustomerImportFileName] = useState("");
+  const [contractImportFileName, setContractImportFileName] = useState("");
   const [contractScanFileUrl, setContractScanFileUrl] = useState("");
   const [contractScanUpdatedAt, setContractScanUpdatedAt] = useState("");
+  const [customerCreateWorkspaceTab, setCustomerCreateWorkspaceTab] = useState<"address" | "contacts" | "routes" | "notes">("address");
+  const [contractCreateWorkspaceTab, setContractCreateWorkspaceTab] = useState<"services" | "file" | "notes">("services");
   const [recentCustomerSearches, setRecentCustomerSearches] = useState<string[]>([]);
   const [recentOriginPortSearches, setRecentOriginPortSearches] = useState<string[]>([]);
   const [recentDestinationPortSearches, setRecentDestinationPortSearches] = useState<string[]>([]);
@@ -1482,13 +2350,93 @@ export default function Page() {
     description: "",
     status: "draft"
   });
+  const initialCustomerCreateForm: CustomerCreateFormState = {
+    customerName: "",
+    englishName: "",
+    taxId: "",
+    customerGroup: "",
+    customerType: "",
+    services: [],
+    priority: "0",
+    salesperson: currentUserName,
+    source: "",
+    responsibleCompanies: [],
+    phone: "",
+    email: "",
+    website: "",
+    tags: [],
+    status: "draft",
+    contractCode: ""
+  };
+  const initialContractCreateForm: ContractCreateFormState = {
+    code: "PIL-CNT-2025-001",
+    customer: "",
+    contractCompany: "",
+    contractType: "",
+    signedAt: "",
+    validFrom: "",
+    validTo: "",
+    status: "draft",
+    services: [],
+    notes: ""
+  };
+  const initialCustomerAddressForm: CustomerAddressFormState = {
+    line1: "",
+    line2: "",
+    country: "Việt Nam",
+    city: "Hồ Chí Minh",
+    postalCode: "",
+    addressType: "Head Office"
+  };
+  const initialCustomerContactForm: CustomerContactFormState = {
+    fullName: "",
+    role: "Sales Contact",
+    phone: "",
+    email: "",
+    department: "",
+    isPrimary: false,
+    notes: ""
+  };
+  const initialCustomerRouteForm: CustomerRouteFormState = {
+    shippingDirection: "Export (Xuất)",
+    transportMode: "FCL",
+    incoterm: "",
+    cargoGroup: "General Cargo",
+    cargoDescription: "",
+    hsCode: "",
+    exportCountry: "",
+    importCountry: "",
+    pol: "",
+    pod: "",
+    containerType: "",
+    estimatedVolume: "",
+    estimatedWeight: "",
+    otherRequirements: ""
+  };
+  const [customerCreateErrors, setCustomerCreateErrors] = useState<CustomerCreateFormErrors>({});
+  const [toast, setToast] = useState<ToastState>(null);
+  const [customerCreateForm, setCustomerCreateForm] = useState<CustomerCreateFormState>(initialCustomerCreateForm);
+  const [customerAddressForm, setCustomerAddressForm] = useState<CustomerAddressFormState>(initialCustomerAddressForm);
+  const [customerAddressRows, setCustomerAddressRows] = useState<CustomerAddressFormState[]>([]);
+  const [isCustomerAddressFormOpen, setIsCustomerAddressFormOpen] = useState(false);
+  const [customerContactForm, setCustomerContactForm] = useState<CustomerContactFormState>(initialCustomerContactForm);
+  const [customerContactRows, setCustomerContactRows] = useState<CustomerContactFormState[]>([]);
+  const [isCustomerContactFormOpen, setIsCustomerContactFormOpen] = useState(false);
+  const [customerRouteForm, setCustomerRouteForm] = useState<CustomerRouteFormState>(initialCustomerRouteForm);
+  const [customerRouteRows, setCustomerRouteRows] = useState<CustomerRouteFormState[]>([]);
+  const [isCustomerRouteFormOpen, setIsCustomerRouteFormOpen] = useState(false);
+  const [customerInternalNotes, setCustomerInternalNotes] = useState("");
+  const [contractCreateForm, setContractCreateForm] = useState<ContractCreateFormState>(initialContractCreateForm);
   const allBookingRows = Object.values(rowsByTab).flat();
   const isCustomerPage = currentPage === "customers";
   const isCustomerListPage = currentPage === "customers" && customerSubPage === "list" && !selectedCustomerKey;
+  const isCustomerCreatePage = currentPage === "customers" && customerSubPage === "create";
+  const isCustomerContractCreatePage = currentPage === "customers" && customerSubPage === "create-contract";
   const isCustomerContractsPage =
     currentPage === "customers" && customerSubPage === "contracts" && !selectedContractCode;
   const isCustomerServicesPage = currentPage === "customers" && customerSubPage === "services";
   const isCustomerDetailsPage = currentPage === "customers" && customerSubPage === "list" && !!selectedCustomerKey;
+  const isCustomerCreateLikePage = isCustomerCreatePage || isCustomerDetailsPage;
   const isContractDetailsPage = currentPage === "customers" && customerSubPage === "contracts" && !!selectedContractCode;
   const isBookingListPage = currentPage === "bookings" && !selectedBookingCode;
   const isCreatePage = selectedBookingCode === CREATE_BOOKING_CODE;
@@ -1602,8 +2550,56 @@ export default function Page() {
 
       return a.code.localeCompare(b.code, "vi");
     });
+  const extraCustomerPrefixes = [
+    "Công ty TNHH",
+    "Công ty Cổ phần",
+    "Tập đoàn",
+    "Công ty Liên doanh",
+    "Tổng công ty"
+  ] as const;
+  const extraCustomerIndustries = [
+    "Logistics",
+    "Thương mại Quốc tế",
+    "Xuất Nhập khẩu",
+    "Chuỗi Cung Ứng",
+    "Phân phối Hàng tiêu dùng",
+    "Sản xuất Công nghiệp",
+    "Nông sản Toàn cầu",
+    "Thiết bị Y tế",
+    "Bán lẻ Đa kênh",
+    "Kho vận Miền Nam"
+  ] as const;
+  const extraCustomerSuffixes = [
+    "Việt Nam",
+    "Miền Bắc",
+    "Miền Trung",
+    "Miền Nam",
+    "Đông Dương",
+    "Toàn Cầu",
+    "Asia Pacific",
+    "Holdings",
+    "Group",
+    "Corporation"
+  ] as const;
+  const extraLongDescriptors = [
+    "",
+    "và Dịch vụ Hậu cần Tích hợp",
+    "với Hệ sinh thái Kho vận và Phân phối Toàn quốc",
+    "cho Chuỗi Bán lẻ, FMCG và Thương mại Điện tử",
+    "Chuyên giải pháp Vận tải Đa phương thức",
+    "Chuyên Quản lý Đơn hàng, Fulfillment và Last-mile",
+    "và Giải pháp Xuất nhập khẩu cho Khách hàng Doanh nghiệp",
+    "với Dịch vụ Vận chuyển Quốc tế và Đại lý Hải quan"
+  ] as const;
+  const extraCustomerNames = Array.from({ length: 100 }, (_, index) => {
+    const prefix = extraCustomerPrefixes[index % extraCustomerPrefixes.length];
+    const industry = extraCustomerIndustries[index % extraCustomerIndustries.length];
+    const suffix = extraCustomerSuffixes[Math.floor(index / extraCustomerPrefixes.length) % extraCustomerSuffixes.length];
+    const descriptor = extraLongDescriptors[index % extraLongDescriptors.length];
+    return `${prefix} ${industry} ${suffix} ${descriptor}`.replace(/\s+/g, " ").trim();
+  });
   const customerSearchOptions = sortSelectOptions(
-    [...new Set(allBookingRows.map((row) => row.customer))].map((customer) => ({
+    [...new Set([...allBookingRows.map((row) => row.customer), ...extraCustomerNames])].map((customer) => ({
       label: customer,
       value: customer
     }))
@@ -1627,64 +2623,120 @@ export default function Page() {
       ];
     })
   ) as Record<string, { contactName: string; email: string; phone: string }>;
-  const customerRows = customerSearchOptions.map((option, index) => {
+  const baseCustomerRows = customerSearchOptions.map((option, index) => {
     const totalBookings = allBookingRows.filter((row) => row.customer === option.value).length;
     const accountStatuses: CustomerAccountStatus[] = ["draft", "active", "active", "locked"];
-    const availableTags = [
-      ["VIP", "Strategic"],
-      ["Strategic"],
-      ["Key Account"],
-      ["VIP"],
-      ["Growth"],
-      ["Priority"]
-    ];
+    const customerTypes = ["Shipper", "Consignee", "Agent", "Co-loader", "Both (Shipper+Consignee)"] as const;
+    const fakeTaxIds = [
+      "4827165903",
+      "7159042683",
+      "2638491057",
+      "9047153826",
+      "5382609417",
+      "1764950283",
+      "8293504716",
+      "6402819573",
+      "3571948260",
+      "9184620753",
+      "2048573619",
+      "7613094825"
+    ] as const;
+    const availableGroups = ["Corporate", "Individual", "Government", "SOE"] as const;
     const availableServices = [
-      ["Xuất khẩu/ nhập khẩu", "Vận chuyển/ kho bãi"],
-      ["Vận chuyển/ kho bãi"],
-      ["Default pickup/ delivery location"],
-      ["Xuất khẩu/ nhập khẩu", "Default pickup/ delivery location"],
-      ["Xuất khẩu/ nhập khẩu"],
-      ["Vận chuyển/ kho bãi", "Default pickup/ delivery location"]
+      ["Ocean FCL", "Warehouse"],
+      ["Air Freight"],
+      ["Trucking"],
+      ["Ocean LCL", "Trucking"],
+      ["Warehouse"],
+      ["Custom Clearance", "Air Freight"]
     ] as const;
 
+    const companyCode = index % 2 === 0 ? "PIL" : "TDB";
+    const companyAssignment = companyCode;
+    const currentYear = new Date().getFullYear();
+
     return {
+      customerCode: `${companyCode}-CUS-${currentYear}-${String(index + 1).padStart(4, "0")}`,
       customer: option.value,
-      taxId: `03012345${String(60 + index).padStart(2, "0")}`,
-      contractCompany: index % 2 === 0 ? "PI Log" : "TDB",
+      taxId: fakeTaxIds[index % fakeTaxIds.length],
+      customerType: customerTypes[index % customerTypes.length],
+      contractCompany: companyAssignment,
       contactName: customerContactDirectory[option.value]?.contactName ?? "",
       email: customerContactDirectory[option.value]?.email ?? "",
       phone: customerContactDirectory[option.value]?.phone ?? "",
       totalBookings,
       status: accountStatuses[index % accountStatuses.length],
-      customerGroup: availableTags[index % availableTags.length][0],
+      customerGroup: availableGroups[index % availableGroups.length],
       services: [...availableServices[index % availableServices.length]]
     };
   });
-  const contractRows: ContractRow[] = customerRows.map((row, index) => ({
-    code: `HD-2026-${String(1001 + index).padStart(4, "0")}`,
-    customer: row.customer,
-    contractCompany: row.contractCompany,
-    services: [...row.services],
-    contractType: index % 3 === 0 ? "Khung năm" : index % 3 === 1 ? "Theo chuyến" : "Dịch vụ logistics",
-    term: index % 3 === 1 ? "01/03/2026 - 30/09/2026" : "01/01/2026 - 31/12/2026",
-    status: index % 5 === 0 ? "draft" : index % 4 === 0 ? "expired" : "active",
-    signedAt: `${String(10 + (index % 18)).padStart(2, "0")}/03/2026`
-  }));
+  const customerRows = baseCustomerRows
+    .filter((row) => !deletedCustomerKeys.includes(row.customer))
+    .map((row) => {
+      const statusOverride = customerStatusOverrides[row.customer];
+      return statusOverride ? { ...row, status: statusOverride } : row;
+    });
+  const contractRows: ContractRow[] = customerRows.map((row, index) => {
+    const seededContractStatuses: ContractRow["status"][] = [
+      "draft",
+      "pending",
+      "accepted",
+      "active",
+      "expiring_soon",
+      "expired",
+      "terminated"
+    ];
+    const status = seededContractStatuses[index % seededContractStatuses.length];
+    const nearExpiryTerms = [
+      "01/01/2025 - 12/04/2026",
+      "15/02/2025 - 08/05/2026",
+      "01/03/2025 - 20/05/2026"
+    ] as const;
+    const longTerms = [
+      "01/01/2025 - 31/12/2026",
+      "15/01/2025 - 30/11/2026",
+      "01/04/2025 - 31/03/2027"
+    ] as const;
+    const expiredTerms = [
+      "01/01/2025 - 31/12/2025",
+      "15/02/2025 - 28/02/2026",
+      "01/03/2025 - 15/03/2026"
+    ] as const;
+
+    let term: string = longTerms[index % longTerms.length];
+    if (status === "expired") {
+      term = expiredTerms[index % expiredTerms.length];
+    } else if (status === "expiring_soon") {
+      term = nearExpiryTerms[index % nearExpiryTerms.length];
+    }
+
+    return {
+      code: `${(row.contractCompany.split(" / ")[0] ?? "PIL")}-CNT-2025-${String(index + 1).padStart(3, "0")}`,
+      customer: row.customer,
+      contractCompany: row.contractCompany,
+      services: [...row.services],
+      contractType:
+        index % 3 === 0 ? "Service Contract" : index % 3 === 1 ? "Framework Agreement" : "Spot Agreement",
+      term,
+      status,
+      signedAt: `${String(10 + (index % 18)).padStart(2, "0")}/03/2025`
+    };
+  });
   const serviceConfigRows: ServiceConfigRow[] = (
     [
       {
-        service: "Xuất khẩu/ nhập khẩu",
-        description: "Dịch vụ xử lý booking, chứng từ và vận hành xuất nhập khẩu.",
+        service: "Ocean FCL",
+        description: "Dịch vụ vận tải biển và điều phối lô hàng quốc tế.",
         status: "active" as const
       },
       {
-        service: "Vận chuyển/ kho bãi",
-        description: "Điều phối vận chuyển nội địa, lưu kho và bàn giao hàng hóa.",
+        service: "Air Freight",
+        description: "Dịch vụ vận tải hàng không và xử lý giao nhận nhanh.",
         status: "active" as const
       },
       {
-        service: "Default pickup/ delivery location",
-        description: "Thiết lập địa điểm lấy và giao hàng mặc định cho từng hồ sơ.",
+        service: "Warehouse",
+        description: "Dịch vụ lưu kho, xử lý hàng và điều phối xuất nhập kho.",
         status: "draft" as const
       }
     ] satisfies Array<Pick<ServiceConfigRow, "service" | "description" | "status">>
@@ -1696,9 +2748,169 @@ export default function Page() {
   const selectedCustomerRow = selectedCustomerKey
     ? customerRows.find((row) => row.customer === selectedCustomerKey) ?? null
     : null;
+  const isCustomerDetailEditable = selectedCustomerRow?.status === "draft";
+  const canEditCustomerDetailTabs = !isCustomerDetailsPage || selectedCustomerRow?.status !== "locked";
+  const matchedCustomerContracts = selectedCustomerRow
+    ? contractRows.filter((row) => row.customer === selectedCustomerRow.customer)
+    : [];
+  const customerDetailPrimaryCompany = selectedCustomerRow?.contractCompany.split(" / ")[0] ?? "";
+  const customerDetailSeededAddressRows: CustomerAddressFormState[] = selectedCustomerRow
+    ? [
+        {
+          line1: "Tầng 5, 123 Nguyễn Huệ",
+          line2: "Phường Bến Nghé, Quận 1",
+          city: "Hồ Chí Minh",
+          country: "Việt Nam",
+          postalCode: "700000",
+          addressType: "Head Office"
+        }
+      ]
+    : [];
+  const customerDetailSeededContactRows: CustomerContactFormState[] = selectedCustomerRow
+    ? [
+        {
+          fullName: selectedCustomerRow.contactName || "Nguyễn Minh Châu",
+          role: "Sales Contact",
+          phone: selectedCustomerRow.phone,
+          email: selectedCustomerRow.email,
+          department: "Logistics",
+          isPrimary: true,
+          notes: ""
+        }
+      ]
+    : [];
+  const customerDetailSeededRouteRows: CustomerRouteFormState[] = selectedCustomerRow
+    ? [
+        {
+          shippingDirection: "Export (Xuất)",
+          transportMode: selectedCustomerRow.services[0]?.includes("Air")
+            ? "Air"
+            : selectedCustomerRow.services[0]?.includes("Truck")
+              ? "Truck"
+              : selectedCustomerRow.services[0]?.includes("Warehouse")
+                ? "Multimodal"
+                : "FCL",
+          incoterm: "FOB",
+          cargoGroup: "General Cargo",
+          cargoDescription: "General merchandise",
+          hsCode: "392690",
+          exportCountry: "Việt Nam",
+          importCountry: "Singapore",
+          pol: "Cát Lái",
+          pod: "Singapore",
+          containerType: "20GP",
+          estimatedVolume: "28",
+          estimatedWeight: "12500",
+          otherRequirements: ""
+        }
+      ]
+    : [];
+  const customerDetailInitialForm: CustomerCreateFormState | null = selectedCustomerRow
+    ? {
+        customerName: selectedCustomerRow.customer,
+        englishName: buildEnglishCustomerName(selectedCustomerRow.customer),
+        taxId: selectedCustomerRow.taxId,
+        customerGroup: selectedCustomerRow.customerGroup,
+        customerType: selectedCustomerRow.customerType,
+        services: [...selectedCustomerRow.services],
+        priority: selectedCustomerRow.status === "draft" ? "1" : selectedCustomerRow.status === "active" ? "2" : "0",
+        salesperson: "An Phạm",
+        source: "Referral",
+        responsibleCompanies: selectedCustomerRow.contractCompany.split(" / "),
+        phone: selectedCustomerRow.phone,
+        email: selectedCustomerRow.email,
+        website: buildCustomerDetailWebsite(selectedCustomerRow.customer),
+        tags: [selectedCustomerRow.customerGroup],
+        status: selectedCustomerRow.status,
+        contractCode: matchedCustomerContracts[0]?.code ?? ""
+      }
+    : null;
+  const customerDetailInitialNotes = selectedCustomerRow
+    ? `Ghi chú nội bộ về ${selectedCustomerRow.customer}. Công ty phụ trách chính: ${customerDetailPrimaryCompany}.`
+    : "";
   const selectedContractRow = selectedContractCode
     ? contractRows.find((row) => row.code === selectedContractCode) ?? null
     : null;
+  const customerAddressCityOptions =
+    customerAddressProvinceOptions[customerAddressForm.country] ?? customerAddressProvinceOptions["Việt Nam"];
+  const hasCustomerAddressDraft =
+    customerAddressForm.line1.trim() !== "" ||
+    customerAddressForm.line2.trim() !== "" ||
+    customerAddressForm.country !== initialCustomerAddressForm.country ||
+    customerAddressForm.city !== initialCustomerAddressForm.city ||
+    customerAddressForm.postalCode.trim() !== "" ||
+    customerAddressForm.addressType !== initialCustomerAddressForm.addressType;
+  const hasCustomerContactDraft =
+    customerContactForm.fullName.trim() !== "" ||
+    customerContactForm.role !== initialCustomerContactForm.role ||
+    customerContactForm.phone.trim() !== "" ||
+    customerContactForm.email.trim() !== "" ||
+    customerContactForm.department.trim() !== "" ||
+    customerContactForm.isPrimary !== initialCustomerContactForm.isPrimary ||
+    customerContactForm.notes.trim() !== "";
+  const hasCustomerRouteDraft =
+    customerRouteForm.shippingDirection !== initialCustomerRouteForm.shippingDirection ||
+    customerRouteForm.transportMode !== initialCustomerRouteForm.transportMode ||
+    customerRouteForm.incoterm !== "" ||
+    customerRouteForm.cargoGroup !== initialCustomerRouteForm.cargoGroup ||
+    customerRouteForm.cargoDescription.trim() !== "" ||
+    customerRouteForm.hsCode.trim() !== "" ||
+    customerRouteForm.exportCountry !== "" ||
+    customerRouteForm.importCountry !== "" ||
+    customerRouteForm.pol !== "" ||
+    customerRouteForm.pod !== "" ||
+    customerRouteForm.containerType !== "" ||
+    customerRouteForm.estimatedVolume.trim() !== "" ||
+    customerRouteForm.estimatedWeight.trim() !== "" ||
+    customerRouteForm.otherRequirements.trim() !== "";
+  const emptyCustomerAddressRows = Math.max(0, 5 - customerAddressRows.length);
+  const emptyCustomerContactRows = Math.max(0, 5 - customerContactRows.length);
+  const openNextCustomerAddressRow = () => {
+    if (hasCustomerAddressDraft) {
+      setCustomerAddressRows((current) => [...current, customerAddressForm]);
+      setCustomerAddressForm(initialCustomerAddressForm);
+      setIsCustomerAddressFormOpen(true);
+      return;
+    }
+
+    setIsCustomerAddressFormOpen(true);
+  };
+
+  const openNextCustomerContactRow = () => {
+    if (hasCustomerContactDraft) {
+      setCustomerContactRows((current) => [...current, customerContactForm]);
+      setCustomerContactForm(initialCustomerContactForm);
+      setIsCustomerContactFormOpen(true);
+      return;
+    }
+
+    setIsCustomerContactFormOpen(true);
+  };
+
+  const openNextCustomerRouteRow = () => {
+    if (hasCustomerRouteDraft) {
+      setCustomerRouteRows((current) => [...current, customerRouteForm]);
+      setCustomerRouteForm(initialCustomerRouteForm);
+      setIsCustomerRouteFormOpen(true);
+      return;
+    }
+
+    setIsCustomerRouteFormOpen(true);
+  };
+  const selectedCreateContractRow = customerCreateForm.contractCode
+    ? contractRows.find((row) => row.code === customerCreateForm.contractCode) ?? null
+    : null;
+  const matchedCustomerCreateRow = customerCreateForm.customerName.trim()
+    ? customerRows.find((row) => row.customer === customerCreateForm.customerName.trim()) ?? null
+    : null;
+  const customerCreateContractOptions = contractRows.filter((row) => {
+    const keyword = customerCreateContractSearch.trim().toLowerCase();
+    if (!keyword) {
+      return true;
+    }
+
+    return `${row.code} ${row.customer} ${row.contractCompany}`.toLowerCase().includes(keyword);
+  });
   const isBookingDetailsPage = currentPage === "bookings" && !!selectedBookingCode && !isCreatePage;
   useEffect(() => {
     const pageTitle = isCreatePage
@@ -1713,6 +2925,10 @@ export default function Page() {
             ? `${selectedCustomerRow.customer} | PI Digital`
             : isCustomerServicesPage
               ? "Cấu hình dịch vụ | PI Digital"
+            : isCustomerCreatePage
+              ? "Thêm mới khách hàng | PI Digital"
+            : isCustomerContractCreatePage
+              ? "Thêm mới hợp đồng | PI Digital"
             : isCustomerContractsPage
               ? "Quản lý hợp đồng | PI Digital"
               : isCustomerListPage
@@ -1731,6 +2947,10 @@ export default function Page() {
             ? `Chi tiết khách hàng ${selectedCustomerRow.customer} trong hệ thống PI Digital.`
             : isCustomerServicesPage
               ? "Cấu hình dịch vụ dùng chung cho khách hàng và hợp đồng trong hệ thống PI Digital."
+            : isCustomerCreatePage
+              ? "Tạo mới hồ sơ khách hàng trong hệ thống PI Digital."
+            : isCustomerContractCreatePage
+              ? "Tạo mới hợp đồng trong hệ thống PI Digital."
             : isCustomerContractsPage
               ? "Quản lý hợp đồng trong hệ thống PI Digital."
               : isCustomerListPage
@@ -1747,6 +2967,8 @@ export default function Page() {
     isBookingDetailsPage,
     isBookingListPage,
     isCreatePage,
+    isCustomerCreatePage,
+    isCustomerContractCreatePage,
     isContractDetailsPage,
     isCustomerContractsPage,
     isCustomerDetailsPage,
@@ -1822,6 +3044,162 @@ export default function Page() {
     }
   ];
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const moduleSearchPlaceholder = isCustomerContractsPage
+    ? "Tìm kiếm theo Số HĐ, Tên KH, MST KH"
+    : "Tìm kiếm theo tên KH, MST, Mã KH, Email, SĐT";
+  const searchFilterSections = [
+    {
+      title: "Công ty phụ trách",
+      items: ["PIL", "TDB"],
+    },
+    {
+      title: "Dịch vụ",
+      items: ["Ocean FCL", "Ocean LCL", "Air Freight", "Trucking", "Warehouse", "Custom Clearance"],
+    },
+    {
+      title: "Phân khúc",
+      items: ["VIP", "Strategic", "SME", "New", "Government"],
+    },
+  ] as const;
+  const contractSearchFilterSections = [
+    {
+      title: "Trạng thái",
+      items: contractStatusFilterOptions.map((option) => option.label),
+    },
+    {
+      title: "Hiệu lực",
+      items: ["Dưới 30 ngày", "Dưới 60 ngày", "Hết hiệu lực"],
+    },
+    {
+      title: "Công ty",
+      items: ["PIL", "TDB"],
+    },
+  ] as const;
+  const activeSearchFilterSections = isCustomerContractsPage ? contractSearchFilterSections : searchFilterSections;
+  const searchGroupOptions = ["Công ty phụ trách", "Loại KH", "Loại dịch vụ", "Tháng tạo", "Trạng thái"] as const;
+  const contractSearchGroupOptions = ["Loại HĐ", "Loại dịch vụ", "Tháng tạo"] as const;
+  const activeSearchGroupOptions = isCustomerContractsPage ? contractSearchGroupOptions : searchGroupOptions;
+  const currentPageTitle = isCustomerPage
+    ? isCustomerCreatePage
+      ? "Thêm mới"
+      : isCustomerContractCreatePage
+        ? "Hợp đồng"
+        : isCustomerContractsPage
+          ? "Hợp đồng"
+          : isCustomerServicesPage
+            ? "Cấu hình dịch vụ"
+            : isCustomerDetailsPage && selectedCustomerRow
+              ? selectedCustomerRow.customer
+              : isContractDetailsPage && selectedContractRow
+                ? selectedContractRow.code
+                : "Khách hàng"
+    : isCreatePage
+      ? "Tạo yêu cầu mới"
+      : selectedBookingCode
+        ? selectedBookingCode
+        : "Danh sách yêu cầu Booking";
+  const isCustomerSelectionMode = isCustomerListPage && selectedCustomerRowKeys.length > 0;
+  const customerCreateWorkflowSteps =
+    isCustomerDetailsPage && selectedCustomerRow?.status === "locked"
+      ? (["Nháp", "Đang hoạt động", "Đã khóa"] as const)
+      : (["Nháp", "Đang hoạt động"] as const);
+  const contractCreateWorkflowSteps = ["Nháp", "Đang hiệu lực"] as const;
+  const customerCreateSummaryRow = isCustomerDetailsPage ? selectedCustomerRow : matchedCustomerCreateRow;
+  const shouldHideCustomerDetailMetrics = isCustomerDetailsPage && selectedCustomerRow?.status === "draft";
+  const customerCreateHeaderMetrics = [
+    {
+      label: "Hợp đồng",
+      value: shouldHideCustomerDetailMetrics
+        ? 0
+        : customerCreateSummaryRow
+          ? contractRows.filter((row) => row.customer === customerCreateSummaryRow.customer).length
+          : 0,
+    },
+    {
+      label: "Shipments",
+      value: shouldHideCustomerDetailMetrics ? 0 : customerCreateSummaryRow?.totalBookings ?? 0,
+    },
+    {
+      label: "Báo giá",
+      value: shouldHideCustomerDetailMetrics
+        ? 0
+        : customerCreateSummaryRow
+          ? Math.max(1, Math.ceil(customerCreateSummaryRow.totalBookings / 2))
+          : 0,
+    },
+    {
+      label: "Phân tích",
+      value: shouldHideCustomerDetailMetrics
+        ? 0
+        : customerCreateSummaryRow
+          ? Math.max(1, Math.ceil(customerCreateSummaryRow.totalBookings / 3))
+          : 0,
+    },
+  ] as const;
+  const customerCreateActivityRows = [
+    {
+      actor: currentUserName,
+      time: "Hôm nay lúc 15:26",
+      message: "Khởi tạo hồ sơ khách hàng và cập nhật thông tin pháp lý."
+    }
+  ] as const;
+  const contractCreateActivityRows = [
+    {
+      actor: currentUserName,
+      time: "Hôm nay lúc 15:26",
+      message: "Khởi tạo hồ sơ hợp đồng mới và chuẩn bị thông tin hiệu lực."
+    }
+  ] as const;
+  const customerDetailActivityRows = [
+    {
+      actor: currentUserName,
+      time: "Hôm nay lúc 15:26",
+      message: "Khởi tạo hồ sơ khách hàng và cập nhật thông tin pháp lý."
+    },
+    {
+      actor: "Nguyễn Minh Châu",
+      time: "Hôm nay lúc 14:48",
+      message: "Bổ sung người liên hệ chính và xác nhận email giao dịch."
+    },
+    {
+      actor: "Trần Gia Hưng",
+      time: "Hôm nay lúc 13:55",
+      message: "Cập nhật công ty phụ trách PIL và gắn phân khúc Strategic."
+    },
+    {
+      actor: "Lê Bảo Trân",
+      time: "Hôm nay lúc 11:20",
+      message: "Thêm tuyến hàng export Việt Nam đi Singapore, Incoterm FOB."
+    },
+    {
+      actor: "System",
+      time: "Hôm qua lúc 18:05",
+      message: "Tạo mã khách hàng tự động và đồng bộ trạng thái hồ sơ."
+    }
+  ] as const;
+  const activeCustomerActivityRows = isCustomerDetailsPage ? customerDetailActivityRows : customerCreateActivityRows;
+  const customerCreateActivityGroups = [
+    {
+      label: "Hôm nay",
+      entries: activeCustomerActivityRows.filter((entry) => entry.time.startsWith("Hôm nay"))
+    },
+    {
+      label: "Hôm qua",
+      entries: activeCustomerActivityRows.filter((entry) => entry.time.startsWith("Hôm qua"))
+    }
+  ].filter((group) => group.entries.length > 0);
+  const contractCreateActivityGroups = [
+    {
+      label: "Hôm nay",
+      entries: contractCreateActivityRows
+    }
+  ];
+  const isAnyCreatePage = isCreatePage || isCustomerCreateLikePage || isCustomerContractCreatePage;
+  const listPageSize = 80;
+  const customerTaxIdByName = new Map(customerRows.map((row) => [row.customer, row.taxId] as const));
+  const selectedContractSearchStatuses = selectedSearchFilters["Trạng thái"] ?? [];
+  const selectedContractSearchExpiry = selectedSearchFilters["Hiệu lực"] ?? [];
+  const selectedContractSearchCompanies = selectedSearchFilters["Công ty"] ?? [];
   const visibleCustomerRows = customerRows.filter((row) => {
     if (
       customerListFilters.contacts.length > 0 &&
@@ -1832,7 +3210,7 @@ export default function Page() {
 
     if (
       customerListFilters.companies.length > 0 &&
-      !customerListFilters.companies.includes(row.contractCompany)
+      !row.contractCompany.split(" / ").some((company) => customerListFilters.companies.includes(company))
     ) {
       return false;
     }
@@ -1881,36 +3259,104 @@ export default function Page() {
         return false;
       }
 
-    if (
-      customerListFilters.services.length > 0 &&
-      !row.services.some((service) => customerListFilters.services.includes(service))
-    ) {
-      return false;
-    }
+      if (isCustomerContractsPage && selectedContractSearchStatuses.length > 0) {
+        const contractStatusLabel = contractStatusMeta[row.status].label;
+        if (!selectedContractSearchStatuses.includes(contractStatusLabel)) {
+          return false;
+        }
+      }
 
-    const expiryValue = row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term;
-    if (customerListFilters.expiryDates.length > 0 && !customerListFilters.expiryDates.includes(expiryValue)) {
-      return false;
-    }
-
-    if (contractExpiryRange.from || contractExpiryRange.to) {
-      if (row.status === "draft") {
+      if (
+        customerListFilters.services.length > 0 &&
+        !row.services.some((service) => customerListFilters.services.includes(service))
+      ) {
         return false;
       }
 
-      const expiryTimestamp = parseDisplayDate(row.term.split(" - ")[1] ?? row.term);
-      if (contractExpiryRange.from && expiryTimestamp < parseIsoDate(contractExpiryRange.from)) {
+      const expiryValue = row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term;
+      if (customerListFilters.expiryDates.length > 0 && !customerListFilters.expiryDates.includes(expiryValue)) {
         return false;
       }
 
-      if (contractExpiryRange.to && expiryTimestamp > parseIsoDate(contractExpiryRange.to)) {
-        return false;
-      }
-    }
+      const expiryTimestamp = row.status === "draft" ? Number.NaN : parseDisplayDate(row.term.split(" - ")[1] ?? row.term);
+      const today = new Date();
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+      const daysUntilExpiry = Number.isNaN(expiryTimestamp)
+        ? Number.POSITIVE_INFINITY
+        : Math.ceil((expiryTimestamp - startOfToday) / (1000 * 60 * 60 * 24));
 
-    return true;
-  })
+      if (isCustomerContractsPage && selectedContractSearchExpiry.length > 0) {
+        const matchesExpiry = selectedContractSearchExpiry.some((item) => {
+          if (item === "Hết hiệu lực") {
+            return row.status === "expired" || (!Number.isNaN(expiryTimestamp) && daysUntilExpiry < 0);
+          }
+
+          if (row.status === "draft" || Number.isNaN(expiryTimestamp) || daysUntilExpiry < 0) {
+            return false;
+          }
+
+          if (item === "Dưới 30 ngày") {
+            return daysUntilExpiry < 30;
+          }
+
+          if (item === "Dưới 60 ngày") {
+            return daysUntilExpiry < 60;
+          }
+
+          return false;
+        });
+
+        if (!matchesExpiry) {
+          return false;
+        }
+      }
+
+      if (isCustomerContractsPage && selectedContractSearchCompanies.length > 0) {
+        if (!selectedContractSearchCompanies.includes(row.contractCompany)) {
+          return false;
+        }
+      }
+
+      if (contractExpiryRange.from || contractExpiryRange.to) {
+        if (row.status === "draft") {
+          return false;
+        }
+
+        if (contractExpiryRange.from && expiryTimestamp < parseIsoDate(contractExpiryRange.from)) {
+          return false;
+        }
+
+        if (contractExpiryRange.to && expiryTimestamp > parseIsoDate(contractExpiryRange.to)) {
+          return false;
+        }
+      }
+
+      if (!normalizedSearchQuery) {
+        return true;
+      }
+
+      return [row.code, row.customer, customerTaxIdByName.get(row.customer) ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearchQuery);
+    })
     .sort((left, right) => {
+      const contractStatusSortPriority: Record<ContractRow["status"], number> = {
+        expiring_soon: 0,
+        pending: 1,
+        accepted: 2,
+        active: 3,
+        draft: 4,
+        expired: 5,
+        terminated: 6
+      };
+      const priorityDiff =
+        contractStatusSortPriority[left.status] - contractStatusSortPriority[right.status];
+
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+
       const leftExpiry = left.status === "draft" ? Number.POSITIVE_INFINITY : parseDisplayDate(left.term.split(" - ")[1] ?? left.term);
       const rightExpiry =
         right.status === "draft" ? Number.POSITIVE_INFINITY : parseDisplayDate(right.term.split(" - ")[1] ?? right.term);
@@ -1928,11 +3374,77 @@ export default function Page() {
 
     return [row.service, row.description].join(" ").toLowerCase().includes(normalizedSearchQuery);
   });
+  const bookingListPageCount = Math.max(1, Math.ceil(visibleRows.length / listPageSize));
+  const paginatedBookingRows = visibleRows.slice(
+    (bookingListPageNumber - 1) * listPageSize,
+    bookingListPageNumber * listPageSize
+  );
+  const customerListPageCount = Math.max(1, Math.ceil(visibleCustomerRows.length / listPageSize));
+  const paginatedCustomerRows = visibleCustomerRows.slice(
+    (customerListPageNumber - 1) * listPageSize,
+    customerListPageNumber * listPageSize
+  );
+  const contractListPageCount = Math.max(1, Math.ceil(visibleContractRows.length / listPageSize));
+  const paginatedContractRows = visibleContractRows.slice(
+    (contractListPageNumber - 1) * listPageSize,
+    contractListPageNumber * listPageSize
+  );
+  const serviceConfigListPageCount = Math.max(1, Math.ceil(visibleServiceConfigRows.length / listPageSize));
+  const paginatedServiceConfigRows = visibleServiceConfigRows.slice(
+    (serviceConfigListPageNumber - 1) * listPageSize,
+    serviceConfigListPageNumber * listPageSize
+  );
+  const activeListPagination = isBookingListPage
+    ? {
+        currentPage: bookingListPageNumber,
+        pageCount: bookingListPageCount,
+        total: visibleRows.length,
+        setPage: setBookingListPageNumber
+      }
+    : isCustomerListPage
+      ? {
+          currentPage: customerListPageNumber,
+          pageCount: customerListPageCount,
+          total: visibleCustomerRows.length,
+          setPage: setCustomerListPageNumber
+        }
+      : isCustomerContractsPage
+        ? {
+            currentPage: contractListPageNumber,
+            pageCount: contractListPageCount,
+            total: visibleContractRows.length,
+            setPage: setContractListPageNumber
+          }
+        : isCustomerServicesPage
+          ? {
+              currentPage: serviceConfigListPageNumber,
+              pageCount: serviceConfigListPageCount,
+              total: visibleServiceConfigRows.length,
+              setPage: setServiceConfigListPageNumber
+            }
+          : null;
+  const activeListRangeStart = activeListPagination
+    ? activeListPagination.total === 0
+      ? 0
+      : (activeListPagination.currentPage - 1) * listPageSize + 1
+    : 0;
+  const activeListRangeEnd = activeListPagination
+    ? Math.min(activeListPagination.currentPage * listPageSize, activeListPagination.total)
+    : 0;
+  const customerDetailNavigationRows = visibleCustomerRows.length > 0 ? visibleCustomerRows : customerRows;
+  const customerDetailIndex = selectedCustomerRow
+    ? customerDetailNavigationRows.findIndex((row) => row.customer === selectedCustomerRow.customer)
+    : -1;
+  const previousCustomerDetail =
+    customerDetailIndex > 0 ? customerDetailNavigationRows[customerDetailIndex - 1] : null;
+  const nextCustomerDetail =
+    customerDetailIndex >= 0 && customerDetailIndex < customerDetailNavigationRows.length - 1
+      ? customerDetailNavigationRows[customerDetailIndex + 1]
+      : null;
   const selectedCustomerStatusLabel = selectedCustomerRow
     ? customerAccountStatusMeta[selectedCustomerRow.status].label
     : "";
-  const selectedCustomerToggleLabel =
-    selectedCustomerRow?.status === "active" ? "Ngưng khách hàng" : "Kích hoạt khách hàng";
+  const selectedCustomerToggleLabel = selectedCustomerRow?.status === "locked" ? "Mở khóa" : "Khóa";
   const selectedContractCustomerRow = selectedContractRow
     ? customerRows.find((row) => row.customer === selectedContractRow.customer) ?? null
     : null;
@@ -2001,11 +3513,19 @@ export default function Page() {
             ? "contracts"
             : nextParams.get("view") === "services"
               ? "services"
+              : nextParams.get("view") === "create-contract"
+                ? "create-contract"
+              : nextParams.get("view") === "create-customer"
+                ? "create"
               : "list"
           : "list"
       );
       setSelectedCustomerKey(
-        nextPage === "customers" && nextParams.get("view") !== "contracts" && nextParams.get("view") !== "services"
+        nextPage === "customers" &&
+          nextParams.get("view") !== "contracts" &&
+          nextParams.get("view") !== "services" &&
+          nextParams.get("view") !== "create-contract" &&
+          nextParams.get("view") !== "create-customer"
           ? nextParams.get("customer")
           : null
       );
@@ -2043,6 +3563,38 @@ export default function Page() {
   }, [selectedCustomerKey]);
 
   useEffect(() => {
+    if (!selectedCustomerRow) {
+      return;
+    }
+
+    if (!customerDetailInitialForm) {
+      return;
+    }
+
+    const isDraftDetailCustomer = selectedCustomerRow.status === "draft";
+
+    setCustomerCreateForm(customerDetailInitialForm);
+    setCustomerAddressForm(
+      isDraftDetailCustomer ? customerDetailSeededAddressRows[0] ?? initialCustomerAddressForm : initialCustomerAddressForm
+    );
+    setCustomerAddressRows(isDraftDetailCustomer ? [] : customerDetailSeededAddressRows);
+    setIsCustomerAddressFormOpen(isDraftDetailCustomer);
+    setCustomerContactForm(
+      isDraftDetailCustomer ? customerDetailSeededContactRows[0] ?? initialCustomerContactForm : initialCustomerContactForm
+    );
+    setCustomerContactRows(isDraftDetailCustomer ? [] : customerDetailSeededContactRows);
+    setIsCustomerContactFormOpen(isDraftDetailCustomer);
+    setCustomerRouteForm(
+      isDraftDetailCustomer ? customerDetailSeededRouteRows[0] ?? initialCustomerRouteForm : initialCustomerRouteForm
+    );
+    setCustomerRouteRows(isDraftDetailCustomer ? [] : customerDetailSeededRouteRows);
+    setIsCustomerRouteFormOpen(isDraftDetailCustomer);
+    setCustomerInternalNotes(customerDetailInitialNotes);
+    setCustomerCreateErrors({});
+    setCustomerCreateWorkspaceTab("address");
+  }, [selectedCustomerKey]);
+
+  useEffect(() => {
     setCustomerDetailNote("");
   }, [selectedContractCode]);
 
@@ -2062,6 +3614,18 @@ export default function Page() {
   useEffect(() => {
     setCustomerShipmentPage((current) => Math.min(current, customerShipmentPageCount));
   }, [customerShipmentPageCount]);
+  useEffect(() => {
+    setBookingListPageNumber((current) => Math.min(current, bookingListPageCount));
+  }, [bookingListPageCount]);
+  useEffect(() => {
+    setCustomerListPageNumber((current) => Math.min(current, customerListPageCount));
+  }, [customerListPageCount]);
+  useEffect(() => {
+    setContractListPageNumber((current) => Math.min(current, contractListPageCount));
+  }, [contractListPageCount]);
+  useEffect(() => {
+    setServiceConfigListPageNumber((current) => Math.min(current, serviceConfigListPageCount));
+  }, [serviceConfigListPageCount]);
 
   useEffect(() => {
     setAdvancedFilters((current) => {
@@ -2177,21 +3741,6 @@ export default function Page() {
   }, [openRowActionCode]);
 
   useEffect(() => {
-    if (!openCustomerRowActionKey) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!customerRowActionMenuRef.current?.contains(event.target as Node)) {
-        setOpenCustomerRowActionKey(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [openCustomerRowActionKey]);
-
-  useEffect(() => {
     if (!openContractRowActionCode) {
       return;
     }
@@ -2222,19 +3771,57 @@ export default function Page() {
   }, [isDetailsActionMenuOpen]);
 
   useEffect(() => {
-    if (!isCustomerCreateMenuOpen) {
+    if (!isCustomerTitleMenuOpen) {
       return;
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (!customerCreateMenuRef.current?.contains(event.target as Node)) {
-        setIsCustomerCreateMenuOpen(false);
+      if (!customerTitleMenuRef.current?.contains(event.target as Node)) {
+        setIsCustomerTitleMenuOpen(false);
       }
     };
 
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isCustomerCreateMenuOpen]);
+  }, [isCustomerTitleMenuOpen]);
+
+  useEffect(() => {
+    if (!isCustomerBulkActionMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customerBulkActionMenuRef.current?.contains(event.target as Node)) {
+        setIsCustomerBulkActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isCustomerBulkActionMenuOpen]);
+
+  useEffect(() => {
+    if (!isGlobalSearchMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!globalSearchMenuRef.current?.contains(event.target as Node)) {
+        setIsGlobalSearchMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isGlobalSearchMenuOpen]);
+
+  useEffect(() => {
+    if (isCustomerSelectionMode) {
+      setIsGlobalSearchMenuOpen(false);
+    } else {
+      setIsCustomerBulkActionMenuOpen(false);
+    }
+  }, [isCustomerSelectionMode]);
 
   useEffect(() => {
     if (!openRoutePortMenu) {
@@ -2270,9 +3857,83 @@ export default function Page() {
   }, [isCustomerSearchOpen]);
 
   useEffect(() => {
+    if (!isCustomerCreateContractOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customerCreateContractRef.current?.contains(event.target as Node)) {
+        setIsCustomerCreateContractOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isCustomerCreateContractOpen]);
+
+  useEffect(() => {
+    if (!isCustomerAddressFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customerAddressInlineFormRef.current?.contains(event.target as Node) && !hasCustomerAddressDraft) {
+        setIsCustomerAddressFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasCustomerAddressDraft, isCustomerAddressFormOpen]);
+
+  useEffect(() => {
+    if (!isCustomerContactFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customerContactInlineFormRef.current?.contains(event.target as Node) && !hasCustomerContactDraft) {
+        setIsCustomerContactFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasCustomerContactDraft, isCustomerContactFormOpen]);
+
+  useEffect(() => {
+    if (!isCustomerRouteFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!customerRouteInlineFormRef.current?.contains(event.target as Node) && !hasCustomerRouteDraft) {
+        setIsCustomerRouteFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasCustomerRouteDraft, isCustomerRouteFormOpen]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => setToast(null), 3000);
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
+
+  useEffect(() => {
     const visibleCodeSet = new Set(visibleRows.map((row) => row.code));
     setSelectedRowCodes((current) => current.filter((code) => visibleCodeSet.has(code)));
   }, [visibleRows]);
+
+  useEffect(() => {
+    const visibleCustomerKeySet = new Set(visibleCustomerRows.map((row) => row.customer));
+    setSelectedCustomerRowKeys((current) => current.filter((key) => visibleCustomerKeySet.has(key)));
+  }, [visibleCustomerRows]);
 
   useEffect(() => {
     setRecentCustomerSearches(customerSearchOptions.slice(0, 5).map((option) => option.value));
@@ -2283,7 +3944,7 @@ export default function Page() {
     setRecentDestinationPortSearches(portSearchOptions.slice(0, 5).map((option) => option.label));
   }, [portSearchOptions]);
 
-  const openBookingDetails = (code: string) => {
+  const performOpenBookingDetails = (code: string) => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("page");
     nextParams.delete("view");
@@ -2294,7 +3955,11 @@ export default function Page() {
     setSelectedBookingCode(code);
   };
 
-  const openCreateRequest = () => {
+  const openBookingDetails = (code: string) => {
+    runWithLeaveGuard(() => performOpenBookingDetails(code));
+  };
+
+  const performOpenCreateRequest = () => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("page");
     nextParams.delete("booking");
@@ -2303,6 +3968,10 @@ export default function Page() {
     window.history.pushState({}, "", nextUrl);
     setCurrentPage("bookings");
     setSelectedBookingCode(CREATE_BOOKING_CODE);
+  };
+
+  const openCreateRequest = () => {
+    runWithLeaveGuard(performOpenCreateRequest);
   };
 
   const selectCreateCustomer = (customer: string) => {
@@ -2331,7 +4000,7 @@ export default function Page() {
     setOpenRoutePortMenu(null);
   };
 
-  const showBookingList = () => {
+  const performShowBookingList = () => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("page");
     nextParams.delete("booking");
@@ -2343,7 +4012,11 @@ export default function Page() {
     setSelectedBookingCode(null);
   };
 
-  const showCustomerList = () => {
+  const showBookingList = () => {
+    runWithLeaveGuard(performShowBookingList);
+  };
+
+  const performShowCustomerList = () => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("view");
@@ -2359,7 +4032,359 @@ export default function Page() {
     setSelectedContractCode(null);
   };
 
-  const showCustomerContracts = () => {
+  const showCustomerList = () => {
+    runWithLeaveGuard(performShowCustomerList);
+  };
+
+  const performOpenCreateCustomer = () => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "create-customer");
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("create");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setCustomerCreateForm(initialCustomerCreateForm);
+    setCustomerAddressForm(initialCustomerAddressForm);
+    setCustomerAddressRows([]);
+    setIsCustomerAddressFormOpen(false);
+    setCustomerContactForm(initialCustomerContactForm);
+    setCustomerContactRows([]);
+    setIsCustomerContactFormOpen(false);
+    setCustomerRouteForm(initialCustomerRouteForm);
+    setCustomerRouteRows([]);
+    setIsCustomerRouteFormOpen(false);
+    setCustomerInternalNotes("");
+    setCustomerCreateWorkspaceTab("address");
+    setCustomerCreateErrors({});
+    setToast(null);
+  };
+
+  const openCreateCustomer = () => {
+    runWithLeaveGuard(performOpenCreateCustomer);
+  };
+
+  const openCustomerImportModal = () => {
+    setCustomerImportFileName("");
+    setIsCustomerImportModalOpen(true);
+  };
+
+  const openContractImportModal = () => {
+    setContractImportFileName("");
+    setIsContractImportModalOpen(true);
+  };
+
+  const exportCustomerRecords = () => {
+    const header = ["Ten khach hang", "Ma so thue", "Nguoi lien he", "Email", "So dien thoai", "Nhom khach hang"];
+    const rows = visibleCustomerRows.map((row) => [
+      row.customer,
+      row.taxId,
+      row.contactName,
+      row.email,
+      row.phone,
+      row.customerGroup,
+    ]);
+    const csvContent = [header, ...rows]
+      .map((columns) => columns.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: "text/csv;charset=utf-8;" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = downloadUrl;
+    link.download = "customer-records.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+    setIsCustomerTitleMenuOpen(false);
+  };
+
+  const exportContractRecords = () => {
+    const header = [
+      "So HD",
+      "Ten khach hang",
+      "Cong ty phu trach",
+      "Loai HD",
+      "Dich vu",
+      "Ngay hieu luc",
+      "Ngay het han",
+      "Trang thai",
+    ];
+    const rows = visibleContractRows.map((row) => {
+      const [validFrom, validTo] = row.term.split(" - ");
+      return [
+        row.code,
+        row.customer,
+        row.contractCompany,
+        row.contractType,
+        row.services.join(", "),
+        validFrom ?? "",
+        validTo ?? row.term,
+        contractStatusMeta[row.status].label,
+      ];
+    });
+    const csvContent = [header, ...rows]
+      .map((columns) => columns.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: "text/csv;charset=utf-8;" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = downloadUrl;
+    link.download = "contract-records.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+    setIsCustomerTitleMenuOpen(false);
+  };
+
+  const handleCustomerImportFileChange = (file?: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    const isValidFile = /\.(xlsx|xls|csv)$/i.test(file.name);
+    if (!isValidFile) {
+      setCustomerImportFileName("");
+      setToast({
+        kind: "error",
+        message: "File không đúng định dạng. Vui lòng chọn file Excel hoặc CSV."
+      });
+      return;
+    }
+
+    setCustomerImportFileName(file.name);
+    setIsCustomerImportModalOpen(false);
+    setToast({
+      kind: "success",
+      message: `Đã tải file ${file.name} để import khách hàng.`
+    });
+  };
+
+  const handleContractImportFileChange = (file?: File | null) => {
+    if (!file) {
+      return;
+    }
+
+    const isValidFile = /\.(xlsx|xls|csv)$/i.test(file.name);
+    if (!isValidFile) {
+      setContractImportFileName("");
+      setToast({
+        kind: "error",
+        message: "File không đúng định dạng. Vui lòng chọn file Excel hoặc CSV."
+      });
+      return;
+    }
+
+    setContractImportFileName(file.name);
+    setIsContractImportModalOpen(false);
+    setToast({
+      kind: "success",
+      message: `Đã tải file ${file.name} để import hợp đồng.`
+    });
+  };
+
+  const sampleCustomerImportTemplate = [
+    ["ten_khach_hang", "ma_so_thue", "cong_ty_ky_hop_dong", "nguoi_lien_he", "email", "so_dien_thoai"],
+    ["Cong ty TNHH ABC Logistics", "0312345678", "PI Log", "Nguyen Van A", "contact@abclogistics.vn", "0901234567"],
+    ["Cong ty CP Minh Phat", "0309988776", "TDB", "Tran Thi B", "ops@minhphat.vn", "0912345678"]
+  ];
+  const sampleCustomerImportTemplateHref = `data:text/csv;charset=utf-8,${encodeURIComponent(
+    sampleCustomerImportTemplate.map((row) => row.join(",")).join("\n")
+  )}`;
+
+  const updateCustomerCreateForm = <K extends keyof CustomerCreateFormState>(
+    key: K,
+    value: CustomerCreateFormState[K]
+  ) => {
+    setCustomerCreateForm((current) => {
+      if (key === "customerName") {
+        return {
+          ...current,
+          customerName: value as CustomerCreateFormState["customerName"],
+          englishName: buildEnglishCustomerName(value as CustomerCreateFormState["customerName"])
+        };
+      }
+
+      return { ...current, [key]: value };
+    });
+    setCustomerCreateErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+
+      const nextErrors = { ...current };
+      delete nextErrors[key];
+      return nextErrors;
+    });
+  };
+
+  const toggleCustomerCreateMultiValue = (
+    key: "services" | "responsibleCompanies" | "tags",
+    value: string
+  ) => {
+    setCustomerCreateForm((current) => {
+      const currentValues = current[key];
+      const nextValues =
+        key === "responsibleCompanies"
+          ? currentValues.includes(value)
+            ? []
+            : [value]
+          : currentValues.includes(value)
+            ? currentValues.filter((item) => item !== value)
+            : [...currentValues, value];
+      return { ...current, [key]: nextValues };
+    });
+    setCustomerCreateErrors((current) => {
+      if (!current[key]) {
+        return current;
+      }
+
+      const nextErrors = { ...current };
+      delete nextErrors[key];
+      return nextErrors;
+    });
+  };
+
+  const validateCustomerCreateForm = () => {
+    const nextErrors: CustomerCreateFormErrors = {};
+    const normalizedCustomerName = customerCreateForm.customerName.trim();
+    const isDuplicateCustomerName = customerRows.some((row) =>
+      row.customer === normalizedCustomerName &&
+      (!isCustomerDetailsPage || row.customer !== selectedCustomerRow?.customer)
+    );
+
+    if (!normalizedCustomerName) {
+      nextErrors.customerName = "Vui lòng nhập tên pháp lý (VN).";
+    } else if (isDuplicateCustomerName) {
+      nextErrors.customerName = "Tên pháp lý đã tồn tại trong hệ thống.";
+    }
+
+    if (customerCreateForm.taxId.trim() && !/^\d{10}(\d{3})?$/.test(customerCreateForm.taxId)) {
+      nextErrors.taxId = "MST phải gồm 10 hoặc 13 chữ số.";
+    }
+
+    if (!customerCreateForm.customerType) {
+      nextErrors.customerType = "Vui lòng chọn loại KH.";
+    }
+
+    if (customerCreateForm.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerCreateForm.email)) {
+      nextErrors.email = "Email không đúng định dạng.";
+    }
+
+    if (customerCreateForm.phone.trim() && !/^(?:\+84|0)\d{9,10}$/.test(customerCreateForm.phone)) {
+      nextErrors.phone = "SĐT phải có dạng +84xxxxxxxxx hoặc 0xxxxxxxxx.";
+    }
+
+    if (customerCreateForm.website.trim() && !/^https?:\/\/.+\..+/i.test(customerCreateForm.website)) {
+      nextErrors.website = "Website phải có dạng URL hợp lệ.";
+    }
+
+    if (customerCreateForm.responsibleCompanies.length === 0) {
+      nextErrors.responsibleCompanies = "Vui lòng chọn ít nhất một công ty phụ trách.";
+    }
+
+    return nextErrors;
+  };
+
+  const handleSaveCustomer = () => {
+    const nextErrors = validateCustomerCreateForm();
+    setCustomerCreateErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setToast(null);
+      return;
+    }
+
+    setToast({
+      kind: "success",
+      message: isCustomerDetailsPage ? "Cập nhật khách hàng thành công." : "Tạo mới khách hàng thành công."
+    });
+  };
+
+  const handleSaveCustomerDraft = () => {
+    setCustomerCreateErrors({});
+    setToast({
+      kind: "success",
+      message: "Đã lưu nháp khách hàng."
+    });
+  };
+
+  const handleSaveContract = () => {
+    setToast({
+      kind: "success",
+      message: "Tạo mới hợp đồng thành công."
+    });
+  };
+
+  const deleteCustomerFromDetails = () => {
+    if (!selectedCustomerRow) {
+      return;
+    }
+
+    setIsCustomerTitleMenuOpen(false);
+    setDeletedCustomerKeys((current) =>
+      current.includes(selectedCustomerRow.customer) ? current : [...current, selectedCustomerRow.customer]
+    );
+    performShowCustomerList();
+    setToast({
+      kind: "success",
+      message: "Đã xóa khách hàng."
+    });
+  };
+
+  const duplicateCustomerFromDetails = () => {
+    if (!selectedCustomerRow) {
+      return;
+    }
+
+    const duplicatedNameBase = customerCreateForm.customerName.trim() || selectedCustomerRow.customer;
+
+    setIsCustomerTitleMenuOpen(false);
+    performOpenCreateCustomer();
+    setCustomerCreateForm({
+      ...customerCreateForm,
+      customerName: `${duplicatedNameBase} (Bản sao)`,
+      status: "draft",
+      contractCode: ""
+    });
+    setCustomerAddressRows(customerAddressRows.map((row) => ({ ...row })));
+    setCustomerContactRows(customerContactRows.map((row) => ({ ...row })));
+    setCustomerRouteRows(customerRouteRows.map((row) => ({ ...row })));
+    setCustomerInternalNotes(customerInternalNotes);
+    setToast({
+      kind: "success",
+      message: "Đã tạo bản sao khách hàng."
+    });
+  };
+
+  const toggleCustomerLockFromDetails = () => {
+    if (!selectedCustomerRow) {
+      return;
+    }
+
+    const nextStatus: CustomerAccountStatus = selectedCustomerRow.status === "locked" ? "active" : "locked";
+
+    setIsCustomerTitleMenuOpen(false);
+    setCustomerStatusOverrides((current) => ({
+      ...current,
+      [selectedCustomerRow.customer]: nextStatus
+    }));
+    setToast({
+      kind: "success",
+      message: nextStatus === "locked" ? "Đã khóa khách hàng." : "Đã mở khóa khách hàng."
+    });
+  };
+
+  const performShowCustomerContracts = () => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("customer");
@@ -2375,7 +4400,45 @@ export default function Page() {
     setSelectedContractCode(null);
   };
 
-  const showCustomerServices = () => {
+  const showCustomerContracts = () => {
+    runWithLeaveGuard(performShowCustomerContracts);
+  };
+
+  const performOpenCreateContract = () => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "create-contract");
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("create-contract");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setContractCreateForm(initialContractCreateForm);
+    setContractCreateUploadFileName("");
+    setContractCreateWorkspaceTab("services");
+  };
+
+  const openCreateContract = () => {
+    runWithLeaveGuard(performOpenCreateContract);
+  };
+
+  const goBackFromCreatePage = () => {
+    if (isCustomerContractCreatePage) {
+      showCustomerContracts();
+      return;
+    }
+
+    if (isCustomerCreateLikePage) {
+      showCustomerList();
+    }
+  };
+
+  const performShowCustomerServices = () => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("customer");
@@ -2391,6 +4454,10 @@ export default function Page() {
     setSelectedContractCode(null);
   };
 
+  const showCustomerServices = () => {
+    runWithLeaveGuard(performShowCustomerServices);
+  };
+
   const openServiceConfigModal = () => {
     setServiceConfigForm({
       service: "",
@@ -2400,7 +4467,7 @@ export default function Page() {
     setIsServiceConfigModalOpen(true);
   };
 
-  const openCustomerDetails = (customer: string) => {
+  const performOpenCustomerDetails = (customer: string) => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("view");
@@ -2416,7 +4483,11 @@ export default function Page() {
     setSelectedContractCode(null);
   };
 
-  const openContractDetails = (code: string) => {
+  const openCustomerDetails = (customer: string) => {
+    runWithLeaveGuard(() => performOpenCustomerDetails(customer));
+  };
+
+  const performOpenContractDetails = (code: string) => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("customer");
@@ -2430,6 +4501,10 @@ export default function Page() {
     setSelectedBookingCode(null);
     setSelectedCustomerKey(null);
     setSelectedContractCode(code);
+  };
+
+  const openContractDetails = (code: string) => {
+    runWithLeaveGuard(() => performOpenContractDetails(code));
   };
 
   const updateAdvancedFilter = (key: AdvancedFilterConfig["key"], values: string[]) => {
@@ -2533,18 +4608,37 @@ export default function Page() {
   ][selectedBookingNumber % 5];
   const [selectedVesselName, selectedVoyage = ""] = selectedVessel.split(" / ");
   const defaultLocationOption = selectedLocationType === "Door" ? "Door" : "Ramp (CY)";
-  const scheduleOriginLabel = selectedBookingRow ? formatPortFilterLabel(selectedBookingRow.route.from) : "";
-  const scheduleDestinationLabel = selectedBookingRow ? formatPortFilterLabel(selectedBookingRow.route.to) : "";
-  const [routeScheduleForm, setRouteScheduleForm] = useState({
-    originPort: isCreatePage ? "" : scheduleOriginLabel,
+  const initialRouteScheduleForm = {
+    originPort: "",
     originLocationType: defaultLocationOption,
-    destinationPort: isCreatePage ? "" : scheduleDestinationLabel,
+    destinationPort: "",
     destinationLocationType: defaultLocationOption,
-    vesselName: isCreatePage ? "" : selectedVesselName,
-    voyage: isCreatePage ? "" : selectedVoyage,
+    vesselName: "",
+    voyage: "",
     etd: "2026-03-15",
     eta: "2026-03-22"
-  });
+  };
+  const initialCarrierInteractionForm = {
+    carrier: selectedCarrier,
+    carrierBookingNo: "",
+    bookingConfirmationFileName: ""
+  };
+  const initialGeneralInfoForm = {
+    customer: "",
+    linkedQuote: "",
+    estimatedRate: "",
+    contactName: "",
+    email: "",
+    phone: ""
+  };
+  const initialValueAddedServicesForm = {
+    inlandTransport: false,
+    customsServices: [] as string[],
+    valueProtect: [] as string[]
+  };
+  const scheduleOriginLabel = selectedBookingRow ? formatPortFilterLabel(selectedBookingRow.route.from) : "";
+  const scheduleDestinationLabel = selectedBookingRow ? formatPortFilterLabel(selectedBookingRow.route.to) : "";
+  const [routeScheduleForm, setRouteScheduleForm] = useState(initialRouteScheduleForm);
   const normalizedOriginPortQuery = routeScheduleForm.originPort.trim().toLowerCase();
   const normalizedDestinationPortQuery = routeScheduleForm.destinationPort.trim().toLowerCase();
   const recentOriginPortOptions = recentOriginPortSearches
@@ -2561,24 +4655,9 @@ export default function Page() {
     normalizedDestinationPortQuery.length >= 3
       ? portSearchOptions.filter((option) => option.searchText.includes(normalizedDestinationPortQuery))
       : recentDestinationPortOptions;
-  const [carrierInteractionForm, setCarrierInteractionForm] = useState({
-    carrier: selectedCarrier,
-    carrierBookingNo: "",
-    bookingConfirmationFileName: ""
-  });
-  const [generalInfoForm, setGeneralInfoForm] = useState({
-    customer: "",
-    linkedQuote: "",
-    estimatedRate: "",
-    contactName: "",
-    email: "",
-    phone: ""
-  });
-  const [valueAddedServicesForm, setValueAddedServicesForm] = useState({
-    inlandTransport: false,
-    customsServices: [] as string[],
-    valueProtect: [] as string[]
-  });
+  const [carrierInteractionForm, setCarrierInteractionForm] = useState(initialCarrierInteractionForm);
+  const [generalInfoForm, setGeneralInfoForm] = useState(initialGeneralInfoForm);
+  const [valueAddedServicesForm, setValueAddedServicesForm] = useState(initialValueAddedServicesForm);
   const normalizedCustomerQuery = generalInfoForm.customer.trim().toLowerCase();
   const recentCustomerOptions = recentCustomerSearches
     .map((value) => customerSearchOptions.find((option) => option.value === value))
@@ -2588,6 +4667,97 @@ export default function Page() {
       ? customerSearchOptions.filter((option) => option.label.toLowerCase().includes(normalizedCustomerQuery))
       : recentCustomerOptions;
   const [internalNotes, setInternalNotes] = useState("");
+  const hasBookingCreateChanges =
+    routeScheduleForm.originPort !== initialRouteScheduleForm.originPort ||
+    routeScheduleForm.originLocationType !== initialRouteScheduleForm.originLocationType ||
+    routeScheduleForm.destinationPort !== initialRouteScheduleForm.destinationPort ||
+    routeScheduleForm.destinationLocationType !== initialRouteScheduleForm.destinationLocationType ||
+    routeScheduleForm.vesselName !== initialRouteScheduleForm.vesselName ||
+    routeScheduleForm.voyage !== initialRouteScheduleForm.voyage ||
+    routeScheduleForm.etd !== initialRouteScheduleForm.etd ||
+    routeScheduleForm.eta !== initialRouteScheduleForm.eta ||
+    carrierInteractionForm.carrier !== initialCarrierInteractionForm.carrier ||
+    carrierInteractionForm.carrierBookingNo !== initialCarrierInteractionForm.carrierBookingNo ||
+    carrierInteractionForm.bookingConfirmationFileName !== initialCarrierInteractionForm.bookingConfirmationFileName ||
+    generalInfoForm.customer !== initialGeneralInfoForm.customer ||
+    generalInfoForm.linkedQuote !== initialGeneralInfoForm.linkedQuote ||
+    generalInfoForm.estimatedRate !== initialGeneralInfoForm.estimatedRate ||
+    generalInfoForm.contactName !== initialGeneralInfoForm.contactName ||
+    generalInfoForm.email !== initialGeneralInfoForm.email ||
+    generalInfoForm.phone !== initialGeneralInfoForm.phone ||
+    valueAddedServicesForm.inlandTransport !== initialValueAddedServicesForm.inlandTransport ||
+    !arraysEqual(valueAddedServicesForm.customsServices, initialValueAddedServicesForm.customsServices) ||
+    !arraysEqual(valueAddedServicesForm.valueProtect, initialValueAddedServicesForm.valueProtect) ||
+    internalNotes !== "";
+  const hasCustomerCreateChanges =
+    customerCreateForm.customerName !== initialCustomerCreateForm.customerName ||
+    customerCreateForm.englishName !== initialCustomerCreateForm.englishName ||
+    customerCreateForm.taxId !== initialCustomerCreateForm.taxId ||
+    customerCreateForm.customerGroup !== initialCustomerCreateForm.customerGroup ||
+    customerCreateForm.customerType !== initialCustomerCreateForm.customerType ||
+    !arraysEqual(customerCreateForm.services, initialCustomerCreateForm.services) ||
+    customerCreateForm.priority !== initialCustomerCreateForm.priority ||
+    customerCreateForm.salesperson !== initialCustomerCreateForm.salesperson ||
+    customerCreateForm.source !== initialCustomerCreateForm.source ||
+    !arraysEqual(customerCreateForm.responsibleCompanies, initialCustomerCreateForm.responsibleCompanies) ||
+    customerCreateForm.phone !== initialCustomerCreateForm.phone ||
+    customerCreateForm.email !== initialCustomerCreateForm.email ||
+    customerCreateForm.website !== initialCustomerCreateForm.website ||
+    !arraysEqual(customerCreateForm.tags, initialCustomerCreateForm.tags) ||
+    customerCreateForm.status !== initialCustomerCreateForm.status ||
+    customerCreateForm.contractCode !== initialCustomerCreateForm.contractCode ||
+    customerInternalNotes.trim() !== "";
+  const normalizedCustomerDetailAddressRows =
+    isCustomerAddressFormOpen && (hasCustomerAddressDraft || (isCustomerDetailsPage && isCustomerDetailEditable))
+      ? [...customerAddressRows, customerAddressForm]
+      : customerAddressRows;
+  const normalizedCustomerDetailContactRows =
+    isCustomerContactFormOpen && (hasCustomerContactDraft || (isCustomerDetailsPage && isCustomerDetailEditable))
+      ? [...customerContactRows, customerContactForm]
+      : customerContactRows;
+  const normalizedCustomerDetailRouteRows =
+    isCustomerRouteFormOpen && (hasCustomerRouteDraft || (isCustomerDetailsPage && isCustomerDetailEditable))
+      ? [...customerRouteRows, customerRouteForm]
+      : customerRouteRows;
+  const hasCustomerDetailChanges =
+    !!customerDetailInitialForm &&
+    (
+      customerCreateForm.customerName !== customerDetailInitialForm.customerName ||
+      customerCreateForm.englishName !== customerDetailInitialForm.englishName ||
+      customerCreateForm.taxId !== customerDetailInitialForm.taxId ||
+      customerCreateForm.customerGroup !== customerDetailInitialForm.customerGroup ||
+      customerCreateForm.customerType !== customerDetailInitialForm.customerType ||
+      !arraysEqual(customerCreateForm.services, customerDetailInitialForm.services) ||
+      customerCreateForm.priority !== customerDetailInitialForm.priority ||
+      customerCreateForm.salesperson !== customerDetailInitialForm.salesperson ||
+      customerCreateForm.source !== customerDetailInitialForm.source ||
+      !arraysEqual(customerCreateForm.responsibleCompanies, customerDetailInitialForm.responsibleCompanies) ||
+      customerCreateForm.phone !== customerDetailInitialForm.phone ||
+      customerCreateForm.email !== customerDetailInitialForm.email ||
+      customerCreateForm.website !== customerDetailInitialForm.website ||
+      !arraysEqual(customerCreateForm.tags, customerDetailInitialForm.tags) ||
+      customerCreateForm.status !== customerDetailInitialForm.status ||
+      customerCreateForm.contractCode !== customerDetailInitialForm.contractCode ||
+      JSON.stringify(normalizedCustomerDetailAddressRows) !== JSON.stringify(customerDetailSeededAddressRows) ||
+      JSON.stringify(normalizedCustomerDetailContactRows) !== JSON.stringify(customerDetailSeededContactRows) ||
+      JSON.stringify(normalizedCustomerDetailRouteRows) !== JSON.stringify(customerDetailSeededRouteRows) ||
+      customerInternalNotes !== customerDetailInitialNotes
+    );
+  const hasContractCreateChanges =
+    contractCreateForm.code !== initialContractCreateForm.code ||
+    contractCreateForm.customer !== initialContractCreateForm.customer ||
+    contractCreateForm.contractCompany !== initialContractCreateForm.contractCompany ||
+    contractCreateForm.contractType !== initialContractCreateForm.contractType ||
+    contractCreateForm.signedAt !== initialContractCreateForm.signedAt ||
+    contractCreateForm.validFrom !== initialContractCreateForm.validFrom ||
+    contractCreateForm.validTo !== initialContractCreateForm.validTo ||
+    contractCreateForm.status !== initialContractCreateForm.status ||
+    !arraysEqual(contractCreateForm.services, initialContractCreateForm.services) ||
+    contractCreateForm.notes !== initialContractCreateForm.notes ||
+    contractCreateUploadFileName !== "";
+  const runWithLeaveGuard = (action: () => void) => {
+    action();
+  };
   const [customerDetailNote, setCustomerDetailNote] = useState("");
   const selectedBookingDetailsEquipment: BookingEquipmentRow[] =
     selectedBookingRow?.cargoType === "Reefer"
@@ -2876,59 +5046,18 @@ export default function Page() {
 
   return (
     <main className="h-screen overflow-hidden bg-background">
-      <div className="flex h-screen w-full flex-col overflow-visible bg-background pt-14">
-        <header className="fixed left-0 right-0 top-0 z-30 h-14 w-full overflow-visible border-b-[0.5px] border-border bg-background">
-          <div className="grid h-full w-full grid-cols-[auto_1fr_auto] items-center gap-3 overflow-visible px-4 md:px-6 lg:grid-cols-[240px_minmax(0,1fr)_auto] lg:px-0">
-            <div className="flex h-full min-w-0 items-center lg:px-6">
-              <SidebarLogo onClick={showBookingList} />
-            </div>
-
-            <div className="hidden h-full min-w-0 items-center md:flex lg:px-6">
-              <div className="w-full min-w-0 max-w-[520px] justify-self-center">
-                <label className="flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-3 text-base text-muted-foreground shadow-subtle">
-                  <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Tìm kiếm đơn hàng, khách hàng, hợp đồng..."
-                    className="w-full min-w-0 border-0 bg-transparent p-0 text-base text-foreground placeholder:text-muted-foreground outline-none"
-                  />
-                  <span className="h-5 w-px shrink-0 bg-border" />
-                  <button
-                    type="button"
-                    className="ui-hover-card -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors"
-                  >
-                    <Filter className="h-4 w-4" strokeWidth={1.8} />
-                  </button>
-                </label>
-              </div>
-            </div>
-
-            <div className="flex h-full min-w-0 items-center justify-end gap-2 md:gap-3 lg:px-6">
-              <HeaderIconButton>
-                <MessagesSquare className="h-5 w-5" strokeWidth={1.8} />
-              </HeaderIconButton>
-              <HeaderIconButton>
-                <History className="h-5 w-5" strokeWidth={1.8} />
-              </HeaderIconButton>
-              <div className="hidden min-w-0 items-center gap-2.5 sm:flex">
-                <button
-                  type="button"
-                  className="ui-hover-card flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#D7D9D3] text-sm font-medium text-foreground transition"
-                >
-                  AP
-                </button>
-              </div>
-            </div>
-          </div>
-        </header>
-
+      <div className="flex h-screen w-full flex-col overflow-visible bg-background">
         <div className="flex flex-1 items-start overflow-hidden">
           <div className="hidden w-[240px] shrink-0 lg:block" aria-hidden="true" />
 
-          <aside className="fixed left-0 top-14 hidden h-[calc(100vh-56px)] w-[240px] overflow-y-auto bg-sidebar lg:block">
-            <div className="px-4 py-2">
-              <div className="space-y-0">
+          <aside className="fixed left-0 top-0 hidden h-screen w-[240px] bg-sidebar lg:block">
+            <div className="sticky top-0 z-10 flex h-14 items-center bg-sidebar px-6">
+              <SidebarLogo onClick={showBookingList} />
+            </div>
+            <div className="border-b-[0.5px] border-border" />
+            <div className="flex h-[calc(100vh-56px)] flex-col">
+              <div className="flex-1 overflow-y-auto px-4 py-2">
+                <div className="space-y-0">
                 {sidebarGroups.map((group) => (
                   <div key={group.title} className="rounded-2xl">
                     {(() => {
@@ -2980,18 +5109,18 @@ export default function Page() {
                             key={item.label}
                             className={`flex cursor-pointer items-center gap-[24px] rounded-xl px-4 py-2 text-[14px] transition-colors ${
                               isCustomersGroup &&
-                              ((item.label === "Danh sách khách hàng" && (isCustomerListPage || isCustomerDetailsPage)) ||
-                                (item.label === "Quản lý hợp đồng" && (isCustomerContractsPage || isContractDetailsPage)) ||
-                                (item.label === "Cấu hình dịch vụ" && isCustomerServicesPage))
+                              ((item.label === "Khách hàng" && (isCustomerListPage || isCustomerDetailsPage || isCustomerCreatePage)) ||
+                                (item.label === "Hợp đồng" && (isCustomerContractsPage || isContractDetailsPage || isCustomerContractCreatePage)) ||
+                                (item.label === "Dịch vụ" && isCustomerServicesPage))
                                 ? "bg-card text-[#18181b]"
                                 : "ui-hover-bg text-foreground"
                             }`}
                             onClick={
-                              isCustomersGroup && item.label === "Danh sách khách hàng"
+                              isCustomersGroup && item.label === "Khách hàng"
                                 ? showCustomerList
-                                : isCustomersGroup && item.label === "Quản lý hợp đồng"
+                                : isCustomersGroup && item.label === "Hợp đồng"
                                   ? showCustomerContracts
-                                  : isCustomersGroup && item.label === "Cấu hình dịch vụ"
+                                  : isCustomersGroup && item.label === "Dịch vụ"
                                     ? showCustomerServices
                                 : undefined
                             }
@@ -2999,9 +5128,9 @@ export default function Page() {
                             <span
                               className={`h-[2px] w-[2px] rounded-full ${
                                 isCustomersGroup &&
-                                ((item.label === "Danh sách khách hàng" && (isCustomerListPage || isCustomerDetailsPage)) ||
-                                  (item.label === "Quản lý hợp đồng" && (isCustomerContractsPage || isContractDetailsPage)) ||
-                                  (item.label === "Cấu hình dịch vụ" && isCustomerServicesPage))
+                                ((item.label === "Khách hàng" && (isCustomerListPage || isCustomerDetailsPage || isCustomerCreatePage)) ||
+                                  (item.label === "Hợp đồng" && (isCustomerContractsPage || isContractDetailsPage)) ||
+                                  (item.label === "Dịch vụ" && isCustomerServicesPage))
                                   ? "bg-[#18181b]"
                                   : "bg-muted-foreground"
                               }`}
@@ -3016,212 +5145,46 @@ export default function Page() {
                     })()}
                   </div>
                 ))}
+                </div>
+              </div>
+              <div className="px-4 py-4">
+                <button
+                  type="button"
+                  className="ui-hover-card flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors"
+                >
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-white ${getAvatarColorClass(currentUserName)}`}>
+                    {currentUserName.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-foreground">{currentUserName}</span>
+                  </span>
+                </button>
               </div>
             </div>
           </aside>
 
-          <section className="flex h-[calc(100vh-56px)] flex-1 flex-col overflow-hidden bg-background p-4 md:p-6">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex w-fit max-w-full flex-col gap-2.5">
-                <div className="flex flex-wrap items-center gap-2.5 text-[22px] font-medium leading-[1.25] text-foreground">
-                  <span>{isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
-                  <ChevronRight className="h-5 w-5" strokeWidth={1.8} />
-                  {isCustomerPage ? (
-                    isCustomerListPage ? (
-                      <span>Danh sách khách hàng</span>
-                    ) : isCustomerContractsPage ? (
-                      <span>Quản lý hợp đồng</span>
-                    ) : isCustomerServicesPage ? (
-                      <span>Cấu hình dịch vụ</span>
-                    ) : isContractDetailsPage ? (
-                      <button
-                        className="text-left text-foreground transition-colors hover:text-muted-foreground"
-                        onClick={showCustomerContracts}
-                      >
-                        Quản lý hợp đồng
-                      </button>
-                    ) : (
-                      <button
-                        className="text-left text-foreground transition-colors hover:text-muted-foreground"
-                        onClick={showCustomerList}
-                      >
-                        Danh sách khách hàng
-                      </button>
-                    )
-                  ) : selectedBookingCode ? (
-                    isCreatePage ? null : (
-                      <button
-                        className="text-left text-foreground transition-colors hover:text-muted-foreground"
-                        onClick={showBookingList}
-                      >
-                        Danh sách yêu cầu Booking
-                      </button>
-                    )
-                  ) : (
-                    <span>Danh sách yêu cầu Booking</span>
-                  )}
-                  {isCustomerDetailsPage && selectedCustomerRow ? (
-                    <>
-                      <ChevronRight className="h-5 w-5" strokeWidth={1.8} />
-                      <span>
-                        {selectedCustomerRow.customer.length > 30
-                          ? `${selectedCustomerRow.customer.slice(0, 27)}...`
-                          : selectedCustomerRow.customer}
-                      </span>
-                      <div ref={detailsActionMenuRef} className="relative flex items-center self-center">
-                        <button
-                          type="button"
-                          aria-label="Tác vụ khách hàng"
-                          className="flex h-4 w-4 items-center justify-center rounded-md text-foreground transition-colors hover:bg-[#F7F7F5]"
-                          onClick={() => setIsDetailsActionMenuOpen((current) => !current)}
-                        >
-                          <DesignDownArrowIcon className="h-3 w-3" />
-                        </button>
-
-                        {isDetailsActionMenuOpen ? (
-                          <div className="absolute right-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                            {[
-                              { label: "Xem chi tiết", icon: Eye, onClick: () => setIsDetailsActionMenuOpen(false) },
-                              { label: "Chỉnh sửa", icon: Pencil, onClick: () => setIsDetailsActionMenuOpen(false) },
-                              { label: "Xóa", icon: Trash2, onClick: () => setIsDetailsActionMenuOpen(false) }
-                            ].map((item, itemIndex) => (
-                              <button
-                                key={item.label}
-                                type="button"
-                                className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                  itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                }`}
-                                onClick={item.onClick}
-                              >
-                                <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                <span>{item.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : null}
-                  {isContractDetailsPage && selectedContractRow ? (
-                    <>
-                      <ChevronRight className="h-5 w-5" strokeWidth={1.8} />
-                      <span>{selectedContractRow.code}</span>
-                      <div ref={detailsActionMenuRef} className="relative flex items-center self-center">
-                        <button
-                          type="button"
-                          aria-label="Tác vụ hợp đồng"
-                          className="flex h-4 w-4 items-center justify-center rounded-md text-foreground transition-colors hover:bg-[#F7F7F5]"
-                          onClick={() => setIsDetailsActionMenuOpen((current) => !current)}
-                        >
-                          <DesignDownArrowIcon className="h-3 w-3" />
-                        </button>
-
-                        {isDetailsActionMenuOpen ? (
-                          <div className="absolute right-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                            {[
-                              { label: "Xem chi tiết", icon: Eye, onClick: () => setIsDetailsActionMenuOpen(false) },
-                              { label: "Chỉnh sửa", icon: Pencil, onClick: () => setIsDetailsActionMenuOpen(false) },
-                              { label: "Xóa", icon: Trash2, onClick: () => setIsDetailsActionMenuOpen(false) }
-                            ].map((item, itemIndex) => (
-                              <button
-                                key={item.label}
-                                type="button"
-                                className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                  itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                }`}
-                                onClick={item.onClick}
-                              >
-                                <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                <span>{item.label}</span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : null}
-                  {selectedBookingCode ? (
-                    <>
-                      {isCreatePage ? null : <ChevronRight className="h-5 w-5" strokeWidth={1.8} />}
-                      <span>{isCreatePage ? "Tạo yêu cầu mới" : selectedBookingCode}</span>
-                      {selectedBookingRow && !isCreatePage ? (
-                        <div ref={detailsActionMenuRef} className="relative flex items-center self-center">
-                          <button
-                            type="button"
-                            aria-label="Tác vụ booking"
-                            className="flex h-4 w-4 items-center justify-center rounded-md text-foreground transition-colors hover:bg-[#F7F7F5]"
-                            onClick={() => setIsDetailsActionMenuOpen((current) => !current)}
-                          >
-                            <DesignDownArrowIcon className="h-3 w-3" />
-                          </button>
-
-                          {isDetailsActionMenuOpen ? (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                              {[
-                                {
-                                  label: "Chỉnh sửa",
-                                  icon: Pencil,
-                                  onClick: () => setIsDetailsActionMenuOpen(false)
-                                },
-                                {
-                                  label: "Nhân bản",
-                                  icon: Copy,
-                                  onClick: () => setIsDetailsActionMenuOpen(false)
-                                },
-                                {
-                                  label: "Tải xuống",
-                                  icon: Download,
-                                  onClick: () => setIsDetailsActionMenuOpen(false)
-                                },
-                                {
-                                  label: "Xóa",
-                                  icon: Trash2,
-                                  onClick: () => setIsDetailsActionMenuOpen(false)
-                                }
-                              ].map((item, itemIndex) => (
-                                    <button
-                                      key={item.label}
-                                      type="button"
-                                      className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                        itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                      }`}
-                                      onClick={item.onClick}
-                                    >
-                                      <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                      <span>{item.label}</span>
-                                    </button>
-                                  ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : null}
-                </div>
-                {isBookingListPage || isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
-                  <div className="md:hidden">
-                  <label className="flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-3 text-base text-muted-foreground shadow-subtle">
-                    <Search className="h-4 w-4 text-muted-foreground" strokeWidth={1.8} />
-                    <input
-                      value={searchQuery}
-                      onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder={
-                        isCustomerPage
-                          ? "Tìm kiếm đơn hàng, khách hàng, hợp đồng..."
-                          : "Tìm kiếm đơn hàng, khách hàng, hợp đồng..."
-                      }
-                      className="w-full border-0 bg-transparent p-0 text-base text-foreground placeholder:text-muted-foreground outline-none"
-                    />
-                  </label>
+          <section className={`flex h-screen flex-1 flex-col bg-background px-4 py-3 md:px-6 md:py-3 ${isAnyCreatePage ? "overflow-y-auto" : "overflow-hidden"}`}>
+            <div className="-mx-4 mb-0 border-b-[0.5px] border-border md:-mx-6">
+              <div className="flex flex-col gap-3 px-4 pb-3 md:px-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
+                      <span>{isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
+                    </div>
                   </div>
-                ) : null}
-              </div>
-
-              {isBookingListPage || isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
-                <div className="shrink-0 lg:ml-auto lg:flex lg:flex-col lg:items-end lg:gap-4">
-                  <div className="flex flex-wrap items-center justify-end gap-3">
-                    {isCustomerPage ? (
-                      <div ref={customerCreateMenuRef} className="relative">
+                  <div className="flex items-center gap-2">
+                    <HeaderIconButton>
+                      <MessagesSquare className="h-4 w-4" strokeWidth={1.8} />
+                    </HeaderIconButton>
+                    <HeaderIconButton>
+                      <History className="h-4 w-4" strokeWidth={1.8} />
+                    </HeaderIconButton>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[1fr_minmax(0,520px)_1fr] lg:items-center lg:gap-4">
+                    <div className="flex flex-wrap items-center gap-2 lg:col-start-1 lg:justify-self-start">
+                      {isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -3230,36 +5193,508 @@ export default function Page() {
                               return;
                             }
 
-                            setIsCustomerCreateMenuOpen((current) => !current);
+                            if (isCustomerContractsPage) {
+                              openCreateContract();
+                              return;
+                            }
+                            openCreateCustomer();
                           }}
-                          className="ui-hover-card inline-flex h-10 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-medium text-foreground shadow-[0_1px_1.75px_rgba(0,0,0,0.05)] transition hover:border-foreground/20 hover:bg-[#fcfcfc]"
+                          className="inline-flex h-8 items-center gap-1 rounded-full bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                         >
-                          <Plus className="h-5 w-5" strokeWidth={1.8} />
+                          <Plus className="h-3 w-3" strokeWidth={2.2} />
                           <span>Thêm mới</span>
                         </button>
+                      ) : null}
+                      {isCustomerCreateLikePage || isCustomerContractCreatePage ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={goBackFromCreatePage}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-[#fafafa]"
+                            aria-label="Quay lại"
+                          >
+                            <ChevronLeft className="h-5 w-5 text-[#2054a3]" strokeWidth={2.2} />
+                          </button>
+                          <div className="leading-[1.2]">
+                            <div className="text-[16px] font-medium text-foreground">
+                              {isCustomerDetailsPage ? "Khách hàng" : currentPageTitle}
+                            </div>
+                            {isCustomerDetailsPage && selectedCustomerRow ? (
+                              <div ref={customerTitleMenuRef} className="relative mt-[2px]">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsCustomerTitleMenuOpen((current) => !current)}
+                                  className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                  <span>{selectedCustomerRow.customerCode}</span>
+                                  <ChevronDown
+                                    className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomerTitleMenuOpen ? "rotate-180" : ""}`}
+                                    strokeWidth={1.8}
+                                  />
+                                </button>
 
-                        {isCustomerCreateMenuOpen && !isCustomerServicesPage ? (
-                          <div className="absolute right-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                            {[
-                              { label: "Thêm thủ công", icon: Plus },
-                              { label: "Import file Excel/CSV", icon: Upload }
-                            ].map((item, itemIndex) => (
+                                {isCustomerTitleMenuOpen ? (
+                                  <div className="absolute left-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                                    {[
+                                      {
+                                        label: "Xóa",
+                                        icon: Trash2,
+                                        onClick: deleteCustomerFromDetails,
+                                      },
+                                      {
+                                        label: "Nhân bản",
+                                        icon: Copy,
+                                        onClick: duplicateCustomerFromDetails,
+                                      },
+                                      {
+                                        label: selectedCustomerToggleLabel,
+                                        icon: selectedCustomerRow?.status === "locked" ? LockOpen : Lock,
+                                        onClick: toggleCustomerLockFromDetails,
+                                      },
+                                    ].map((item, itemIndex) => (
+                                      <button
+                                        key={item.label}
+                                        type="button"
+                                        onClick={item.onClick}
+                                        className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
+                                          itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
+                                        }`}
+                                      >
+                                        <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                        <span>{item.label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                          {isCustomerCreateLikePage && (!isCustomerDetailsPage || (isCustomerDetailEditable && hasCustomerDetailChanges)) ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={handleSaveCustomer}
+                                disabled={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                className={`inline-flex h-8 items-center rounded-full px-2.5 text-[13px] font-medium text-white transition ${
+                                  isCustomerDetailsPage && !isCustomerDetailEditable
+                                    ? "cursor-not-allowed bg-[#9FB4D6]"
+                                    : "bg-[#2054a3] hover:bg-[#1b467d]"
+                                }`}
+                              >
+                                Lưu KH
+                              </button>
+                              <button
+                                type="button"
+                                onClick={goBackFromCreatePage}
+                                className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-2.5 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                              >
+                                Hủy bỏ
+                              </button>
+                            </>
+                          ) : null}
+                          {isCustomerContractCreatePage ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={handleSaveContract}
+                                className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                              >
+                                Lưu HĐ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={goBackFromCreatePage}
+                                className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-2.5 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                              >
+                                Hủy bỏ
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      ) : isCustomerListPage || isCustomerContractsPage ? (
+                        <div ref={customerTitleMenuRef} className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setIsCustomerTitleMenuOpen((current) => !current)}
+                            className="inline-flex items-center gap-1 text-[16px] font-medium leading-[1.25] text-foreground"
+                          >
+                            <span>{currentPageTitle}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomerTitleMenuOpen ? "rotate-180" : ""}`}
+                              strokeWidth={1.8}
+                            />
+                          </button>
+
+                          {isCustomerTitleMenuOpen ? (
+                            <div className="absolute left-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                              {[
+                                isCustomerContractsPage
+                                  ? {
+                                      label: "Import Hợp đồng",
+                                      icon: Upload,
+                                      onClick: () => {
+                                        setIsCustomerTitleMenuOpen(false);
+                                        openContractImportModal();
+                                      },
+                                    }
+                                  : {
+                                      label: "Import khách hàng",
+                                      icon: Upload,
+                                      onClick: () => {
+                                        setIsCustomerTitleMenuOpen(false);
+                                        openCustomerImportModal();
+                                      },
+                                    },
+                                isCustomerContractsPage
+                                  ? {
+                                      label: "Export Hợp đồng",
+                                      icon: Download,
+                                      onClick: exportContractRecords,
+                                    }
+                                  : {
+                                      label: "Export khách hàng",
+                                      icon: Download,
+                                      onClick: exportCustomerRecords,
+                                    },
+                              ].map((item, itemIndex) => (
+                                <button
+                                  key={item.label}
+                                  type="button"
+                                  onClick={item.onClick}
+                                  className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
+                                    itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
+                                  }`}
+                                >
+                                  <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                  <span>{item.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="leading-[1.25]">
+                          <div className="text-[16px] font-medium text-foreground">
+                            <span>{isCustomerDetailsPage ? "Khách hàng" : currentPageTitle}</span>
+                          </div>
+                          {isCustomerDetailsPage && selectedCustomerRow ? (
+                            <div className="mt-0.5 text-[12px] font-medium text-muted-foreground">
+                              {selectedCustomerRow.customerCode}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 lg:col-start-2">
+                      <div ref={globalSearchMenuRef} className="relative w-full">
+                        {isCustomerCreateLikePage ? (
+                          <div className="relative z-30 flex flex-wrap items-center justify-center gap-2">
+                            {customerCreateHeaderMetrics.map((item) => (
                               <button
                                 key={item.label}
                                 type="button"
-                                className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                  itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                }`}
-                                onClick={() => setIsCustomerCreateMenuOpen(false)}
+                                className="inline-flex h-10 items-center rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground shadow-subtle transition hover:bg-[#fafafa] active:bg-[#f2f2f2]"
                               >
-                                <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                <span>{item.label}</span>
+                                <span>{`${item.value} ${item.label}`}</span>
                               </button>
                             ))}
                           </div>
                         ) : null}
+                        {isCustomerSelectionMode ? (
+                          <div className="relative z-30 flex items-center justify-center gap-2">
+                            <div className="inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground shadow-subtle">
+                              <span>{`${selectedCustomerRowKeys.length} đã chọn`}</span>
+                              <button
+                                type="button"
+                                aria-label="Clear selected rows"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#4A63B8] transition hover:bg-[rgba(74,99,184,0.08)]"
+                                onClick={() => setSelectedCustomerRowKeys([])}
+                              >
+                                <X className="h-4 w-4" strokeWidth={2.2} />
+                              </button>
+                            </div>
+                            <div ref={customerBulkActionMenuRef} className="relative">
+                              <button
+                                type="button"
+                                className="inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground transition hover:bg-[#fafafa] shadow-subtle"
+                                onClick={() => setIsCustomerBulkActionMenuOpen((current) => !current)}
+                              >
+                                <Settings className="h-4 w-4" strokeWidth={2.2} />
+                                <span>Tác vụ</span>
+                              </button>
+
+                              {isCustomerBulkActionMenuOpen ? (
+                                <div className="absolute left-0 top-full z-40 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                                  {[
+                                    {
+                                      label: "Xóa",
+                                      icon: Trash2,
+                                      onClick: () => setIsCustomerBulkActionMenuOpen(false),
+                                    },
+                                    {
+                                      label: "Nhân bản",
+                                      icon: Copy,
+                                      onClick: () => setIsCustomerBulkActionMenuOpen(false),
+                                    },
+                                    {
+                                      label: "Export",
+                                      icon: Download,
+                                      onClick: () => {
+                                        setIsCustomerBulkActionMenuOpen(false);
+                                        exportCustomerRecords();
+                                      },
+                                    },
+                                  ].map((item, itemIndex) => (
+                                    <button
+                                      key={item.label}
+                                      type="button"
+                                      onClick={item.onClick}
+                                      className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
+                                        itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
+                                      }`}
+                                    >
+                                      <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                      <span>{item.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        ) : null}
+                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode ? (
+                          <button
+                            type="button"
+                            aria-label="Close search overlay"
+                            className="fixed inset-0 z-20 bg-[rgba(17,17,17,0.18)]"
+                            onClick={() => setIsGlobalSearchMenuOpen(false)}
+                          />
+                        ) : null}
+
+                        <label
+                          className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage ? "hidden" : ""
+                          }`}
+                        >
+                          <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+                          <input
+                            value={searchQuery}
+                            onFocus={() => setIsGlobalSearchMenuOpen(true)}
+                            onChange={(event) => {
+                              setSearchQuery(event.target.value);
+                              setIsGlobalSearchMenuOpen(true);
+                            }}
+                            placeholder={moduleSearchPlaceholder}
+                            className="w-full min-w-0 border-0 bg-transparent p-0 text-base text-foreground placeholder:text-muted-foreground outline-none"
+                          />
+                          <span className="h-5 w-px shrink-0 bg-border" />
+                          <button
+                            type="button"
+                            className="ui-hover-card -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors"
+                            onClick={() => setIsGlobalSearchMenuOpen((current) => !current)}
+                          >
+                            <ChevronDown className="h-4 w-4" strokeWidth={1.8} />
+                          </button>
+                        </label>
+
+                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode ? (
+                          <div className="absolute left-1/2 top-full z-40 w-[130%] -translate-x-1/2 overflow-hidden rounded-[16px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                            <div className="grid gap-0 md:grid-cols-3">
+                              <div className="border-b-[0.5px] border-[#E7E6E9] px-5 py-4 md:border-b-0 md:border-r-[0.5px]">
+                                <div className="flex items-center gap-2 text-[16px] font-semibold text-foreground">
+                                  <Filter className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={1.9} />
+                                  <span>Bộ lọc</span>
+                                </div>
+                                <div className="mt-4 space-y-0">
+                                  {activeSearchFilterSections.map((section, sectionIndex) => {
+                                    return (
+                                      <div
+                                        key={section.title}
+                                        className={sectionIndex === 0 ? "" : "border-t-[0.5px] border-[#E7E6E9] pt-3"}
+                                      >
+                                        <div className={sectionIndex === activeSearchFilterSections.length - 1 ? "" : "pb-3"}>
+                                          <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                            {section.title}
+                                          </div>
+                                          <div className="space-y-2 text-[14px] leading-5 text-foreground">
+                                            {section.items.map((item) => {
+                                              const isSelected = (selectedSearchFilters[section.title] ?? []).includes(item);
+
+                                              return (
+                                                <button
+                                                  key={item}
+                                                  type="button"
+                                                  className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                                    isSelected ? "font-semibold" : ""
+                                                  }`}
+                                                  onClick={() =>
+                                                    setSelectedSearchFilters((current) => {
+                                                      const currentItems = current[section.title] ?? [];
+                                                      const nextItems = currentItems.includes(item)
+                                                        ? currentItems.filter((currentItem) => currentItem !== item)
+                                                        : [...currentItems, item];
+
+                                                      return {
+                                                        ...current,
+                                                        [section.title]: nextItems,
+                                                      };
+                                                    })
+                                                  }
+                                                >
+                                                  <span>{item}</span>
+                                                  {isSelected ? (
+                                                    <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                                  ) : null}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
+                                  >
+                                    <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
+                                    <span>Thêm bộ lọc</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="border-b-[0.5px] border-[#E7E6E9] px-5 py-4 md:border-b-0 md:border-r-[0.5px]">
+                                <div className="flex items-center gap-2 text-[16px] font-semibold text-foreground">
+                                  <ArrowDownWideNarrow className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={1.9} />
+                                  <span>Nhóm theo</span>
+                                </div>
+                                <div className="mt-4 space-y-2 text-[14px] leading-5 text-foreground">
+                                  {activeSearchGroupOptions.map((item) => {
+                                    const isSelected = selectedSearchGroupOptions.includes(item);
+
+                                    return (
+                                      <button
+                                        key={item}
+                                        type="button"
+                                        className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                          isSelected ? "font-semibold" : ""
+                                        }`}
+                                        onClick={() =>
+                                          setSelectedSearchGroupOptions((current) =>
+                                            current.includes(item)
+                                              ? current.filter((currentItem) => currentItem !== item)
+                                              : [...current, item]
+                                          )
+                                        }
+                                      >
+                                        <span>{item}</span>
+                                        {isSelected ? (
+                                          <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                        ) : null}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
+                                  <button
+                                    type="button"
+                                    className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
+                                  >
+                                    <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
+                                    <span>Thêm nhóm</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="px-5 py-4">
+                                <div className="flex items-center gap-2 text-[16px] font-semibold text-foreground">
+                                  <Star className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={1.9} />
+                                  <span>Yêu thích</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : (
+                    </div>
+                    <div className="flex items-center justify-end gap-3 lg:col-start-3">
+                      {isCustomerDetailsPage && selectedCustomerRow ? (
+                        <>
+                          <div className="text-[14px] font-normal text-foreground">
+                            {`${customerDetailIndex >= 0 ? customerDetailIndex + 1 : 0} / ${customerDetailNavigationRows.length}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (previousCustomerDetail) {
+                                  openCustomerDetails(previousCustomerDetail.customer);
+                                }
+                              }}
+                              disabled={!previousCustomerDetail}
+                              aria-label="Khách hàng trước"
+                            >
+                              <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (nextCustomerDetail) {
+                                  openCustomerDetails(nextCustomerDetail.customer);
+                                }
+                              }}
+                              disabled={!nextCustomerDetail}
+                              aria-label="Khách hàng sau"
+                            >
+                              <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                          </div>
+                        </>
+                      ) : activeListPagination ? (
+                        <>
+                          <div className="text-[14px] font-normal text-foreground">
+                            {`${activeListRangeStart}-${activeListRangeEnd} / ${activeListPagination.total}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => activeListPagination.setPage((current) => Math.max(1, current - 1))}
+                              disabled={activeListPagination.currentPage === 1}
+                              aria-label="Trang trước"
+                            >
+                              <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() =>
+                                activeListPagination.setPage((current) =>
+                                  Math.min(activeListPagination.pageCount, current + 1)
+                                )
+                              }
+                              disabled={activeListPagination.currentPage === activeListPagination.pageCount}
+                              aria-label="Trang sau"
+                            >
+                              <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              {isBookingListPage || isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
+                <div className="shrink-0 lg:ml-auto lg:flex lg:flex-col lg:items-end lg:gap-4">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {!isCustomerPage ? (
                       <button
                         type="button"
                         onClick={openCreateRequest}
@@ -3268,13 +5703,13 @@ export default function Page() {
                         <Plus className="h-5 w-5" strokeWidth={1.8} />
                         <span>Tạo yêu cầu mới</span>
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ) : null}
             </div>
 
-            {isCustomerDetailsPage && selectedCustomerRow ? (
+            {isCustomerDetailsPage && selectedCustomerRow && !isCustomerCreateLikePage ? (
               <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
                 <div className="space-y-5">
                   <div className="space-y-5">
@@ -3620,12 +6055,8 @@ export default function Page() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <div className="text-base font-medium text-muted-foreground">Loại dịch vụ</div>
-                            <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              {selectedContractRow.services.map((service) => (
-                                <CustomerServiceTag key={`${selectedContractRow.code}-${service}`} service={service} />
-                              ))}
-                            </div>
+                            <div className="text-base font-medium text-muted-foreground">Dịch vụ</div>
+                            <div className="text-base text-foreground">{selectedContractRow.services.join(", ") || "-"}</div>
                           </div>
                           <div className="space-y-2">
                             <div className="text-base font-medium text-muted-foreground">Loại hợp đồng</div>
@@ -3639,7 +6070,9 @@ export default function Page() {
                           </div>
                           <div className="space-y-2">
                             <div className="text-base font-medium text-muted-foreground">Ngày hết hạn</div>
-                            <div className="text-base text-foreground">{selectedContractExpiry}</div>
+                            <div className={`text-base ${selectedContractRow ? getContractExpiryTextClass(selectedContractRow) : "text-foreground"}`}>
+                              {selectedContractExpiry}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -3836,7 +6269,10 @@ export default function Page() {
                 </div>
               </div>
             ) : selectedBookingRow ? (
-              <div ref={detailsScrollRef} className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div
+                ref={detailsScrollRef}
+                className={`mt-5 pr-1 ${isCreatePage ? "min-h-fit overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}
+              >
                 <div className="space-y-5">
                   <div ref={detailsIntroCardRef} className="rounded-[16px] bg-card p-5">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -4818,40 +7254,6 @@ export default function Page() {
 
             {isBookingListPage ? (
               <>
-                <div className="mt-1 shrink-0 flex flex-wrap items-start gap-2">
-                  {resolvedAdvancedFilterConfigs.map((filter) => (
-                    <AdvancedMultiSelectFilter
-                      key={filter.key}
-                      label={filter.label}
-                      placeholder={filter.placeholder}
-                      searchPlaceholder={filter.searchPlaceholder}
-                      options={filter.options}
-                      selectedValues={advancedFilters[filter.key]}
-                      onChange={(values) => updateAdvancedFilter(filter.key, values)}
-                      align="left"
-                      searchable={
-                        filter.key === "customers" ||
-                        filter.key === "originPorts" ||
-                        filter.key === "destinationPorts"
-                      }
-                      immediateSingleChoice={
-                        filter.key === "cargoTypes" || filter.key === "packaging"
-                      }
-                      openSignal={filter.key === "destinationPorts" ? destinationOpenSignal : 0}
-                      onApplied={filter.key === "originPorts" ? handleOriginPortsApplied : undefined}
-                    />
-                  ))}
-                  {totalSelectedFilters > 0 ? (
-                    <button
-                      type="button"
-                      onClick={clearAllAdvancedFilters}
-                      className="ui-hover-soft h-[34px] rounded-full bg-[#f7f7f7] px-3 text-sm font-semibold text-foreground transition-colors"
-                    >
-                      Xóa tất cả
-                    </button>
-                  ) : null}
-                </div>
-
                 <div
                   ref={desktopTableShellRef}
                   className="mt-[12px] hidden min-h-0 flex-1 overflow-hidden rounded-[12px] bg-background lg:flex lg:flex-col"
@@ -4944,8 +7346,8 @@ export default function Page() {
                     className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
                     style={desktopRowsHeight ? { height: `${desktopRowsHeight}px` } : undefined}
                   >
-                    {visibleRows.length > 0 ? (
-                      visibleRows.map((row, index) => (
+                    {paginatedBookingRows.length > 0 ? (
+                      paginatedBookingRows.map((row, index) => (
                         <div
                           key={row.code}
                           className="ui-hover-row group grid cursor-pointer bg-card transition-colors"
@@ -4967,7 +7369,7 @@ export default function Page() {
                               <>
                           <div
                             className={`ui-hover-row-cell flex h-12 w-full min-w-0 items-center justify-start gap-3 whitespace-nowrap pl-6 pr-9 text-left text-sm font-semibold text-foreground transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             <label
@@ -4993,49 +7395,49 @@ export default function Page() {
                           </div>
                           <div
                             className={`ui-hover-row-cell flex h-12 w-full min-w-0 items-center justify-start px-3 text-left text-sm text-foreground transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             {row.customer}
                           </div>
                           <div
                             className={`ui-hover-row-cell flex h-12 w-full items-center justify-start px-3 text-left text-sm text-foreground transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             <RouteCell {...row.route} />
                           </div>
                           <div
                             className={`ui-hover-row-cell flex h-12 w-full items-center justify-start px-3 text-left text-sm text-foreground transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             {row.cargoType}
                           </div>
                           <div
                             className={`ui-hover-row-cell flex h-12 w-full items-center justify-start px-3 text-left text-sm text-foreground transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             {row.packaging}
                           </div>
                           <div
                             className={`ui-hover-row-cell h-12 px-3 text-left text-sm text-foreground flex items-center justify-start transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             <BookingStatusTag status={row.status} />
                           </div>
                           <div
                             className={`ui-hover-row-cell h-12 px-3 text-left text-sm text-foreground flex items-center justify-start transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             {row.createdAt}
                           </div>
                           <div
                             className={`ui-hover-row-cell h-12 px-3 text-center flex items-center justify-center transition-colors ${selectedRowClass} ${
-                              index === visibleRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
+                              index === paginatedBookingRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
                             }`}
                           >
                             <div
@@ -5109,8 +7511,8 @@ export default function Page() {
 
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto lg:hidden">
                   <div className="grid gap-3">
-                    {visibleRows.length > 0 ? (
-                      visibleRows.map((row) => (
+                    {paginatedBookingRows.length > 0 ? (
+                      paginatedBookingRows.map((row) => (
                         <article
                           key={row.code}
                           className="ui-hover-soft cursor-pointer rounded-2xl border border-border bg-card p-4 transition-colors"
@@ -5178,106 +7580,25 @@ export default function Page() {
 
             {isCustomerListPage ? (
               <>
-                <div className="flex flex-wrap items-center gap-2">
-                  {customerListFilterConfigs.map((filter) => (
-                    <AdvancedMultiSelectFilter
-                      key={filter.key}
-                      label={filter.label}
-                      placeholder={filter.placeholder}
-                      searchPlaceholder={filter.searchPlaceholder}
-                      options={filter.options}
-                      selectedValues={customerListFilters[filter.key]}
-                      onChange={(values) => updateCustomerListFilter(filter.key, values)}
-                      align="left"
-                      searchable={filter.key === "contacts" || filter.key === "companies"}
-                      immediateSingleChoice={false}
-                      compactModal={filter.key === "groups"}
-                      modalWidthClass={
-                        filter.key === "services" ? "w-[247px]" : undefined
-                      }
-                    />
-                  ))}
-                  <div className="flex items-center">
-                    {totalSelectedCustomerListFilters > 0 ? (
-                      <button
-                        type="button"
-                        onClick={clearAllCustomerListFilters}
-                        className="ui-hover-soft h-[34px] rounded-full bg-[#f7f7f7] px-3 text-sm font-semibold text-foreground transition-colors"
-                      >
-                        Xóa tất cả
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
                 <div
                   className="mt-[12px] hidden min-h-0 flex-1 overflow-hidden rounded-[12px] bg-background lg:flex lg:flex-col"
                 >
                   <div
-                    className="grid shrink-0 border-b border-border bg-card"
+                    className="grid shrink-0 border-b-[0.5px] border-border bg-card"
                     style={{
                       gridTemplateColumns: customerTableColumns,
                       paddingRight: customerTableScrollbarWidth ? `${customerTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["Khách hàng", "Công ty", "Dịch vụ đang sử dụng", "Trạng thái", "Nhóm khách hàng", ""].map((label, index) => (
+                    {["", "Mã KH", "Tên khách hàng", "Loại KH", "Công ty phụ trách", "Trạng thái"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
-                          index === 0 ? "pl-6 pr-9" : "px-4"
+                          index === 0 ? "justify-center px-2" : index === 1 ? "pl-6 pr-9" : "px-4"
                         }`}
                       >
                         {label === "Trạng thái" ? (
-                          <div ref={customerStatusFilterRef} className="relative flex items-center gap-1.5">
-                            <span>{label}</span>
-                            <button
-                              type="button"
-                              className={`rounded-md p-1 transition-colors ${
-                                isCustomerStatusFilterOpen || customerStatusFilters.length > 0
-                                  ? "text-foreground"
-                                  : "text-muted-foreground"
-                              }`}
-                              onClick={openCustomerStatusFilter}
-                            >
-                              <ListFilter className="h-4 w-4" strokeWidth={1.8} />
-                            </button>
-
-                            {isCustomerStatusFilterOpen ? (
-                              <div className="absolute left-0 top-full z-20 mt-1 w-[220px] overflow-hidden rounded-[12px] border border-[#e7e6e9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                                <div className="max-h-[220px] overflow-y-auto py-2">
-                                  <button
-                                    type="button"
-                                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-sidebar ${
-                                      customerStatusFilters.length === 0 ? "text-foreground" : "text-muted-foreground"
-                                    }`}
-                                    onClick={selectAllCustomerStatuses}
-                                  >
-                                    <span>{customerStatusFilterAllOption.label}</span>
-                                    {customerStatusFilters.length === 0 ? (
-                                      <Check className="h-4 w-4 text-foreground" strokeWidth={2} />
-                                    ) : null}
-                                  </button>
-                                  {customerStatusFilterOptions.map((option) => {
-                                    const isSelected = customerStatusFilters[0] === option.value;
-
-                                    return (
-                                      <button
-                                        key={option.value}
-                                        type="button"
-                                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-sidebar ${
-                                          isSelected ? "text-foreground" : "text-muted-foreground"
-                                        }`}
-                                        onClick={() => toggleCustomerStatusFilterValue(option.value)}
-                                      >
-                                        <span>{option.label}</span>
-                                        {isSelected ? <Check className="h-4 w-4 text-foreground" strokeWidth={2} /> : null}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
+                          <span>{label}</span>
                         ) : (
                           label
                         )}
@@ -5286,13 +7607,15 @@ export default function Page() {
                   </div>
 
                   <div ref={customerTableBodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                    {visibleCustomerRows.length > 0 ? (
-                      visibleCustomerRows.map((row, index) => (
-                        <div
-                          key={row.customer}
-                          className="grid cursor-pointer bg-card transition-colors hover:bg-[#B6E1FF]"
-                          style={{ gridTemplateColumns: customerTableColumns }}
-                          role="button"
+	                    {paginatedCustomerRows.length > 0 ? (
+	                      paginatedCustomerRows.map((row, index) => (
+	                        <div
+	                          key={row.customer}
+	                          className={`grid cursor-pointer transition-colors hover:bg-[#B6E1FF] ${
+	                            selectedCustomerRowKeys.includes(row.customer) ? "bg-[#B6E1FF]" : "bg-card"
+	                          }`}
+	                          style={{ gridTemplateColumns: customerTableColumns }}
+	                          role="button"
                           tabIndex={0}
                           onClick={() => openCustomerDetails(row.customer)}
                           onKeyDown={(event) => {
@@ -5302,73 +7625,49 @@ export default function Page() {
                             }
                           }}
                         >
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start pl-6 pr-9 text-left text-sm font-semibold text-foreground ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.customer}
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.contractCompany}
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 flex-nowrap items-center justify-start gap-2 overflow-hidden px-4 text-left text-sm text-foreground ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.services[0] ? (
-                              <CustomerServiceTag key={`${row.customer}-${row.services[0]}`} service={row.services[0]} />
-                            ) : null}
-                            {row.services.length > 1 ? (
-                              <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2 py-1 text-xs font-medium text-foreground">
-                                {`${row.services.length - 1}+`}
-                              </span>
-                            ) : null}
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <CustomerAccountStatusTag status={row.status} />
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.customerGroup}
-                          </div>
-                          <div className={`flex h-12 items-center justify-center px-3 ${index === visibleCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <div
-                              ref={openCustomerRowActionKey === row.customer ? customerRowActionMenuRef : undefined}
-                              className="relative"
+                          <div
+                            className={`flex h-12 items-center justify-center px-2 ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}
+                          >
+                            <label
+                              className="-m-2 flex h-8 w-8 cursor-pointer items-center justify-center"
+                              onClick={(event) => event.stopPropagation()}
                             >
-                              <button
-                                type="button"
-                                aria-label={`Tác vụ cho ${row.customer}`}
-                                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setOpenCustomerRowActionKey((current) =>
-                                    current === row.customer ? null : row.customer
+                              <input
+                                type="checkbox"
+                                checked={selectedCustomerRowKeys.includes(row.customer)}
+                                className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setSelectedCustomerRowKeys((current) =>
+                                    checked ? [...current, row.customer] : current.filter((key) => key !== row.customer)
                                   );
                                 }}
-                              >
-                                <MoreVertical className="h-4 w-4" strokeWidth={1.8} />
-                              </button>
-
-                              {openCustomerRowActionKey === row.customer ? (
-                                <div className="absolute right-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                                  {[
-                                    { label: "Xem chi tiết", icon: Eye, onClick: () => openCustomerDetails(row.customer) },
-                                    { label: "Chỉnh sửa", icon: Pencil },
-                                    { label: "Xóa", icon: Trash2 }
-                                  ].map((item, itemIndex) => (
-                                    <button
-                                      key={item.label}
-                                      type="button"
-                                      className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                        itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                      }`}
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        setOpenCustomerRowActionKey(null);
-                                        item.onClick?.();
-                                      }}
-                                    >
-                                      <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                      <span>{item.label}</span>
-                                    </button>
-                                  ))}
-                                </div>
-                              ) : null}
+                              />
+                            </label>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden pl-6 pr-4 text-left text-sm font-medium text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.customerCode}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 pr-9 text-left text-sm font-semibold text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.customer}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.customerType}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              {row.contractCompany.split(" / ").map((company) => (
+                                <span
+                                  key={`${row.customer}-${company}`}
+                                  className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground"
+                                >
+                                  {company}
+                                </span>
+                              ))}
                             </div>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <CustomerAccountStatusTag status={row.status} />
                           </div>
                         </div>
                       ))
@@ -5382,17 +7681,33 @@ export default function Page() {
 
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto lg:hidden">
                   <div className="grid gap-3">
-                    {visibleCustomerRows.length > 0 ? (
-                      visibleCustomerRows.map((row) => (
+                    {paginatedCustomerRows.length > 0 ? (
+                      paginatedCustomerRows.map((row) => (
                         <article
                           key={row.customer}
                           className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]"
                         >
-                          <div className="text-sm font-semibold text-foreground">{row.customer}</div>
+                          <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{row.customerCode}</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{row.customer}</div>
                           <div className="mt-3 space-y-2 text-sm text-foreground">
                             <div>
-                              <span className="text-muted-foreground">Công ty ký hợp đồng: </span>
-                              {row.contractCompany}
+                              <span className="text-muted-foreground">MST: </span>
+                              {row.taxId}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Loại KH: </span>
+                              {row.customerType}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-muted-foreground">Công ty PT: </span>
+                              {row.contractCompany.split(" / ").map((company) => (
+                                <span
+                                  key={`${row.customer}-mobile-${company}`}
+                                  className="inline-flex items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2 py-1 text-xs font-medium text-foreground"
+                                >
+                                  {company}
+                                </span>
+                              ))}
                             </div>
                             <div>
                               <span className="text-muted-foreground">Trạng thái: </span>
@@ -5405,7 +7720,7 @@ export default function Page() {
                               {row.customerGroup}
                             </div>
                             <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
-                              <span className="text-muted-foreground">Dịch vụ đang sử dụng: </span>
+                              <span className="text-muted-foreground">Dịch vụ: </span>
                               {row.services[0] ? (
                                 <CustomerServiceTag key={`${row.customer}-${row.services[0]}`} service={row.services[0]} />
                               ) : null}
@@ -5428,178 +7743,900 @@ export default function Page() {
               </>
             ) : null}
 
-            {isCustomerContractsPage ? (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <AdvancedMultiSelectFilter
-                    label="Khách hàng"
-                    placeholder="Chọn khách hàng"
-                    searchPlaceholder="Tìm theo tên khách hàng hoặc MST"
-                    options={sortSelectOptions(
-                      contractRows.map((row) => ({
-                        label: row.customer,
-                        value: row.customer,
-                        searchText: `${row.customer} ${customerRows.find((customer) => customer.customer === row.customer)?.taxId ?? ""}`
-                      }))
+            {isCustomerCreateLikePage ? (
+              <div className={`mt-1 pr-1 ${isAnyCreatePage ? "min-h-fit overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-0">
+                    {isCustomerDetailsPage ? <div /> : (
+                      <button
+                        type="button"
+                        disabled
+                        aria-disabled="true"
+                        className="inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-[#F3F4F6] px-2.5 text-[13px] font-medium text-[#9CA3AF] opacity-100"
+                      >
+                        <Mail className="h-4 w-4 text-[#9CA3AF]" strokeWidth={1.9} />
+                        Gửi email
+                      </button>
                     )}
-                    selectedValues={customerListFilters.contacts}
-                    onChange={(values) => updateCustomerListFilter("contacts", values)}
-                    align="left"
-                    searchable
-                  />
-                  <AdvancedMultiSelectFilter
-                    label="Công ty ký hợp đồng"
-                    placeholder="Chọn công ty ký hợp đồng"
-                    searchPlaceholder="Tìm theo công ty ký hợp đồng"
-                    options={sortSelectOptions(
-                      [...new Set(contractRows.map((row) => row.contractCompany))].map((company) => ({
-                        label: company,
-                        value: company
-                      }))
-                    )}
-                    selectedValues={customerListFilters.companies}
-                    onChange={(values) => updateCustomerListFilter("companies", values)}
-                    align="left"
-                    searchable
-                  />
-                  <AdvancedMultiSelectFilter
-                    label="Dịch vụ"
-                    placeholder="Chọn dịch vụ"
-                    searchPlaceholder="Tìm theo dịch vụ"
-                    options={sortSelectOptions(
-                      [...new Set(contractRows.flatMap((row) => row.services))].map((service) => ({
-                        label: service,
-                        value: service
-                      }))
-                    )}
-                    selectedValues={customerListFilters.services}
-                    onChange={(values) => updateCustomerListFilter("services", values)}
-                    align="left"
-                    immediateSingleChoice={false}
-                    modalWidthClass="w-[247px]"
-                    searchable={false}
-                  />
-                  <div ref={contractExpiryFilterRef} className="relative">
-                    <button
-                      type="button"
-                      className={`ui-hover-soft inline-flex h-[34px] max-w-full items-center justify-between gap-2 rounded-full border-[0.5px] bg-card px-3 text-left text-sm text-foreground transition-colors ${
-                        isContractExpiryFilterOpen || contractExpiryRange.from || contractExpiryRange.to
-                          ? "border-[#18181b]"
-                          : "border-[#cbccc9]"
-                      }`}
-                      onClick={() => setIsContractExpiryFilterOpen((current) => !current)}
-                    >
-                      <span className="truncate">
-                        {contractExpiryRange.from || contractExpiryRange.to
-                          ? `${contractExpiryRange.from ? formatIsoDateToDisplay(contractExpiryRange.from) : "Từ ngày"} - ${
-                              contractExpiryRange.to ? formatIsoDateToDisplay(contractExpiryRange.to) : "Đến ngày"
-                            }`
-                          : "Ngày hết hạn"}
-                      </span>
-                      <ChevronDown
-                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-                          isContractExpiryFilterOpen ? "rotate-180" : ""
-                        }`}
-                        strokeWidth={1.8}
-                      />
-                    </button>
+                    <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                      {customerCreateWorkflowSteps.map((step, index) => (
+                        <div
+                          key={step}
+                          className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                            (
+                              selectedCustomerRow?.status === "locked"
+                                ? index === 2
+                                : selectedCustomerRow?.status === "active"
+                                  ? index === 1
+                                  : index === 0
+                            )
+                              ? "bg-[#2054a3] text-white"
+                              : "bg-[#EAF1FB] text-[#245698]"
+                          } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                        >
+                          {step}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
 
-                    {isContractExpiryFilterOpen ? (
-                      <div className="absolute left-0 top-full z-40 mt-1 w-[320px] max-w-[calc(100vw-32px)] rounded-[16px] bg-card shadow-[inset_0_0_0_0.5px_#E7E6E9,0_24px_62px_rgba(17,17,17,0.22)]">
-                        <div className="space-y-4 px-4 py-4">
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium text-muted-foreground">Từ ngày</div>
-                            <input
-                              ref={contractExpiryFromInputRef}
-                              type="date"
-                              value={draftContractExpiryRange.from}
-                              onClick={() => contractExpiryFromInputRef.current?.showPicker?.()}
-                              onFocus={() => contractExpiryFromInputRef.current?.showPicker?.()}
-                              onKeyDown={(event) => event.preventDefault()}
-                              onChange={(event) =>
-                                setDraftContractExpiryRange((current) => ({
-                                  ...current,
-                                  from: event.target.value
-                                }))
-                              }
-                              className="min-h-[42px] w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none transition focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
+                  <div className="rounded-[14px] bg-card">
+                    <div className="p-4">
+                      <div className="rounded-[14px] border border-[#DADCE3] bg-white shadow-[0_2px_10px_rgba(17,17,17,0.04)]">
+              <div className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <Star className="h-7 w-7 text-muted-foreground" strokeWidth={1.8} />
+                            <div className="text-[24px] font-semibold leading-none text-foreground">
+                              {isCustomerDetailsPage ? selectedCustomerRow?.customerCode ?? "Chi tiết Khách hàng" : "Thêm mới Khách hàng"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-x-8 gap-y-5 px-5 pb-5 pt-0 lg:grid-cols-2">
+                          <div className="space-y-0">
+                            <FormField
+                              label="Tên pháp lý (VN)"
+                              value={customerCreateForm.customerName}
+                              error={customerCreateErrors.customerName}
+                              placeholder="Tên đầy đủ theo GPKD"
+                              variant="inlineUnderline"
+                              allowWrapWhenReadOnly
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("customerName", value)}
+                            />
+                            <FormField
+                              label="Tên tiếng Anh"
+                              value={customerCreateForm.englishName}
+                              error={customerCreateErrors.englishName}
+                              placeholder="Tên trên B/L, AWB, thư gửi đối tác quốc tế"
+                              variant="inlineUnderline"
+                              allowWrapWhenReadOnly
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("englishName", value)}
+                            />
+                            <FormField
+                              label="Mã số thuế (MST)"
+                              value={customerCreateForm.taxId}
+                              error={customerCreateErrors.taxId}
+                              placeholder="10 hoặc 13 chữ số"
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("taxId", value.replace(/\D/g, ""))}
+                            />
+                            <FormField
+                              label="Nhóm KH"
+                              value={customerCreateForm.customerGroup}
+                              error={customerCreateErrors.customerGroup}
+                              options={customerGroupOptions}
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("customerGroup", value)}
+                            />
+                            <FormField
+                              label="Loại KH"
+                              value={customerCreateForm.customerType}
+                              error={customerCreateErrors.customerType}
+                              options={customerTypeOptions}
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("customerType", value)}
+                            />
+                            <InlineDropdownField
+                              label="Dịch vụ"
+                              values={customerCreateForm.services}
+                              options={customerCreateServiceOptions}
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onToggle={(value) => toggleCustomerCreateMultiValue("services", value)}
+                              error={customerCreateErrors.services}
+                            />
+                            <FormField
+                              label="Mức độ ưu tiên"
+                              value={customerCreateForm.priority}
+                              options={customerPriorityOptions.map((option) => ({
+                                label: option.label,
+                                value: option.value
+                              }))}
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("priority", value)}
                             />
                           </div>
-                          <div className="space-y-2">
-                            <div className="text-sm font-medium text-muted-foreground">Đến ngày</div>
-                            <input
-                              ref={contractExpiryToInputRef}
-                              type="date"
-                              value={draftContractExpiryRange.to}
-                              onClick={() => contractExpiryToInputRef.current?.showPicker?.()}
-                              onFocus={() => contractExpiryToInputRef.current?.showPicker?.()}
-                              onKeyDown={(event) => event.preventDefault()}
-                              onChange={(event) =>
-                                setDraftContractExpiryRange((current) => ({
-                                  ...current,
-                                  to: event.target.value
-                                }))
+
+                          <div className="space-y-0">
+                            <FormField
+                              label="Nhân viên KD"
+                              value={customerCreateForm.salesperson}
+                              error={customerCreateErrors.salesperson}
+                              options={customerSalespersonOptions}
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("salesperson", value)}
+                            />
+                            <FormField
+                              label="Nguồn KH"
+                              value={customerCreateForm.source}
+                              error={customerCreateErrors.source}
+                              options={customerSourceOptions}
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("source", value)}
+                            />
+                            <InlineDropdownField
+                              label="Công ty phụ trách"
+                              values={customerCreateForm.responsibleCompanies}
+                              options={customerResponsibleCompanyOptions}
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onToggle={(value) => toggleCustomerCreateMultiValue("responsibleCompanies", value)}
+                              error={customerCreateErrors.responsibleCompanies}
+                            />
+                            <FormField
+                              label="SĐT"
+                              value={customerCreateForm.phone}
+                              error={customerCreateErrors.phone}
+                              placeholder="Nhập SĐT"
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) =>
+                                updateCustomerCreateForm(
+                                  "phone",
+                                  value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "")
+                                )
                               }
-                              className="min-h-[42px] w-full rounded-xl border border-input bg-card px-3 text-sm text-foreground outline-none transition focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
+                            />
+                            <FormField
+                              label="Email"
+                              value={customerCreateForm.email}
+                              error={customerCreateErrors.email}
+                              placeholder="Nhập email"
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("email", value)}
+                            />
+                            <FormField
+                              label="Website"
+                              value={customerCreateForm.website}
+                              error={customerCreateErrors.website}
+                              placeholder="https://example.com"
+                              variant="inlineUnderline"
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onChange={(value) => updateCustomerCreateForm("website", value)}
+                            />
+                            <InlineDropdownField
+                              label="Tags / Phân khúc"
+                              values={customerCreateForm.tags}
+                              options={customerSegmentOptions}
+                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                              onToggle={(value) => toggleCustomerCreateMultiValue("tags", value)}
+                              error={customerCreateErrors.tags}
                             />
                           </div>
                         </div>
-                        <div className="flex items-center justify-between border-t-[0.5px] border-[#18181b] px-4 py-4">
-                          <button
-                            type="button"
-                            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-                            onClick={() => setDraftContractExpiryRange({ from: "", to: "" })}
-                            disabled={!draftContractExpiryRange.from && !draftContractExpiryRange.to}
-                          >
-                            Xóa bộ lọc
-                          </button>
-                          <div className="flex items-center gap-5">
-                            <button
-                              type="button"
-                              className="text-sm font-medium text-[#22579B] transition-colors hover:text-[#1b467d]"
-                              onClick={() => {
-                                setDraftContractExpiryRange(
-                                  contractExpiryRange.from || contractExpiryRange.to
-                                    ? contractExpiryRange
-                                    : getCurrentYearDateRange()
-                                );
-                                setIsContractExpiryFilterOpen(false);
-                              }}
-                            >
-                              Hủy
-                            </button>
-                            <button
-                              type="button"
-                              className="text-sm font-medium text-[#22579B] transition-colors hover:text-[#1b467d] disabled:cursor-not-allowed disabled:opacity-40"
-                              onClick={() => {
-                                setContractExpiryRange(draftContractExpiryRange);
-                                setIsContractExpiryFilterOpen(false);
-                              }}
-                              disabled={
-                                draftContractExpiryRange.from === contractExpiryRange.from &&
-                                draftContractExpiryRange.to === contractExpiryRange.to
-                              }
-                            >
-                              Áp dụng
-                            </button>
+
+                        <div className="mt-0 border-t border-[#E7E6E9]">
+                          <div className="flex flex-wrap items-end gap-0 border-b border-[#E7E6E9] px-5 pt-0">
+                            {[
+                              { key: "address", label: "Địa chỉ" },
+                              { key: "contacts", label: "Liên hệ" },
+                              { key: "routes", label: "Tuyến hàng" },
+                              { key: "notes", label: "Ghi chú" }
+                            ].map((tab) => {
+                              const isActive = customerCreateWorkspaceTab === tab.key;
+                              return (
+                                <button
+                                  key={tab.key}
+                                  type="button"
+                                  className={`inline-flex h-9 items-center border-r border-[#CDD3E3] px-4 text-[14px] font-medium ${
+                                    isActive
+                                      ? "border-b-2 border-b-[#4A63B8] bg-[#F3F4F6] text-foreground"
+                                      : "text-muted-foreground"
+                                  }`}
+                                  onClick={() => setCustomerCreateWorkspaceTab(tab.key as "address" | "contacts" | "routes" | "notes")}
+                                >
+                                  {tab.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="px-5 py-0">
+                            {customerCreateWorkspaceTab === "address" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Số nhà, tên đường", "Phường/Xã, Quận/Huyện", "Tỉnh/Thành phố", "Quốc gia", "Mã bưu chính", "Loại địa chỉ"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {customerAddressRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`customer-address-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">{row.line1 || "-"}</div>
+                                      <div className="px-4 py-2">{row.line2 || "-"}</div>
+                                      <div className="px-4 py-2">{row.city || "-"}</div>
+                                      <div className="px-4 py-2">{row.country || "-"}</div>
+                                      <div className="px-4 py-2">{row.postalCode || "-"}</div>
+                                      <div className="px-4 py-2">{row.addressType || "-"}</div>
+                                    </div>
+                                  ))}
+                                  {isCustomerAddressFormOpen ? (
+                                    <div
+                                      ref={customerAddressInlineFormRef}
+                                      className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerAddressForm.line1}
+                                          onChange={(event) =>
+                                            setCustomerAddressForm((current) => ({ ...current, line1: event.target.value }))
+                                          }
+                                          placeholder="Số nhà, tên đường"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerAddressForm.line2}
+                                          onChange={(event) =>
+                                            setCustomerAddressForm((current) => ({ ...current, line2: event.target.value }))
+                                          }
+                                          placeholder="Phường/Xã, Quận/Huyện"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <TableDropdownField
+                                          value={customerAddressForm.country}
+                                          options={customerAddressCountryOptions}
+                                          onChange={(value) =>
+                                            setCustomerAddressForm((current) => ({
+                                              ...current,
+                                              country: value,
+                                              city: (customerAddressProvinceOptions[value] ?? [])[0]?.value ?? ""
+                                            }))
+                                          }
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <TableDropdownField
+                                          value={customerAddressForm.city}
+                                          options={customerAddressCityOptions}
+                                          onChange={(value) =>
+                                            setCustomerAddressForm((current) => ({ ...current, city: value }))
+                                          }
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerAddressForm.postalCode}
+                                          onChange={(event) =>
+                                            setCustomerAddressForm((current) => ({
+                                              ...current,
+                                              postalCode: event.target.value.replace(/\D/g, "").slice(0, 6)
+                                            }))
+                                          }
+                                          placeholder="5-6 chữ số"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <TableDropdownField
+                                          value={customerAddressForm.addressType}
+                                          options={customerAddressTypeOptions}
+                                          onChange={(value) =>
+                                            setCustomerAddressForm((current) => ({ ...current, addressType: value }))
+                                          }
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {!canEditCustomerDetailTabs ? null : Array.from({ length: emptyCustomerAddressRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 ? (
+                                      <button
+                                        key="customer-address-add-row"
+                                        type="button"
+                                        className="grid w-full grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextCustomerAddressRow}
+                                      >
+                                        <div className="col-span-6 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`customer-address-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 6 }).map((__, cellIndex) => (
+                                          <div key={`customer-address-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            ) : customerCreateWorkspaceTab === "contacts" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Họ tên", "Vai trò", "SĐT", "Email", "Phòng ban", "Liên hệ chính", "Ghi chú"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {customerContactRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`customer-contact-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">{row.fullName || "-"}</div>
+                                      <div className="px-4 py-2">{row.role || "-"}</div>
+                                      <div className="px-4 py-2">{row.phone || "-"}</div>
+                                      <div className="px-4 py-2">{row.email || "-"}</div>
+                                      <div className="px-4 py-2">{row.department || "-"}</div>
+                                      <div className="px-4 py-2">{row.isPrimary ? "Có" : "-"}</div>
+                                      <div className="px-4 py-2">{row.notes || "-"}</div>
+                                    </div>
+                                  ))}
+                                  {isCustomerContactFormOpen ? (
+                                    <div
+                                      ref={customerContactInlineFormRef}
+                                      className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerContactForm.fullName}
+                                          onChange={(event) =>
+                                            setCustomerContactForm((current) => ({ ...current, fullName: event.target.value }))
+                                          }
+                                          placeholder="Tên liên hệ đầy đủ"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <TableDropdownField
+                                          value={customerContactForm.role}
+                                          options={customerContactRoleOptions}
+                                          onChange={(value) =>
+                                            setCustomerContactForm((current) => ({ ...current, role: value }))
+                                          }
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerContactForm.phone}
+                                          onChange={(event) =>
+                                            setCustomerContactForm((current) => ({
+                                              ...current,
+                                              phone: event.target.value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "")
+                                            }))
+                                          }
+                                          placeholder="SĐT trực tiếp"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerContactForm.email}
+                                          onChange={(event) =>
+                                            setCustomerContactForm((current) => ({ ...current, email: event.target.value }))
+                                          }
+                                          placeholder="Email"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerContactForm.department}
+                                          onChange={(event) =>
+                                            setCustomerContactForm((current) => ({ ...current, department: event.target.value }))
+                                          }
+                                          placeholder="Phòng ban"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
+                                          <input
+                                            type="checkbox"
+                                            checked={customerContactForm.isPrimary}
+                                            onChange={(event) =>
+                                              setCustomerContactForm((current) => ({ ...current, isPrimary: event.target.checked }))
+                                            }
+                                            className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                          />
+                                        </label>
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={customerContactForm.notes}
+                                          onChange={(event) =>
+                                            setCustomerContactForm((current) => ({ ...current, notes: event.target.value }))
+                                          }
+                                          placeholder="Ghi chú đặc biệt về liên hệ này"
+                                          className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {!canEditCustomerDetailTabs ? null : Array.from({ length: emptyCustomerContactRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 ? (
+                                      <button
+                                        key="customer-contact-add-row"
+                                        type="button"
+                                        className="grid w-full grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextCustomerContactRow}
+                                      >
+                                        <div className="col-span-7 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`customer-contact-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 7 }).map((__, cellIndex) => (
+                                          <div key={`customer-contact-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            ) : customerCreateWorkspaceTab === "routes" ? (
+                              <div className="px-4 py-4">
+                                {customerRouteRows.length === 0 && !isCustomerRouteFormOpen ? (
+                                  !canEditCustomerDetailTabs ? null : (
+                                  <button
+                                    type="button"
+                                    onClick={openNextCustomerRouteRow}
+                                    className="inline-flex h-[36px] items-center gap-2 text-[14px] text-[#4A63B8] transition hover:text-[#3550a3]"
+                                  >
+                                    <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                    Thêm tuyến hàng
+                                  </button>
+                                  )
+                                ) : (
+                                  <div className="space-y-4">
+                                    {customerRouteRows.map((row, index) => (
+                                      <div key={`customer-route-row-${index}`} className="space-y-3 rounded-[16px] border border-[#E7E6E9] bg-[#FCFCFD] px-4 py-4">
+                                        <div className="text-[14px] font-semibold text-foreground">
+                                          Tuyến hàng {String(index + 1).padStart(2, "0")}
+                                        </div>
+                                        <div className="grid gap-x-4 gap-y-0 lg:grid-cols-2">
+                                          <div className="space-y-0">
+                                            <InlineCompactField label="Hướng vận chuyển">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteDirectionOptions, row.shippingDirection) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Phương thức vận tải">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteTransportModeOptions, row.transportMode) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Incoterm">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteIncotermOptions, row.incoterm) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Nhóm hàng hóa">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteCargoGroupOptions, row.cargoGroup) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Mô tả hàng hóa">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{row.cargoDescription || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="HS Code">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{row.hsCode || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Nước xuất">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteCountryOptions, row.exportCountry) || "-"}</div>
+                                            </InlineCompactField>
+                                          </div>
+                                          <div className="space-y-0">
+                                            <InlineCompactField label="Nước nhập">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteCountryOptions, row.importCountry) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="POL (Cảng xếp)">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRoutePolOptions, row.pol) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="POD (Cảng dỡ)">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRoutePodOptions, row.pod) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Loại container">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{resolveSelectOptionLabel(customerRouteContainerTypeOptions, row.containerType) || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Volume dự kiến (CBM)">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{row.estimatedVolume || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Trọng lượng dự kiến (KG)">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{row.estimatedWeight || "-"}</div>
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Yêu cầu khác">
+                                              <div className="flex h-6 items-center text-[13px] text-foreground">{row.otherRequirements || "-"}</div>
+                                            </InlineCompactField>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+
+                                    {isCustomerRouteFormOpen ? (
+                                      <div ref={customerRouteInlineFormRef} className="space-y-3 rounded-[16px] border border-[#E7E6E9] bg-[#FCFCFD] px-4 py-4">
+                                        <div className="text-[14px] font-semibold text-foreground">
+                                          Tuyến hàng {String(customerRouteRows.length + 1).padStart(2, "0")}
+                                        </div>
+                                        <div className="grid gap-x-4 gap-y-0 lg:grid-cols-2">
+                                          <div className="space-y-0">
+                                            <InlineCompactField label="Hướng vận chuyển">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.shippingDirection} options={customerRouteDirectionOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, shippingDirection: value }))} />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Phương thức vận tải">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.transportMode} options={customerRouteTransportModeOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, transportMode: value }))} />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Incoterm">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.incoterm} options={customerRouteIncotermOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, incoterm: value }))} placeholder="Chọn Incoterm" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Nhóm hàng hóa">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.cargoGroup} options={customerRouteCargoGroupOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, cargoGroup: value }))} />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Mô tả hàng hóa">
+                                              <input value={customerRouteForm.cargoDescription} onChange={(event) => setCustomerRouteForm((current) => ({ ...current, cargoDescription: event.target.value }))} placeholder="Tên hàng cụ thể" className="h-6 w-full border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-[#9CA3AF]" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="HS Code">
+                                              <input value={customerRouteForm.hsCode} onChange={(event) => setCustomerRouteForm((current) => ({ ...current, hsCode: event.target.value.replace(/\D/g, "").slice(0, 10) }))} placeholder="6-10 số" className="h-6 w-full border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-[#9CA3AF]" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Nước xuất">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.exportCountry} options={customerRouteCountryOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, exportCountry: value }))} placeholder="Chọn nước xuất" />
+                                            </InlineCompactField>
+                                          </div>
+                                          <div className="space-y-0">
+                                            <InlineCompactField label="Nước nhập">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.importCountry} options={customerRouteCountryOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, importCountry: value }))} placeholder="Chọn nước nhập" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="POL (Cảng xếp)">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.pol} options={customerRoutePolOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, pol: value }))} placeholder="Chọn POL" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="POD (Cảng dỡ)">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.pod} options={customerRoutePodOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, pod: value }))} placeholder="Chọn POD" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Loại container">
+                                              <TableDropdownField heightClass="h-6" textSizeClass="text-[13px]" value={customerRouteForm.containerType} options={customerRouteContainerTypeOptions} onChange={(value) => setCustomerRouteForm((current) => ({ ...current, containerType: value }))} placeholder="Chọn loại container" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Volume dự kiến (CBM)">
+                                              <input value={customerRouteForm.estimatedVolume} onChange={(event) => setCustomerRouteForm((current) => ({ ...current, estimatedVolume: event.target.value }))} placeholder="Ước tính volume" className="h-6 w-full border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-[#9CA3AF]" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Trọng lượng dự kiến (KG)">
+                                              <input value={customerRouteForm.estimatedWeight} onChange={(event) => setCustomerRouteForm((current) => ({ ...current, estimatedWeight: event.target.value }))} placeholder="Ước tính trọng lượng" className="h-6 w-full border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-[#9CA3AF]" />
+                                            </InlineCompactField>
+                                            <InlineCompactField label="Yêu cầu khác">
+                                              <input value={customerRouteForm.otherRequirements} onChange={(event) => setCustomerRouteForm((current) => ({ ...current, otherRequirements: event.target.value }))} placeholder="Yêu cầu đặc biệt" className="h-6 w-full border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-[#9CA3AF]" />
+                                            </InlineCompactField>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ) : null}
+
+                                    {!canEditCustomerDetailTabs ? null : (
+                                      <button
+                                        type="button"
+                                        onClick={openNextCustomerRouteRow}
+                                        className="inline-flex h-[36px] items-center gap-2 text-[14px] text-[#4A63B8] transition hover:text-[#3550a3]"
+                                      >
+                                        <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                        Thêm tuyến hàng
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="px-4 py-4">
+                                <div className="max-w-[980px] space-y-3">
+                                  <TiptapRichTextEditor
+                                    value={customerInternalNotes}
+                                    onChange={setCustomerInternalNotes}
+                                    placeholder="Ghi chú nội bộ. Không gửi cho KH. Ghi thông tin đặc biệt về KH"
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ) : null}
+                    </div>
                   </div>
-                  <div className="flex items-center">
-                    {totalSelectedCustomerListFilters > 0 ? (
-                      <button
-                        type="button"
-                        onClick={clearAllCustomerListFilters}
-                        className="ui-hover-soft h-[34px] rounded-full bg-[#f7f7f7] px-3 text-sm font-semibold text-foreground transition-colors"
-                      >
-                        Xóa tất cả
-                      </button>
-                    ) : null}
+
+                  <div className="px-5 py-4">
+                    <div className="space-y-5">
+                      {customerCreateActivityGroups.map((group) => (
+                        <div key={group.label}>
+                          <div className="relative flex items-center justify-center">
+                            <div className="absolute inset-x-0 top-1/2 h-[0.5px] -translate-y-1/2 bg-[#E7E6E9]" />
+                            <div className="relative bg-background px-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{group.label}</div>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {group.entries.map((entry) => (
+                              <div key={`${group.label}-${entry.actor}-${entry.time}`} className="flex items-start gap-3">
+                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-white ${getAvatarColorClass(entry.actor)}`}>
+                                  {entry.actor.trim().charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-foreground">
+                                    <span>{entry.actor}</span>
+                                    <span className="text-[12px] font-normal text-muted-foreground">{entry.time}</span>
+                                  </div>
+                                  <div className="mt-1 text-[14px] text-foreground">{entry.message}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
+              </div>
+            ) : null}
 
+            {isCustomerContractCreatePage ? (
+              <div className={`mt-1 pr-1 ${isAnyCreatePage ? "min-h-fit overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-0">
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-[#F3F4F6] px-2.5 text-[13px] font-medium text-[#9CA3AF] opacity-100"
+                    >
+                      <Mail className="h-4 w-4 text-[#9CA3AF]" strokeWidth={1.9} />
+                      Gửi email
+                    </button>
+                    <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                      {contractCreateWorkflowSteps.map((step, index) => (
+                        <div
+                          key={step}
+                          className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                            ((contractCreateForm.status === "draft" ? index === 0 : index === 1))
+                              ? "bg-[#2054a3] text-white"
+                              : "bg-[#EAF1FB] text-[#245698]"
+                          } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                        >
+                          {step}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] bg-card">
+                    <div className="p-4">
+                      <div className="rounded-[14px] border border-[#DADCE3] bg-white shadow-[0_2px_10px_rgba(17,17,17,0.04)]">
+                        <div className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <Star className="h-7 w-7 text-muted-foreground" strokeWidth={1.8} />
+                            <div className="text-[24px] font-semibold leading-none text-foreground">
+                              Thêm mới Hợp đồng
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-x-8 gap-y-5 px-5 pb-5 pt-0 lg:grid-cols-2">
+                          <div className="space-y-0">
+                            <FormField
+                              label="Khách hàng"
+                              value={contractCreateForm.customer}
+                              options={[
+                                { label: "Chọn khách hàng", value: "" },
+                                ...customerRows
+                                  .filter((row) => row.status === "active")
+                                  .map((row) => ({ label: row.customer, value: row.customer }))
+                              ]}
+                              placeholder="Chọn khách hàng"
+                              variant="inlineUnderline"
+                              autoSelectFirstOption={false}
+                              matchDropdownWidth
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, customer: value }))}
+                            />
+                            <FormField
+                              label="Công ty"
+                              value={contractCreateForm.contractCompany}
+                              options={[
+                                { label: "Chọn công ty", value: "" },
+                                { label: "PIL", value: "PIL" },
+                                { label: "TDB", value: "TDB" }
+                              ]}
+                              variant="inlineUnderline"
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, contractCompany: value }))}
+                            />
+                            <FormField
+                              label="Loại hợp đồng"
+                              value={contractCreateForm.contractType}
+                              options={[
+                                { label: "Chọn loại hợp đồng", value: "" },
+                                { label: "Service Contract", value: "Service Contract" },
+                                { label: "Framework Agreement", value: "Framework Agreement" },
+                                { label: "Spot Agreement", value: "Spot Agreement" }
+                              ]}
+                              variant="inlineUnderline"
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, contractType: value }))}
+                            />
+                            <InlineDropdownField
+                              label="Dịch vụ áp dụng"
+                              values={contractCreateForm.services}
+                              options={["Ocean FCL", "Air Freight", "Trucking", "Warehouse"]}
+                              onToggle={(value) =>
+                                setContractCreateForm((current) => ({
+                                  ...current,
+                                  services: current.services.includes(value as CustomerService)
+                                    ? current.services.filter((item) => item !== value)
+                                    : [...current.services, value as CustomerService]
+                                }))
+                              }
+                            />
+                          </div>
+                          <div className="space-y-0">
+                            <FormField
+                              label="Ngày hiệu lực"
+                              type="date"
+                              value={contractCreateForm.validFrom}
+                              variant="inlineUnderline"
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, validFrom: value }))}
+                            />
+                            <FormField
+                              label="Ngày hết hạn"
+                              type="date"
+                              value={contractCreateForm.validTo}
+                              variant="inlineUnderline"
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, validTo: value }))}
+                            />
+                            <FormField
+                              label="Ngày ký kết"
+                              type="date"
+                              value={contractCreateForm.signedAt}
+                              variant="inlineUnderline"
+                              onChange={(value) => setContractCreateForm((current) => ({ ...current, signedAt: value }))}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-0 border-t border-[#E7E6E9]">
+                          <div className="flex flex-wrap items-end gap-0 border-b border-[#E7E6E9] px-5 pt-0">
+                            {[
+                              { key: "services", label: "Dịch vụ" },
+                              { key: "file", label: "Tệp hợp đồng" },
+                              { key: "notes", label: "Ghi chú" }
+                            ].map((tab) => {
+                              const isActive = contractCreateWorkspaceTab === tab.key;
+                              return (
+                                <button
+                                  key={tab.key}
+                                  type="button"
+                                  onClick={() => setContractCreateWorkspaceTab(tab.key as "services" | "file" | "notes")}
+                                  className={`inline-flex h-9 items-center border-r border-[#CDD3E3] px-4 text-[14px] font-medium ${
+                                    isActive
+                                      ? "border-b-2 border-b-[#4A63B8] bg-[#F3F4F6] text-foreground"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {tab.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="px-5 py-0">
+                            {contractCreateWorkspaceTab === "services" ? (
+                              <div className="px-4 py-4">
+                                <div className="text-[14px] text-muted-foreground">
+                                  Dịch vụ áp dụng được cấu hình trong phần thông tin chung của hợp đồng.
+                                </div>
+                              </div>
+                            ) : contractCreateWorkspaceTab === "file" ? (
+                              <div className="px-4 py-4">
+                                <input
+                                  ref={contractCreateUploadInputRef}
+                                  type="file"
+                                  accept=".pdf,.doc,.docx,.xlsx,.xls"
+                                  className="hidden"
+                                  onChange={(event) => {
+                                    const file = event.target.files?.[0];
+                                    setContractCreateUploadFileName(file?.name ?? "");
+                                    if (file?.name) {
+                                      setToast({
+                                        kind: "success",
+                                        message: `Đã đính kèm file ${file.name}.`
+                                      });
+                                    }
+                                  }}
+                                />
+
+                                <button
+                                  type="button"
+                                  className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[16px] border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 text-center transition hover:border-[#245698] hover:bg-[#F2F7FD]"
+                                  onClick={() => contractCreateUploadInputRef.current?.click()}
+                                >
+                                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#245698] shadow-[0_6px_18px_rgba(36,86,152,0.12)]">
+                                    <Upload className="h-5 w-5" strokeWidth={1.8} />
+                                  </span>
+                                  <div className="mt-4 text-sm font-semibold text-foreground">
+                                    {contractCreateUploadFileName ? contractCreateUploadFileName : "Chọn file hợp đồng"}
+                                  </div>
+                                  <p className="mt-2 text-xs text-muted-foreground">
+                                    Hỗ trợ `.pdf`, `.doc`, `.docx`, `.xlsx`, `.xls`.
+                                  </p>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="px-4 py-4">
+                                <div className="max-w-[980px] space-y-3">
+                                  <TiptapRichTextEditor
+                                    value={contractCreateForm.notes}
+                                    onChange={(value) => setContractCreateForm((current) => ({ ...current, notes: value }))}
+                                    placeholder="Ghi chú nội bộ. Không gửi cho KH. Ghi thông tin đặc biệt về hợp đồng"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-4">
+                    <div className="space-y-5">
+                      {contractCreateActivityGroups.map((group) => (
+                        <div key={group.label}>
+                          <div className="relative flex items-center justify-center">
+                            <div className="absolute inset-x-0 top-1/2 h-[0.5px] -translate-y-1/2 bg-[#E7E6E9]" />
+                            <div className="relative bg-background px-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{group.label}</div>
+                          </div>
+                          <div className="mt-4 space-y-3">
+                            {group.entries.map((entry, index) => (
+                              <div key={`${entry.actor}-${index}`} className="flex items-start gap-3">
+                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-white ${getAvatarColorClass(entry.actor)}`}>
+                                  {entry.actor.trim().charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-foreground">
+                                    <span>{entry.actor}</span>
+                                    <span className="text-[12px] font-normal text-muted-foreground">{entry.time}</span>
+                                  </div>
+                                  <div className="mt-1 text-[14px] text-foreground">{entry.message}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isCustomerContractsPage ? (
+              <>
                 <div className="mt-[12px] hidden min-h-0 flex-1 overflow-hidden rounded-[12px] bg-background lg:flex lg:flex-col">
                   <div
                     className="grid shrink-0 border-b border-border bg-card"
@@ -5608,83 +8645,25 @@ export default function Page() {
                       paddingRight: contractTableScrollbarWidth ? `${contractTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["Mã hợp đồng", "Khách hàng", "Công ty", "Loại dịch vụ", "Ngày hết hạn", "Trạng thái", ""].map((label, index) => (
+                    {["Số HĐ", "Khách hàng", "Loại HĐ", "Công ty", "Dịch vụ", "Ngày hiệu lực", "Ngày hết hạn", "Trạng thái"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
-                          index === 0 ? "pl-6 pr-4" : index === 6 ? "sticky right-0 z-20 bg-card px-3" : "px-4"
+                          index === 0 ? "pl-6 pr-4" : "px-4"
                         }`}
                       >
-                        {label === "Trạng thái" ? (
-                          <div ref={contractStatusFilterRef} className="relative flex items-center gap-1.5">
-                            <span>{label}</span>
-                            <button
-                              type="button"
-                              className={`rounded-md p-1 transition-colors ${
-                                isContractStatusFilterOpen || contractStatusFilters.length > 0
-                                  ? "text-foreground"
-                                  : "text-muted-foreground"
-                              }`}
-                              onClick={openContractStatusFilter}
-                            >
-                              <ListFilter className="h-4 w-4" strokeWidth={1.8} />
-                            </button>
-
-                            {isContractStatusFilterOpen ? (
-                              <div className="absolute left-0 top-full z-20 mt-1 w-[220px] overflow-hidden rounded-[12px] border border-[#e7e6e9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                                <div className="max-h-[220px] overflow-y-auto py-2">
-                                  <button
-                                    type="button"
-                                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-sidebar ${
-                                      contractStatusFilters.length === 0 ? "text-foreground" : "text-muted-foreground"
-                                    }`}
-                                    onClick={selectAllContractStatuses}
-                                  >
-                                    <span>{contractStatusFilterAllOption.label}</span>
-                                    {contractStatusFilters.length === 0 ? (
-                                      <Check className="h-4 w-4 text-foreground" strokeWidth={2} />
-                                    ) : null}
-                                  </button>
-                                  {contractStatusFilterOptions.map((option) => {
-                                    const isSelected = contractStatusFilters[0] === option.value;
-
-                                    return (
-                                      <button
-                                        key={option.value}
-                                        type="button"
-                                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-sidebar ${
-                                          isSelected ? "text-foreground" : "text-muted-foreground"
-                                        }`}
-                                        onClick={() => toggleContractStatusFilterValue(option.value)}
-                                      >
-                                        <span>{option.label}</span>
-                                        {isSelected ? <Check className="h-4 w-4 text-foreground" strokeWidth={2} /> : null}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          label
-                        )}
+                        {label}
                       </div>
                     ))}
                   </div>
 
                   <div ref={contractTableBodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                    {visibleContractRows.length > 0 ? (
-                      visibleContractRows.map((row, index, filteredRows) => (
+                    {paginatedContractRows.length > 0 ? (
+                      paginatedContractRows.map((row, index, filteredRows) => (
                           <div
                             key={row.code}
-                            className={`group grid cursor-pointer bg-card transition-colors hover:bg-[#B6E1FF] ${
-                              index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"
-                            }`}
-                            style={{
-                              gridTemplateColumns:
-                                contractTableColumns
-                            }}
+                            className="group grid cursor-pointer bg-card transition-colors hover:bg-[#B6E1FF]"
+                            style={{ gridTemplateColumns: contractTableColumns }}
                             role="button"
                             tabIndex={0}
                             onClick={() => openContractDetails(row.code)}
@@ -5695,80 +8674,51 @@ export default function Page() {
                               }
                             }}
                           >
-                            <div className="flex h-12 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground">
-                              {row.code}
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <span className="block truncate whitespace-nowrap">{row.code}</span>
                             </div>
-                            <div className="flex h-12 items-center justify-start px-4 text-left text-sm text-foreground">
-                              {row.customer}
-                            </div>
-                            <div className="flex h-12 items-center justify-start whitespace-nowrap px-4 text-left text-sm text-foreground">
-                              {row.contractCompany}
-                            </div>
-                            <div className="flex h-12 min-w-0 flex-nowrap items-center justify-start gap-2 overflow-hidden px-4 text-left text-sm text-foreground">
-                              {row.services[0] ? (
-                                <CustomerServiceTag key={`${row.code}-${row.services[0]}`} service={row.services[0]} />
-                              ) : null}
-                              {row.services.length > 1 ? (
-                                <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2 py-1 text-xs font-medium text-foreground">
-                                  {`${row.services.length - 1}+`}
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="flex h-12 items-center justify-start px-4 text-left text-sm text-foreground">
-                              {row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term}
-                            </div>
-                            <div className="flex h-12 items-center justify-start px-4 text-left text-sm text-foreground">
-                              <ContractStatusTag status={row.status} />
-                            </div>
-                            <div
-                              className={`sticky right-0 flex h-12 items-center justify-center bg-card px-3 transition-colors group-hover:bg-[#B6E1FF] ${
-                                openContractRowActionCode === row.code ? "z-30" : "z-10"
-                              }`}
-                            >
-                              <div
-                                ref={openContractRowActionCode === row.code ? contractRowActionMenuRef : undefined}
-                                className="relative z-30"
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openCustomerDetails(row.customer);
+                                }}
+                                className="block truncate whitespace-nowrap text-left text-[#245698] transition-colors hover:text-[#1b467d] hover:underline"
                               >
-                                <button
-                                  type="button"
-                                  aria-label={`Tác vụ cho ${row.code}`}
-                                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setOpenContractRowActionCode((current) =>
-                                      current === row.code ? null : row.code
-                                    );
-                                  }}
-                                >
-                                  <MoreVertical className="h-4 w-4" strokeWidth={1.8} />
-                                </button>
-
-                                {openContractRowActionCode === row.code ? (
-                                  <div className="absolute right-0 top-full z-40 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                                    {[
-                                      { label: "Xem chi tiết", icon: Eye, onClick: () => openContractDetails(row.code) },
-                                      { label: "Chỉnh sửa", icon: Pencil },
-                                      { label: "Xóa", icon: Trash2 }
-                                    ].map((item, itemIndex) => (
-                                      <button
-                                        key={item.label}
-                                        type="button"
-                                        className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
-                                          itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
-                                        }`}
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          setOpenContractRowActionCode(null);
-                                          item.onClick?.();
-                                        }}
-                                      >
-                                        <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
-                                        <span>{item.label}</span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                ) : null}
+                                {row.customer}
+                              </button>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground">
+                                {row.contractType}
+                              </span>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                {row.contractCompany.split(" / ").map((company) => (
+                                  <span
+                                    key={`${row.code}-${company}`}
+                                    className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground"
+                                  >
+                                    {company}
+                                  </span>
+                                ))}
                               </div>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <span className="block truncate whitespace-nowrap">{row.services.join(", ") || "-"}</span>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <span className="block truncate whitespace-nowrap">{row.term.split(" - ")[0] ?? row.term}</span>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <span className={`block truncate whitespace-nowrap ${getContractExpiryTextClass(row)}`}>
+                                {row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term}
+                              </span>
+                            </div>
+                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                              <ContractStatusTag status={row.status} />
                             </div>
                           </div>
                         ))
@@ -5782,7 +8732,7 @@ export default function Page() {
 
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto lg:hidden">
                   <div className="grid gap-3">
-                    {contractRows.map((row) => (
+                    {paginatedContractRows.map((row) => (
                       <article
                         key={row.code}
                         className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]"
@@ -5798,20 +8748,43 @@ export default function Page() {
                       >
                         <div className="text-sm font-semibold text-foreground">{row.code}</div>
                         <div className="mt-3 space-y-2 text-sm text-foreground">
-                          <div><span className="text-muted-foreground">Khách hàng: </span>{row.customer}</div>
-                          <div><span className="text-muted-foreground">Công ty ký hợp đồng: </span>{row.contractCompany}</div>
-                          <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
-                            <span className="text-muted-foreground">Loại dịch vụ: </span>
-                            {row.services[0] ? (
-                              <CustomerServiceTag key={`${row.code}-${row.services[0]}`} service={row.services[0]} />
-                            ) : null}
-                            {row.services.length > 1 ? (
-                              <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2 py-1 text-xs font-medium text-foreground">
-                                {`${row.services.length - 1}+`}
-                              </span>
-                            ) : null}
+                          <div>
+                            <span className="text-muted-foreground">Khách hàng: </span>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openCustomerDetails(row.customer);
+                              }}
+                              className="text-[#245698] transition-colors hover:text-[#1b467d] hover:underline"
+                            >
+                              {row.customer}
+                            </button>
                           </div>
-                          <div><span className="text-muted-foreground">Ngày hết hạn: </span>{row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-muted-foreground">Loại HĐ: </span>
+                            <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground">
+                              {row.contractType}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-muted-foreground">Công ty ký hợp đồng: </span>
+                            {row.contractCompany.split(" / ").map((company) => (
+                              <span
+                                key={`${row.code}-mobile-${company}`}
+                                className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground"
+                              >
+                                {company}
+                              </span>
+                            ))}
+                          </div>
+                          <div><span className="text-muted-foreground">Dịch vụ: </span>{row.services.join(", ") || "-"}</div>
+                          <div>
+                            <span className="text-muted-foreground">Ngày hết hạn: </span>
+                            <span className={getContractExpiryTextClass(row)}>
+                              {row.status === "draft" ? "-" : row.term.split(" - ")[1] ?? row.term}
+                            </span>
+                          </div>
                           <div>
                             <span className="text-muted-foreground">Trạng thái: </span>
                             <span className="inline-flex align-middle">
@@ -5849,29 +8822,29 @@ export default function Page() {
                   </div>
 
                   <div ref={serviceConfigTableBodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-                    {visibleServiceConfigRows.length > 0 ? (
-                      visibleServiceConfigRows.map((row, index) => (
+                    {paginatedServiceConfigRows.length > 0 ? (
+                      paginatedServiceConfigRows.map((row, index) => (
                         <div
                           key={row.service}
                           className="grid bg-card transition-colors hover:bg-[#B6E1FF]"
                           style={{ gridTemplateColumns: serviceConfigTableColumns }}
                         >
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.service}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.description}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.customerCount}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.contractCount}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <CustomerAccountStatusTag status={row.status} />
                           </div>
-                          <div className={`flex h-12 items-center justify-center px-3 ${index === visibleServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex h-12 items-center justify-center px-3 ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <button
                               type="button"
                               aria-label={`Tác vụ cho ${row.service}`}
@@ -5892,8 +8865,8 @@ export default function Page() {
 
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto lg:hidden">
                   <div className="grid gap-3">
-                    {visibleServiceConfigRows.length > 0 ? (
-                      visibleServiceConfigRows.map((row) => (
+                    {paginatedServiceConfigRows.length > 0 ? (
+                      paginatedServiceConfigRows.map((row) => (
                         <article key={row.service} className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]">
                           <div className="text-sm font-semibold text-foreground">{row.service}</div>
                           <div className="mt-3 space-y-2 text-sm text-foreground">
@@ -6026,6 +8999,173 @@ export default function Page() {
                 Lưu
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomerImportModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomerImportModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[760px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Import file Excel/CSV</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomerImportModalOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => customerImportInputRef.current?.click()}
+                  className="inline-flex h-10 items-center rounded-full border-[0.5px] border-[#245698] bg-white px-5 text-[14px] font-medium text-[#245698] transition hover:bg-[#F5F8FF]"
+                >
+                  Tải tệp dữ liệu lên
+                </button>
+                <div className={`text-[14px] ${customerImportFileName ? "font-medium text-foreground" : "italic text-foreground"}`}>
+                  {customerImportFileName || "Chưa đặt tên"}
+                </div>
+              </div>
+            </div>
+
+            <input
+              ref={customerImportInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(event) => {
+                handleCustomerImportFileChange(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+
+            <div className="px-5 py-0">
+              <button
+                type="button"
+                className="flex min-h-[320px] w-full flex-col items-center justify-center border-b-[0.5px] border-border px-6 py-8 text-center transition hover:bg-[#FCFDFE]"
+                onClick={() => customerImportInputRef.current?.click()}
+              >
+                <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-[#EEF4FF] text-[#245698]">
+                  <FileText className="h-9 w-9" strokeWidth={1.6} />
+                </span>
+                <div className="mt-5 text-[18px] font-semibold leading-tight text-foreground">
+                  Thả hoặc tải lên một tệp để nhập
+                </div>
+                <p className="mt-3 max-w-[500px] text-[14px] leading-6 text-muted-foreground">
+                  Khuyến dùng tệp Excel để định dạng tự động. Bạn cũng có thể sử dụng tệp CSV để nhập nhanh dữ liệu khách hàng.
+                </p>
+                <a
+                  href={sampleCustomerImportTemplateHref}
+                  download="customer-import-template.csv"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-6 inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-[#245698] bg-white px-4 text-[14px] font-medium text-[#245698] transition hover:bg-[#F5F8FF]"
+                >
+                  <Download className="h-4 w-4" strokeWidth={1.8} />
+                  <span>Tải xuống file mẫu</span>
+                </a>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isContractImportModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsContractImportModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[760px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Import file Excel/CSV</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsContractImportModalOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => contractImportInputRef.current?.click()}
+                  className="inline-flex h-10 items-center rounded-full border-[0.5px] border-[#245698] bg-white px-5 text-[14px] font-medium text-[#245698] transition hover:bg-[#F5F8FF]"
+                >
+                  Tải tệp dữ liệu lên
+                </button>
+                <div className={`text-[14px] ${contractImportFileName ? "font-medium text-foreground" : "italic text-foreground"}`}>
+                  {contractImportFileName || "Chưa đặt tên"}
+                </div>
+              </div>
+            </div>
+
+            <input
+              ref={contractImportInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={(event) => {
+                handleContractImportFileChange(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+
+            <div className="px-5 py-0">
+              <button
+                type="button"
+                className="flex min-h-[320px] w-full flex-col items-center justify-center border-b-[0.5px] border-border px-6 py-8 text-center transition hover:bg-[#FCFDFE]"
+                onClick={() => contractImportInputRef.current?.click()}
+              >
+                <span className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-[#EEF4FF] text-[#245698]">
+                  <FileText className="h-9 w-9" strokeWidth={1.6} />
+                </span>
+                <div className="mt-5 text-[18px] font-semibold leading-tight text-foreground">
+                  Thả hoặc tải lên một tệp để nhập
+                </div>
+                <p className="mt-3 max-w-[500px] text-[14px] leading-6 text-muted-foreground">
+                  Khuyến dùng tệp Excel để định dạng tự động. Bạn cũng có thể sử dụng tệp CSV để nhập nhanh dữ liệu hợp đồng.
+                </p>
+                <a
+                  href={sampleCustomerImportTemplateHref}
+                  download="contract-import-template.csv"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-6 inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-[#245698] bg-white px-4 text-[14px] font-medium text-[#245698] transition hover:bg-[#F5F8FF]"
+                >
+                  <Download className="h-4 w-4" strokeWidth={1.8} />
+                  <span>Tải xuống file mẫu</span>
+                </a>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div className="pointer-events-none fixed right-6 top-6 z-[60]">
+          <div
+            className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium text-white shadow-[0_18px_40px_rgba(17,17,17,0.18)] ${
+              toast.kind === "success" ? "bg-[#0F9D58]" : "bg-[#F33233]"
+            }`}
+          >
+            <Check className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+            <span>{toast.message}</span>
           </div>
         </div>
       ) : null}

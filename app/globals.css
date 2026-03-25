@@ -48,6 +48,30 @@ input {
   font: inherit;
 }
 
+.tiptap-content p {
+  margin: 0;
+}
+
+.tiptap-content ul,
+.tiptap-content ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.tiptap-content blockquote {
+  margin: 0;
+  padding-left: 0.75rem;
+  border-left: 2px solid #cbccc9;
+  color: #666666;
+}
+
+.tiptap-content h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 700;
+}
+
 .scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
