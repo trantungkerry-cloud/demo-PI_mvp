@@ -28,6 +28,7 @@ import {
   MoreVertical,
   Package,
   Pencil,
+  Printer,
   Plus,
   Route,
   Search,
@@ -160,6 +161,8 @@ type CustomerCreateFormState = {
 
 type CustomerCreateField = keyof CustomerCreateFormState | "services";
 type CustomerCreateFormErrors = Partial<Record<CustomerCreateField, string>>;
+type ContractCreateField = "customer" | "contractType" | "validFrom" | "validTo";
+type ContractCreateFormErrors = Partial<Record<ContractCreateField, string>>;
 type ToastState = {
   kind: "success" | "error";
   message: string;
@@ -185,8 +188,60 @@ type ContractCreateFormState = {
   validFrom: string;
   validTo: string;
   status: ContractRow["status"];
-  services: CustomerService[];
+  services: string[];
+  serviceItems: Record<string, string[]>;
   notes: string;
+};
+
+type ContractRateFormState = {
+  fareCode: string;
+  fareName: string;
+  pol: string;
+  pod: string;
+  carrier: string;
+  mod: string;
+  container: string;
+  rate: string;
+  currency: string;
+  unit: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+};
+
+type ContractDomesticServiceFormState = {
+  fareCode: string;
+  fareName: string;
+  pickupPoint: string;
+  deliveryPoint: string;
+  unit: string;
+  container: string;
+  currency: string;
+  rate: string;
+  linkedWarehouse: string;
+};
+
+type ContractCustomsFormState = {
+  serviceName: string;
+  unit: string;
+  currency: string;
+  rate: string;
+  isPreset?: boolean;
+};
+
+type ContractWarehouseFormState = {
+  serviceName: string;
+  unit: string;
+  currency: string;
+  rate: string;
+  isPreset?: boolean;
+};
+
+type ContractDocumentFormState = {
+  fileName: string;
+  documentType: string;
+  documentName: string;
+  documentDate: string;
+  uploadedBy: string;
 };
 
 type CustomerAddressFormState = {
@@ -328,11 +383,11 @@ const sidebarGroups: SidebarGroup[] = [
 const tabs = ["Nháp", "Đang chờ xác nhận", "Đã xác nhận"];
 const desktopTableColumns = "176px minmax(0, 1.45fr) minmax(180px, 1.05fr) 120px 180px 150px 120px 49px";
 const customerTableColumns =
-  "44px minmax(180px,0.92fr) minmax(320px,1.7fr) minmax(190px,1fr) minmax(180px,0.95fr) 208px";
+  "44px minmax(180px,0.92fr) minmax(320px,1.7fr) minmax(114px,0.6fr) minmax(180px,0.95fr) minmax(150px,0.85fr) 208px";
 const contractTableColumns =
-  "minmax(158px,1.08fr) minmax(231px,1.5fr) minmax(180px,1.05fr) minmax(110px,0.72fr) minmax(151px,0.72fr) minmax(118px,0.63fr) minmax(130px,0.67fr) minmax(214px,1.05fr)";
+  "minmax(158px,1.08fr) minmax(231px,1.5fr) minmax(180px,1.05fr) minmax(255px,1.22fr) minmax(118px,0.63fr) minmax(130px,0.67fr) minmax(214px,1.05fr)";
 const serviceConfigTableColumns =
-  "minmax(260px,1.45fr) minmax(360px,2.1fr) 180px 180px 160px 49px";
+  "minmax(220px,1.1fr) minmax(360px,1.9fr) 180px 180px";
 const CREATE_BOOKING_CODE = "__create__";
 const customerCreateStatusOptions: SelectOption[] = [
   { label: "Nháp", value: "draft" },
@@ -389,6 +444,23 @@ const customerSourceOptions: SelectOption[] = [
   { label: "Partnership", value: "Partnership" }
 ];
 const customerResponsibleCompanyOptions = ["PIL", "TDB"] as const;
+const responsibleCompanyDirectory: Record<
+  (typeof customerResponsibleCompanyOptions)[number],
+  { legalName: string; taxId: string; phone: string; email: string }
+> = {
+  PIL: {
+    legalName: "PI Log",
+    taxId: "0312345678",
+    phone: "02838256789",
+    email: "contact@pi-logistics.vn"
+  },
+  TDB: {
+    legalName: "TDB",
+    taxId: "0309988776",
+    phone: "02838451234",
+    email: "support@tdb.vn"
+  }
+};
 const customerAddressCountryOptions: SelectOption[] = [
   { label: "Việt Nam", value: "Việt Nam" },
   { label: "Singapore", value: "Singapore" },
@@ -488,10 +560,50 @@ const customerSegmentOptions = [
 ] as const;
 const contractTypeOptions: SelectOption[] = [
   { label: "Chọn loại hợp đồng", value: "" },
-  { label: "Khung năm", value: "Khung năm" },
-  { label: "Theo chuyến", value: "Theo chuyến" },
-  { label: "Dịch vụ logistics", value: "Dịch vụ logistics" }
+  { label: "Hợp đồng thương mại", value: "Hợp đồng thương mại" },
+  { label: "Hợp đồng nguyên tắc", value: "Hợp đồng nguyên tắc" },
+  { label: "Hợp đồng kinh tế", value: "Hợp đồng kinh tế" }
 ];
+const contractDisplayServiceOptions = [
+  "🌍 Vận tải quốc tế",
+  "🚚 Vận tải nội địa",
+  "📑 Thủ tục hải quan",
+  "🏭 Kho bãi & phân phối"
+] as const;
+const contractDisplayServiceItemOptions: Record<(typeof contractDisplayServiceOptions)[number], readonly string[]> = {
+  "🌍 Vận tải quốc tế": [
+    "FCL (Full Container Load)",
+    "LCL (Less than Container Load)",
+    "Air Freight",
+    "Reefer (hàng lạnh)",
+    "Dangerous Goods (DG)",
+    "Door-to-Door quốc tế"
+  ],
+  "🚚 Vận tải nội địa": [
+    "Trucking container",
+    "Trucking hàng lẻ",
+    "Last-mile delivery",
+    "Linehaul (liên tỉnh)",
+    "Door-to-Door nội địa",
+    "Express delivery"
+  ],
+  "📑 Thủ tục hải quan": [
+    "Khai báo hải quan xuất khẩu",
+    "Khai báo hải quan nhập khẩu",
+    "Xin giấy phép chuyên ngành",
+    "Kiểm hóa hàng hóa",
+    "Tư vấn HS code",
+    "Dịch vụ chứng từ"
+  ],
+  "🏭 Kho bãi & phân phối": [
+    "Lưu kho",
+    "Cross-docking",
+    "Pick & pack",
+    "Quản lý tồn kho",
+    "Phân phối hàng hóa",
+    "Dán nhãn / đóng gói lại"
+  ]
+};
 const contractStatusCreateOptions: SelectOption[] = [
   { label: "Nháp", value: "draft" },
   { label: "Chờ duyệt", value: "pending" },
@@ -500,6 +612,74 @@ const contractStatusCreateOptions: SelectOption[] = [
   { label: "Sắp hết hạn", value: "expiring_soon" },
   { label: "Hết hiệu lực", value: "expired" },
   { label: "Đã chấm dứt", value: "terminated" }
+];
+const contractFareCodeOptions: SelectOption[] = [
+  { label: "OCEAN-FRT", value: "OCEAN-FRT" },
+  { label: "AIR-FRT", value: "AIR-FRT" },
+  { label: "TRUCK-FRT", value: "TRUCK-FRT" },
+  { label: "WHS-FEE", value: "WHS-FEE" }
+];
+const contractFareNameOptions: SelectOption[] = [
+  { label: "Ocean Freight", value: "Ocean Freight" },
+  { label: "Air Freight", value: "Air Freight" },
+  { label: "Trucking Fee", value: "Trucking Fee" },
+  { label: "Warehouse Fee", value: "Warehouse Fee" }
+];
+const contractDomesticFareCodeOptions: SelectOption[] = [
+  { label: "CUSTOM-HQ", value: "CUSTOM-HQ" },
+  { label: "TRUCK-DEL", value: "TRUCK-DEL" },
+  { label: "WARE-OUT", value: "WARE-OUT" }
+];
+const contractDomesticFareNameOptions: SelectOption[] = [
+  { label: "Custom Clearance", value: "Custom Clearance" },
+  { label: "Trucking Fee", value: "Trucking Fee" },
+  { label: "Warehouse Handling", value: "Warehouse Handling" }
+];
+const contractCarrierOptions: SelectOption[] = [
+  { label: "Maersk", value: "Maersk" },
+  { label: "CMA CGM", value: "CMA CGM" },
+  { label: "Emirates SkyCargo", value: "Emirates SkyCargo" },
+  { label: "Vietnam Airlines Cargo", value: "Vietnam Airlines Cargo" }
+];
+const contractModOptions: SelectOption[] = [
+  { label: "LCL (CBM)", value: "LCL (CBM)" },
+  { label: "Air (KG)", value: "Air (KG)" },
+  { label: "FCL", value: "FCL" }
+];
+const contractContainerOptions: SelectOption[] = [
+  { label: "20GP", value: "20GP" },
+  { label: "40GP", value: "40GP" },
+  { label: "40HC", value: "40HC" },
+  { label: "45HC", value: "45HC" }
+];
+const contractCurrencyOptions: SelectOption[] = [
+  { label: "USD", value: "USD" },
+  { label: "VND", value: "VND" },
+  { label: "EUR", value: "EUR" }
+];
+const contractUnitOptions: SelectOption[] = [
+  { label: "/container", value: "/container" },
+  { label: "/CBM", value: "/CBM" },
+  { label: "/KG", value: "/KG" },
+  { label: "/chuyến", value: "/chuyến" },
+  { label: "/pallet", value: "/pallet" }
+];
+const contractDomesticPointOptions: SelectOption[] = [
+  { label: "Kho Bình Dương", value: "Kho Bình Dương" },
+  { label: "ICD Sóng Thần", value: "ICD Sóng Thần" },
+  { label: "Cảng Cát Lái", value: "Cảng Cát Lái" },
+  { label: "KCN VSIP 1", value: "KCN VSIP 1" }
+];
+const contractDomesticWarehouseOptions: SelectOption[] = [
+  { label: "Kho Bình Dương", value: "Kho Bình Dương" },
+  { label: "Kho Tân Tạo", value: "Kho Tân Tạo" },
+  { label: "Kho Hải Phòng", value: "Kho Hải Phòng" }
+];
+const contractDocumentTypeOptions: SelectOption[] = [
+  { label: "Contract", value: "Contract" },
+  { label: "Amendment", value: "Amendment" },
+  { label: "Rate Sheet", value: "Rate Sheet" },
+  { label: "Appendix", value: "Appendix" }
 ];
 const createQuoteOptions = ["SQ-2026-0005", "SQ-2026-0012", "SQ-2026-0018", "SQ-2026-0024"];
 const bookingStatuses: BookingStatus[] = ["draft", "pending", "confirmed", "canceled"];
@@ -1366,6 +1546,28 @@ function getContractExpiryTextClass(row: ContractRow) {
   return "text-foreground";
 }
 
+function formatContractServiceLabels(services: string[]) {
+  const labels: string[] = [];
+
+  if (services.some((service) => ["Ocean FCL", "Ocean LCL", "Air Freight"].includes(service))) {
+    labels.push("Vận tải quốc tế");
+  }
+
+  if (services.includes("Trucking")) {
+    labels.push("Vận tải nội địa");
+  }
+
+  if (services.includes("Custom Clearance")) {
+    labels.push("Thủ tục hải quan");
+  }
+
+  if (services.includes("Warehouse")) {
+    labels.push("Kho bãi & phân phối");
+  }
+
+  return labels.length > 0 ? labels.join(", ") : "-";
+}
+
 function CustomerServiceTag({
   service
 }: {
@@ -1852,7 +2054,8 @@ function TableDropdownField({
   onChange,
   placeholder = "Chọn",
   textSizeClass = "text-[15px]",
-  heightClass = "h-7"
+  heightClass = "h-7",
+  disabled = false
 }: {
   value: string;
   options: SelectOption[];
@@ -1860,6 +2063,7 @@ function TableDropdownField({
   placeholder?: string;
   textSizeClass?: string;
   heightClass?: string;
+  disabled?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -1883,16 +2087,27 @@ function TableDropdownField({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        className={`flex ${heightClass} w-full items-center justify-between gap-2 border-0 px-0 text-left ${textSizeClass} text-foreground transition-colors`}
+        onClick={() => {
+          if (!disabled) {
+            setIsOpen((current) => !current);
+          }
+        }}
+        className={`flex ${heightClass} w-full items-center justify-between gap-2 border-0 px-0 text-left ${textSizeClass} text-foreground transition-colors ${
+          disabled ? "cursor-default" : ""
+        }`}
       >
         <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>
           {options.find((option) => option.value === value)?.label ?? placeholder}
         </span>
-        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-opacity ${isOpen ? "opacity-100" : "opacity-0"}`} strokeWidth={1.8} />
+        <ChevronDown
+          className={`h-4 w-4 text-muted-foreground transition-opacity ${
+            disabled ? "opacity-0" : isOpen ? "opacity-100" : "opacity-0"
+          }`}
+          strokeWidth={1.8}
+        />
       </button>
 
-      {isOpen ? (
+      {isOpen && !disabled ? (
         <div className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-[180px] w-[50%] overflow-y-auto rounded-[12px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)]">
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -1934,6 +2149,60 @@ function InlineCompactField({
           {children}
         </div>
       </div>
+    </div>
+  );
+}
+
+function InlineCompactDateField({
+  value,
+  onChange,
+  placeholder = "Chọn ngày",
+  textSizeClass = "text-[13px]",
+  heightClass = "h-6",
+  readOnly = false
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  textSizeClass?: string;
+  heightClass?: string;
+  readOnly?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const openPicker = () => {
+    if (readOnly) {
+      return;
+    }
+
+    try {
+      inputRef.current?.focus();
+      inputRef.current?.showPicker?.();
+    } catch {
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={openPicker}
+        className={`flex ${heightClass} w-full items-center border-0 bg-transparent px-0 text-left ${textSizeClass} text-foreground outline-none ${
+          readOnly ? "cursor-default" : ""
+        }`}
+      >
+        <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>{value || placeholder}</span>
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="pointer-events-none absolute inset-0 opacity-0"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
     </div>
   );
 }
@@ -2261,11 +2530,17 @@ export default function Page() {
   const bookingConfirmationInputRef = useRef<HTMLInputElement | null>(null);
   const contractScanInputRef = useRef<HTMLInputElement | null>(null);
   const contractCreateUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const contractDocumentUploadInputRef = useRef<HTMLInputElement | null>(null);
   const contractImportInputRef = useRef<HTMLInputElement | null>(null);
   const customerImportInputRef = useRef<HTMLInputElement | null>(null);
   const customerAddressInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerContactInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerRouteInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractRateInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractDomesticInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractCustomsInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractWarehouseInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractDocumentInlineFormRef = useRef<HTMLDivElement | null>(null);
   const statusFilterRef = useRef<HTMLDivElement | null>(null);
   const customerStatusFilterRef = useRef<HTMLDivElement | null>(null);
   const contractStatusFilterRef = useRef<HTMLDivElement | null>(null);
@@ -2315,7 +2590,9 @@ export default function Page() {
   const [isCustomerBulkActionMenuOpen, setIsCustomerBulkActionMenuOpen] = useState(false);
   const [isGlobalSearchMenuOpen, setIsGlobalSearchMenuOpen] = useState(false);
   const [customerStatusOverrides, setCustomerStatusOverrides] = useState<Record<string, CustomerAccountStatus>>({});
+  const [contractStatusOverrides, setContractStatusOverrides] = useState<Record<string, ContractRow["status"]>>({});
   const [deletedCustomerKeys, setDeletedCustomerKeys] = useState<string[]>([]);
+  const [deletedContractCodes, setDeletedContractCodes] = useState<string[]>([]);
   const [selectedSearchFilters, setSelectedSearchFilters] = useState<Record<string, string[]>>({});
   const [selectedSearchGroupOptions, setSelectedSearchGroupOptions] = useState<string[]>([]);
   const [isCustomerImportModalOpen, setIsCustomerImportModalOpen] = useState(false);
@@ -2340,7 +2617,8 @@ export default function Page() {
   const [contractScanFileUrl, setContractScanFileUrl] = useState("");
   const [contractScanUpdatedAt, setContractScanUpdatedAt] = useState("");
   const [customerCreateWorkspaceTab, setCustomerCreateWorkspaceTab] = useState<"address" | "contacts" | "routes" | "notes">("address");
-  const [contractCreateWorkspaceTab, setContractCreateWorkspaceTab] = useState<"services" | "file" | "notes">("services");
+  const [contractCreateWorkspaceTab, setContractCreateWorkspaceTab] =
+    useState<"services" | "domestic" | "customs" | "warehouse" | "documents" | "notes">("documents");
   const [recentCustomerSearches, setRecentCustomerSearches] = useState<string[]>([]);
   const [recentOriginPortSearches, setRecentOriginPortSearches] = useState<string[]>([]);
   const [recentDestinationPortSearches, setRecentDestinationPortSearches] = useState<string[]>([]);
@@ -2378,7 +2656,52 @@ export default function Page() {
     validTo: "",
     status: "draft",
     services: [],
+    serviceItems: {},
     notes: ""
+  };
+  const initialContractRateForm: ContractRateFormState = {
+    fareCode: "OCEAN-FRT",
+    fareName: "Ocean Freight",
+    pol: "",
+    pod: "",
+    carrier: "",
+    mod: "FCL",
+    container: "20GP",
+    rate: "",
+    currency: "USD",
+    unit: "/container",
+    effectiveFrom: "",
+    effectiveTo: ""
+  };
+  const initialContractDomesticForm: ContractDomesticServiceFormState = {
+    fareCode: "CUSTOM-HQ",
+    fareName: "Custom Clearance",
+    pickupPoint: "",
+    deliveryPoint: "",
+    unit: "/container",
+    container: "20GP",
+    currency: "USD",
+    rate: "",
+    linkedWarehouse: ""
+  };
+  const initialContractCustomsForm: ContractCustomsFormState = {
+    serviceName: "",
+    unit: "/container",
+    currency: "USD",
+    rate: ""
+  };
+  const initialContractWarehouseForm: ContractWarehouseFormState = {
+    serviceName: "",
+    unit: "/container",
+    currency: "USD",
+    rate: ""
+  };
+  const initialContractDocumentForm: ContractDocumentFormState = {
+    fileName: "",
+    documentType: "",
+    documentName: "",
+    documentDate: "",
+    uploadedBy: currentUserName
   };
   const initialCustomerAddressForm: CustomerAddressFormState = {
     line1: "",
@@ -2414,6 +2737,7 @@ export default function Page() {
     otherRequirements: ""
   };
   const [customerCreateErrors, setCustomerCreateErrors] = useState<CustomerCreateFormErrors>({});
+  const [contractCreateErrors, setContractCreateErrors] = useState<ContractCreateFormErrors>({});
   const [toast, setToast] = useState<ToastState>(null);
   const [customerCreateForm, setCustomerCreateForm] = useState<CustomerCreateFormState>(initialCustomerCreateForm);
   const [customerAddressForm, setCustomerAddressForm] = useState<CustomerAddressFormState>(initialCustomerAddressForm);
@@ -2427,6 +2751,25 @@ export default function Page() {
   const [isCustomerRouteFormOpen, setIsCustomerRouteFormOpen] = useState(false);
   const [customerInternalNotes, setCustomerInternalNotes] = useState("");
   const [contractCreateForm, setContractCreateForm] = useState<ContractCreateFormState>(initialContractCreateForm);
+  const [contractRateForm, setContractRateForm] = useState<ContractRateFormState>(initialContractRateForm);
+  const [contractRateRows, setContractRateRows] = useState<ContractRateFormState[]>([]);
+  const [isContractRateFormOpen, setIsContractRateFormOpen] = useState(false);
+  const [contractDomesticForm, setContractDomesticForm] =
+    useState<ContractDomesticServiceFormState>(initialContractDomesticForm);
+  const [contractDomesticRows, setContractDomesticRows] = useState<ContractDomesticServiceFormState[]>([]);
+  const [isContractDomesticFormOpen, setIsContractDomesticFormOpen] = useState(false);
+  const [contractCustomsForm, setContractCustomsForm] =
+    useState<ContractCustomsFormState>(initialContractCustomsForm);
+  const [contractCustomsRows, setContractCustomsRows] = useState<ContractCustomsFormState[]>([]);
+  const [isContractCustomsFormOpen, setIsContractCustomsFormOpen] = useState(false);
+  const [contractWarehouseForm, setContractWarehouseForm] =
+    useState<ContractWarehouseFormState>(initialContractWarehouseForm);
+  const [contractWarehouseRows, setContractWarehouseRows] = useState<ContractWarehouseFormState[]>([]);
+  const [isContractWarehouseFormOpen, setIsContractWarehouseFormOpen] = useState(false);
+  const [contractDocumentForm, setContractDocumentForm] =
+    useState<ContractDocumentFormState>(initialContractDocumentForm);
+  const [contractDocumentRows, setContractDocumentRows] = useState<ContractDocumentFormState[]>([]);
+  const [isContractDocumentFormOpen, setIsContractDocumentFormOpen] = useState(false);
   const allBookingRows = Object.values(rowsByTab).flat();
   const isCustomerPage = currentPage === "customers";
   const isCustomerListPage = currentPage === "customers" && customerSubPage === "list" && !selectedCustomerKey;
@@ -2591,12 +2934,13 @@ export default function Page() {
     "và Giải pháp Xuất nhập khẩu cho Khách hàng Doanh nghiệp",
     "với Dịch vụ Vận chuyển Quốc tế và Đại lý Hải quan"
   ] as const;
-  const extraCustomerNames = Array.from({ length: 100 }, (_, index) => {
+  const extraCustomerNames = Array.from({ length: 210 }, (_, index) => {
     const prefix = extraCustomerPrefixes[index % extraCustomerPrefixes.length];
     const industry = extraCustomerIndustries[index % extraCustomerIndustries.length];
     const suffix = extraCustomerSuffixes[Math.floor(index / extraCustomerPrefixes.length) % extraCustomerSuffixes.length];
-    const descriptor = extraLongDescriptors[index % extraLongDescriptors.length];
-    return `${prefix} ${industry} ${suffix} ${descriptor}`.replace(/\s+/g, " ").trim();
+    const descriptor = index < 5 ? extraLongDescriptors[(index % (extraLongDescriptors.length - 1)) + 1] : "";
+    const shortUniqueSuffix = index >= 100 ? ` C${String(index - 99).padStart(3, "0")}` : "";
+    return `${prefix} ${industry} ${suffix}${shortUniqueSuffix} ${descriptor}`.replace(/\s+/g, " ").trim();
   });
   const customerSearchOptions = sortSelectOptions(
     [...new Set([...allBookingRows.map((row) => row.customer), ...extraCustomerNames])].map((customer) => ({
@@ -2710,18 +3054,24 @@ export default function Page() {
       term = nearExpiryTerms[index % nearExpiryTerms.length];
     }
 
+    const code = `${(row.contractCompany.split(" / ")[0] ?? "PIL")}-CNT-2025-${String(index + 1).padStart(3, "0")}`;
+
     return {
-      code: `${(row.contractCompany.split(" / ")[0] ?? "PIL")}-CNT-2025-${String(index + 1).padStart(3, "0")}`,
+      code,
       customer: row.customer,
       contractCompany: row.contractCompany,
       services: [...row.services],
       contractType:
-        index % 3 === 0 ? "Service Contract" : index % 3 === 1 ? "Framework Agreement" : "Spot Agreement",
+        index % 3 === 0
+          ? "Hợp đồng thương mại"
+          : index % 3 === 1
+            ? "Hợp đồng nguyên tắc"
+            : "Hợp đồng kinh tế",
       term,
-      status,
+      status: contractStatusOverrides[code] ?? status,
       signedAt: `${String(10 + (index % 18)).padStart(2, "0")}/03/2025`
     };
-  });
+  }).filter((row) => !deletedContractCodes.includes(row.code));
   const serviceConfigRows: ServiceConfigRow[] = (
     [
       {
@@ -2745,8 +3095,59 @@ export default function Page() {
     customerCount: customerRows.filter((customer) => customer.services.includes(row.service)).length,
     contractCount: contractRows.filter((contract) => contract.services.includes(row.service)).length
   }));
+  const serviceConfigNestedRows = contractDisplayServiceOptions.flatMap((service) => {
+    const serviceLabelWithoutEmoji = service.replace(/^[^\p{L}\p{N}]+\s*/u, "");
+    const meta =
+      service === "🌍 Vận tải quốc tế"
+        ? {
+            customerCount: customerRows.filter((customer) =>
+              customer.services.some((customerService) =>
+                ["Ocean FCL", "Ocean LCL", "Air Freight"].includes(customerService)
+              )
+            ).length,
+            contractCount: contractRows.filter((contract) =>
+              contract.services.some((contractService) =>
+                ["Ocean FCL", "Ocean LCL", "Air Freight"].includes(contractService)
+              )
+            ).length,
+            status: "active" as ServiceConfigStatus
+          }
+        : service === "🚚 Vận tải nội địa"
+          ? {
+              customerCount: customerRows.filter((customer) => customer.services.includes("Trucking")).length,
+              contractCount: contractRows.filter((contract) => contract.services.includes("Trucking")).length,
+              status: "active" as ServiceConfigStatus
+            }
+          : service === "📑 Thủ tục hải quan"
+            ? {
+                customerCount: customerRows.filter((customer) => customer.services.includes("Custom Clearance")).length,
+                contractCount: contractRows.filter((contract) => contract.services.includes("Custom Clearance")).length,
+                status: "active" as ServiceConfigStatus
+              }
+            : {
+                customerCount: customerRows.filter((customer) => customer.services.includes("Warehouse")).length,
+                contractCount: contractRows.filter((contract) => contract.services.includes("Warehouse")).length,
+                status: "draft" as ServiceConfigStatus
+              };
+
+    return contractDisplayServiceItemOptions[service].map((item, index) => ({
+      service,
+      serviceLabelWithoutEmoji,
+      item,
+      customerCount: meta.customerCount,
+      contractCount: meta.contractCount,
+      status: meta.status,
+      isFirstInGroup: index === 0
+    }));
+  });
   const selectedCustomerRow = selectedCustomerKey
     ? customerRows.find((row) => row.customer === selectedCustomerKey) ?? null
+    : null;
+  const selectedResponsibleCompany = (customerCreateForm.responsibleCompanies[0] ??
+    selectedCustomerRow?.contractCompany.split(" / ")[0] ??
+    "") as (typeof customerResponsibleCompanyOptions)[number] | "";
+  const selectedResponsibleCompanyInfo = selectedResponsibleCompany
+    ? responsibleCompanyDirectory[selectedResponsibleCompany]
     : null;
   const isCustomerDetailEditable = selectedCustomerRow?.status === "draft";
   const canEditCustomerDetailTabs = !isCustomerDetailsPage || selectedCustomerRow?.status !== "locked";
@@ -2831,6 +3232,10 @@ export default function Page() {
   const selectedContractRow = selectedContractCode
     ? contractRows.find((row) => row.code === selectedContractCode) ?? null
     : null;
+  const activeContractDetailStatus = isContractDetailsPage ? contractCreateForm.status : selectedContractRow?.status;
+  const isContractDetailReadOnly =
+    isContractDetailsPage &&
+    (activeContractDetailStatus === "expired" || activeContractDetailStatus === "terminated");
   const customerAddressCityOptions =
     customerAddressProvinceOptions[customerAddressForm.country] ?? customerAddressProvinceOptions["Việt Nam"];
   const hasCustomerAddressDraft =
@@ -2863,8 +3268,51 @@ export default function Page() {
     customerRouteForm.estimatedVolume.trim() !== "" ||
     customerRouteForm.estimatedWeight.trim() !== "" ||
     customerRouteForm.otherRequirements.trim() !== "";
+  const hasContractRateDraft =
+    contractRateForm.fareCode !== initialContractRateForm.fareCode ||
+    contractRateForm.fareName !== initialContractRateForm.fareName ||
+    contractRateForm.pol !== "" ||
+    contractRateForm.pod !== "" ||
+    contractRateForm.carrier !== "" ||
+    contractRateForm.mod !== initialContractRateForm.mod ||
+    contractRateForm.container !== initialContractRateForm.container ||
+    contractRateForm.rate.trim() !== "" ||
+    contractRateForm.currency !== initialContractRateForm.currency ||
+    contractRateForm.unit !== initialContractRateForm.unit ||
+    contractRateForm.effectiveFrom !== "" ||
+    contractRateForm.effectiveTo !== "";
+  const hasContractDomesticDraft =
+    contractDomesticForm.fareCode !== initialContractDomesticForm.fareCode ||
+    contractDomesticForm.fareName !== initialContractDomesticForm.fareName ||
+    contractDomesticForm.pickupPoint !== "" ||
+    contractDomesticForm.deliveryPoint !== "" ||
+    contractDomesticForm.unit !== initialContractDomesticForm.unit ||
+    contractDomesticForm.container !== initialContractDomesticForm.container ||
+    contractDomesticForm.currency !== initialContractDomesticForm.currency ||
+    contractDomesticForm.rate.trim() !== "" ||
+    contractDomesticForm.linkedWarehouse !== "";
+  const hasContractCustomsDraft =
+    contractCustomsForm.serviceName !== "" ||
+    contractCustomsForm.unit !== initialContractCustomsForm.unit ||
+    contractCustomsForm.currency !== initialContractCustomsForm.currency ||
+    contractCustomsForm.rate.trim() !== "";
+  const hasContractWarehouseDraft =
+    contractWarehouseForm.serviceName !== "" ||
+    contractWarehouseForm.unit !== initialContractWarehouseForm.unit ||
+    contractWarehouseForm.currency !== initialContractWarehouseForm.currency ||
+    contractWarehouseForm.rate.trim() !== "";
+  const hasContractDocumentDraft =
+    contractDocumentForm.fileName.trim() !== "" ||
+    contractDocumentForm.documentType !== "" ||
+    contractDocumentForm.documentName.trim() !== "" ||
+    contractDocumentForm.documentDate !== "";
   const emptyCustomerAddressRows = Math.max(0, 5 - customerAddressRows.length);
   const emptyCustomerContactRows = Math.max(0, 5 - customerContactRows.length);
+  const emptyContractRateRows = Math.max(0, 5 - contractRateRows.length);
+  const emptyContractDomesticRows = Math.max(0, 5 - contractDomesticRows.length);
+  const emptyContractCustomsRows = Math.max(0, 5 - contractCustomsRows.length);
+  const emptyContractWarehouseRows = Math.max(0, 5 - contractWarehouseRows.length);
+  const emptyContractDocumentRows = Math.max(0, 5 - contractDocumentRows.length);
   const openNextCustomerAddressRow = () => {
     if (hasCustomerAddressDraft) {
       setCustomerAddressRows((current) => [...current, customerAddressForm]);
@@ -2896,6 +3344,76 @@ export default function Page() {
     }
 
     setIsCustomerRouteFormOpen(true);
+  };
+  const openNextContractRateRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractRateDraft) {
+      setContractRateRows((current) => [...current, contractRateForm]);
+      setContractRateForm(initialContractRateForm);
+      setIsContractRateFormOpen(true);
+      return;
+    }
+
+    setIsContractRateFormOpen(true);
+  };
+  const openNextContractDomesticRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractDomesticDraft) {
+      setContractDomesticRows((current) => [...current, contractDomesticForm]);
+      setContractDomesticForm(initialContractDomesticForm);
+      setIsContractDomesticFormOpen(true);
+      return;
+    }
+
+    setIsContractDomesticFormOpen(true);
+  };
+  const openNextContractCustomsRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractCustomsDraft) {
+      setContractCustomsRows((current) => [...current, contractCustomsForm]);
+      setContractCustomsForm(initialContractCustomsForm);
+      setIsContractCustomsFormOpen(true);
+      return;
+    }
+
+    setIsContractCustomsFormOpen(true);
+  };
+  const openNextContractWarehouseRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractWarehouseDraft) {
+      setContractWarehouseRows((current) => [...current, contractWarehouseForm]);
+      setContractWarehouseForm(initialContractWarehouseForm);
+      setIsContractWarehouseFormOpen(true);
+      return;
+    }
+
+    setIsContractWarehouseFormOpen(true);
+  };
+  const openNextContractDocumentRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractDocumentDraft) {
+      setContractDocumentRows((current) => [...current, contractDocumentForm]);
+      setContractDocumentForm(initialContractDocumentForm);
+      setIsContractDocumentFormOpen(true);
+      return;
+    }
+
+    setIsContractDocumentFormOpen(true);
   };
   const selectedCreateContractRow = customerCreateForm.contractCode
     ? contractRows.find((row) => row.code === customerCreateForm.contractCode) ?? null
@@ -3046,15 +3564,13 @@ export default function Page() {
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const moduleSearchPlaceholder = isCustomerContractsPage
     ? "Tìm kiếm theo Số HĐ, Tên KH, MST KH"
+    : isCustomerServicesPage
+      ? "Tìm kiếm theo Nhóm dịch vụ, Tên dịch vụ"
     : "Tìm kiếm theo tên KH, MST, Mã KH, Email, SĐT";
   const searchFilterSections = [
     {
       title: "Công ty phụ trách",
       items: ["PIL", "TDB"],
-    },
-    {
-      title: "Dịch vụ",
-      items: ["Ocean FCL", "Ocean LCL", "Air Freight", "Trucking", "Warehouse", "Custom Clearance"],
     },
     {
       title: "Phân khúc",
@@ -3075,19 +3591,33 @@ export default function Page() {
       items: ["PIL", "TDB"],
     },
   ] as const;
-  const activeSearchFilterSections = isCustomerContractsPage ? contractSearchFilterSections : searchFilterSections;
-  const searchGroupOptions = ["Công ty phụ trách", "Loại KH", "Loại dịch vụ", "Tháng tạo", "Trạng thái"] as const;
+  const serviceSearchFilterSections = [
+    {
+      title: "Nhóm dịch vụ",
+      items: contractDisplayServiceOptions.map((service) => service.replace(/^[^\p{L}\p{N}]+\s*/u, "")),
+    },
+  ] as const;
+  const activeSearchFilterSections = isCustomerContractsPage
+    ? contractSearchFilterSections
+    : isCustomerServicesPage
+      ? serviceSearchFilterSections
+      : searchFilterSections;
+  const searchGroupOptions = ["Công ty phụ trách", "Tháng tạo", "Trạng thái"] as const;
   const contractSearchGroupOptions = ["Loại HĐ", "Loại dịch vụ", "Tháng tạo"] as const;
-  const activeSearchGroupOptions = isCustomerContractsPage ? contractSearchGroupOptions : searchGroupOptions;
+  const activeSearchGroupOptions = isCustomerContractsPage
+    ? contractSearchGroupOptions
+    : isCustomerServicesPage
+      ? []
+      : searchGroupOptions;
   const currentPageTitle = isCustomerPage
     ? isCustomerCreatePage
       ? "Thêm mới"
       : isCustomerContractCreatePage
         ? "Hợp đồng"
-        : isCustomerContractsPage
-          ? "Hợp đồng"
+          : isCustomerContractsPage
+            ? "Hợp đồng"
           : isCustomerServicesPage
-            ? "Cấu hình dịch vụ"
+            ? "Dịch vụ"
             : isCustomerDetailsPage && selectedCustomerRow
               ? selectedCustomerRow.customer
               : isContractDetailsPage && selectedContractRow
@@ -3103,7 +3633,15 @@ export default function Page() {
     isCustomerDetailsPage && selectedCustomerRow?.status === "locked"
       ? (["Nháp", "Đang hoạt động", "Đã khóa"] as const)
       : (["Nháp", "Đang hoạt động"] as const);
-  const contractCreateWorkflowSteps = ["Nháp", "Đang hiệu lực"] as const;
+  const contractCreateWorkflowSteps: readonly string[] = (
+    isContractDetailsPage && activeContractDetailStatus === "expiring_soon"
+      ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Sắp hết hạn"]
+      : isContractDetailsPage && activeContractDetailStatus === "expired"
+        ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Hết hiệu lực"]
+        : isContractDetailsPage && activeContractDetailStatus === "terminated"
+          ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Đã chấm dứt"]
+        : ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực"]
+  );
   const customerCreateSummaryRow = isCustomerDetailsPage ? selectedCustomerRow : matchedCustomerCreateRow;
   const shouldHideCustomerDetailMetrics = isCustomerDetailsPage && selectedCustomerRow?.status === "draft";
   const customerCreateHeaderMetrics = [
@@ -3135,6 +3673,12 @@ export default function Page() {
           ? Math.max(1, Math.ceil(customerCreateSummaryRow.totalBookings / 3))
           : 0,
     },
+  ] as const;
+  const contractCreateHeaderMetrics = [
+    { label: "Báo giá", value: 0 },
+    { label: "Shipments", value: 0 },
+    { label: "Hóa đơn", value: 0 },
+    { label: "Debit note", value: 0 },
   ] as const;
   const customerCreateActivityRows = [
     {
@@ -3188,13 +3732,36 @@ export default function Page() {
       entries: activeCustomerActivityRows.filter((entry) => entry.time.startsWith("Hôm qua"))
     }
   ].filter((group) => group.entries.length > 0);
+  const activeContractActivityRows = isContractDetailsPage && selectedContractRow
+    ? [
+        {
+          actor: "Admin PI Logistics",
+          time: "Hôm nay lúc 09:10",
+          message: `Khởi tạo hợp đồng ${selectedContractRow.code} cho ${selectedContractRow.customer}.`
+        },
+        {
+          actor: "Sales Team",
+          time: "Hôm nay lúc 14:25",
+          message: `Áp dụng dịch vụ: ${selectedContractRow.services.join(", ")}.`
+        },
+        {
+          actor: "Legal Team",
+          time: "Hôm qua lúc 08:45",
+          message: `Trạng thái hợp đồng được cập nhật thành ${contractStatusMeta[selectedContractRow.status].label}.`
+        }
+      ]
+    : contractCreateActivityRows;
   const contractCreateActivityGroups = [
     {
       label: "Hôm nay",
-      entries: contractCreateActivityRows
+      entries: activeContractActivityRows.filter((entry) => entry.time.startsWith("Hôm nay"))
+    },
+    {
+      label: "Hôm qua",
+      entries: activeContractActivityRows.filter((entry) => entry.time.startsWith("Hôm qua"))
     }
-  ];
-  const isAnyCreatePage = isCreatePage || isCustomerCreateLikePage || isCustomerContractCreatePage;
+  ].filter((group) => group.entries.length > 0);
+  const isAnyCreatePage = isCreatePage || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage;
   const listPageSize = 80;
   const customerTaxIdByName = new Map(customerRows.map((row) => [row.customer, row.taxId] as const));
   const selectedContractSearchStatuses = selectedSearchFilters["Trạng thái"] ?? [];
@@ -3367,12 +3934,12 @@ export default function Page() {
 
       return left.code.localeCompare(right.code, "vi");
     });
-  const visibleServiceConfigRows = serviceConfigRows.filter((row) => {
+  const visibleServiceConfigRows = serviceConfigNestedRows.filter((row) => {
     if (!normalizedSearchQuery) {
       return true;
     }
 
-    return [row.service, row.description].join(" ").toLowerCase().includes(normalizedSearchQuery);
+    return [row.serviceLabelWithoutEmoji, row.item].join(" ").toLowerCase().includes(normalizedSearchQuery);
   });
   const bookingListPageCount = Math.max(1, Math.ceil(visibleRows.length / listPageSize));
   const paginatedBookingRows = visibleRows.slice(
@@ -3441,6 +4008,16 @@ export default function Page() {
     customerDetailIndex >= 0 && customerDetailIndex < customerDetailNavigationRows.length - 1
       ? customerDetailNavigationRows[customerDetailIndex + 1]
       : null;
+  const contractDetailNavigationRows = visibleContractRows.length > 0 ? visibleContractRows : contractRows;
+  const contractDetailIndex = selectedContractRow
+    ? contractDetailNavigationRows.findIndex((row) => row.code === selectedContractRow.code)
+    : -1;
+  const previousContractDetail =
+    contractDetailIndex > 0 ? contractDetailNavigationRows[contractDetailIndex - 1] : null;
+  const nextContractDetail =
+    contractDetailIndex >= 0 && contractDetailIndex < contractDetailNavigationRows.length - 1
+      ? contractDetailNavigationRows[contractDetailIndex + 1]
+      : null;
   const selectedCustomerStatusLabel = selectedCustomerRow
     ? customerAccountStatusMeta[selectedCustomerRow.status].label
     : "";
@@ -3448,6 +4025,27 @@ export default function Page() {
   const selectedContractCustomerRow = selectedContractRow
     ? customerRows.find((row) => row.customer === selectedContractRow.customer) ?? null
     : null;
+  const contractHasInternationalService = contractCreateForm.services.includes("🌍 Vận tải quốc tế");
+  const contractHasDomesticService = contractCreateForm.services.includes("🚚 Vận tải nội địa");
+  const contractHasCustomsService = contractCreateForm.services.includes("📑 Thủ tục hải quan");
+  const contractHasWarehouseService = contractCreateForm.services.includes("🏭 Kho bãi & phân phối");
+  const selectedCustomsServiceItems = contractCreateForm.serviceItems["📑 Thủ tục hải quan"] ?? [];
+  const selectedWarehouseServiceItems = contractCreateForm.serviceItems["🏭 Kho bãi & phân phối"] ?? [];
+  const contractCreateTabs = [
+    contractHasInternationalService ? { key: "services", label: "Vận tải quốc tế" } : null,
+    contractHasDomesticService ? { key: "domestic", label: "Vận tải nội địa" } : null,
+    contractHasCustomsService ? { key: "customs", label: "Thủ tục hải quan" } : null,
+    contractHasWarehouseService ? { key: "warehouse", label: "Kho bãi & phân phối" } : null,
+    { key: "documents", label: "Chứng từ hợp đồng" },
+    { key: "notes", label: "Ghi chú" }
+  ].filter(
+    (
+      tab
+    ): tab is {
+      key: "services" | "domestic" | "customs" | "warehouse" | "documents" | "notes";
+      label: string;
+    } => tab !== null
+  );
   const contractDetailShipmentRows = selectedContractCustomerRow
     ? allBookingRows
         .filter((row) => row.customer === selectedContractCustomerRow.customer)
@@ -3597,6 +4195,130 @@ export default function Page() {
   useEffect(() => {
     setCustomerDetailNote("");
   }, [selectedContractCode]);
+
+  useEffect(() => {
+    if (!isContractDetailsPage || !selectedContractRow) {
+      return;
+    }
+
+    const [validFrom, validTo] = selectedContractRow.term.split(" - ");
+    const nextServices: string[] = [];
+    const nextServiceItems: Record<string, string[]> = {};
+    const nextRateRows: ContractRateFormState[] = [];
+    const nextDomesticRows: ContractDomesticServiceFormState[] = [];
+
+    selectedContractRow.services.forEach((service) => {
+      if (service === "Ocean FCL" || service === "Ocean LCL" || service === "Air Freight") {
+        if (!nextServices.includes("🌍 Vận tải quốc tế")) {
+          nextServices.push("🌍 Vận tải quốc tế");
+        }
+
+        nextRateRows.push({
+          fareCode: "OCEAN-FRT",
+          fareName: service === "Air Freight" ? "Air Freight" : "Ocean Freight",
+          pol: "",
+          pod: "",
+          carrier: "",
+          mod:
+            service === "Ocean FCL"
+              ? "FCL"
+              : service === "Ocean LCL"
+                ? "LCL (CBM)"
+                : "Air (KG)",
+          container: "20GP",
+          rate: "",
+          currency: "USD",
+          unit: service === "Air Freight" ? "/KG" : "/container",
+          effectiveFrom: validFrom ?? "",
+          effectiveTo: validTo ?? selectedContractRow.term
+        });
+      }
+
+      if (service === "Trucking") {
+        if (!nextServices.includes("🚚 Vận tải nội địa")) {
+          nextServices.push("🚚 Vận tải nội địa");
+        }
+
+        nextDomesticRows.push({
+          fareCode: "TRUCK-DEL",
+          fareName: "Trucking Fee",
+          pickupPoint: "",
+          deliveryPoint: "",
+          unit: "/chuyến",
+          container: "20GP",
+          currency: "VND",
+          rate: "",
+          linkedWarehouse: ""
+        });
+      }
+
+      if (service === "Custom Clearance") {
+        if (!nextServices.includes("📑 Thủ tục hải quan")) {
+          nextServices.push("📑 Thủ tục hải quan");
+        }
+
+        nextServiceItems["📑 Thủ tục hải quan"] = ["Khai báo hải quan xuất khẩu"];
+      }
+
+      if (service === "Warehouse") {
+        if (!nextServices.includes("🏭 Kho bãi & phân phối")) {
+          nextServices.push("🏭 Kho bãi & phân phối");
+        }
+
+        nextServiceItems["🏭 Kho bãi & phân phối"] = ["Lưu kho"];
+      }
+    });
+
+    setContractCreateErrors({});
+    setContractCreateForm({
+      ...initialContractCreateForm,
+      code: selectedContractRow.code,
+      customer: selectedContractRow.customer,
+      contractCompany: selectedContractRow.contractCompany.split(" / ")[0] ?? selectedContractRow.contractCompany,
+      contractType: selectedContractRow.contractType,
+      signedAt: selectedContractRow.status === "draft" ? "" : selectedContractRow.signedAt,
+      validFrom: validFrom ?? "",
+      validTo: validTo ?? selectedContractRow.term,
+      status: selectedContractRow.status,
+      services: nextServices,
+      serviceItems: nextServiceItems,
+      notes: `Ghi chú nội bộ. Điều khoản đặc biệt cho hợp đồng ${selectedContractRow.code}.`
+    });
+    setContractRateForm(initialContractRateForm);
+    setContractRateRows(nextRateRows);
+    setIsContractRateFormOpen(false);
+    setContractDomesticForm(initialContractDomesticForm);
+    setContractDomesticRows(nextDomesticRows);
+    setIsContractDomesticFormOpen(false);
+    setContractCustomsForm(initialContractCustomsForm);
+    setContractCustomsRows([]);
+    setIsContractCustomsFormOpen(false);
+    setContractWarehouseForm(initialContractWarehouseForm);
+    setContractWarehouseRows([]);
+    setIsContractWarehouseFormOpen(false);
+    setContractDocumentForm(initialContractDocumentForm);
+    setContractDocumentRows(
+      selectedContractRow.status === "draft"
+        ? []
+        : [
+            {
+              fileName: `${selectedContractRow.code}.pdf`,
+              documentType: "Contract",
+              documentName: selectedContractRow.code,
+              documentDate: selectedContractRow.signedAt,
+              uploadedBy: currentUserName
+            }
+          ]
+    );
+    setIsContractDocumentFormOpen(false);
+    setContractCreateWorkspaceTab(nextServices[0] ? (nextServices[0] === "🌍 Vận tải quốc tế"
+      ? "services"
+      : nextServices[0] === "🚚 Vận tải nội địa"
+        ? "domestic"
+        : nextServices[0] === "📑 Thủ tục hải quan"
+          ? "customs"
+          : "warehouse") : "documents");
+  }, [currentUserName, isContractDetailsPage, selectedContractCode]);
 
   useEffect(() => {
     if (selectedContractRow?.status === "active") {
@@ -3824,6 +4546,12 @@ export default function Page() {
   }, [isCustomerSelectionMode]);
 
   useEffect(() => {
+    if (contractCreateTabs.length > 0 && !contractCreateTabs.some((tab) => tab.key === contractCreateWorkspaceTab)) {
+      setContractCreateWorkspaceTab(contractCreateTabs[0].key);
+    }
+  }, [contractCreateTabs, contractCreateWorkspaceTab]);
+
+  useEffect(() => {
     if (!openRoutePortMenu) {
       return;
     }
@@ -3915,6 +4643,127 @@ export default function Page() {
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [hasCustomerRouteDraft, isCustomerRouteFormOpen]);
+
+  useEffect(() => {
+    setContractCustomsRows((current) => {
+      const manualRows = current.filter((row) => !row.isPreset);
+      const presetRows = selectedCustomsServiceItems.map((item) => {
+        const existingRow = current.find((row) => row.isPreset && row.serviceName === item);
+
+        if (existingRow) {
+          return existingRow;
+        }
+
+        return {
+          serviceName: item,
+          unit: initialContractCustomsForm.unit,
+          currency: initialContractCustomsForm.currency,
+          rate: "",
+          isPreset: true
+        };
+      });
+
+      return [...presetRows, ...manualRows];
+    });
+  }, [selectedCustomsServiceItems]);
+
+  useEffect(() => {
+    setContractWarehouseRows((current) => {
+      const manualRows = current.filter((row) => !row.isPreset);
+      const presetRows = selectedWarehouseServiceItems.map((item) => {
+        const existingRow = current.find((row) => row.isPreset && row.serviceName === item);
+
+        if (existingRow) {
+          return existingRow;
+        }
+
+        return {
+          serviceName: item,
+          unit: initialContractWarehouseForm.unit,
+          currency: initialContractWarehouseForm.currency,
+          rate: "",
+          isPreset: true
+        };
+      });
+
+      return [...presetRows, ...manualRows];
+    });
+  }, [selectedWarehouseServiceItems]);
+
+  useEffect(() => {
+    if (!isContractRateFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractRateInlineFormRef.current?.contains(event.target as Node) && !hasContractRateDraft) {
+        setIsContractRateFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractRateDraft, isContractRateFormOpen]);
+
+  useEffect(() => {
+    if (!isContractDomesticFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractDomesticInlineFormRef.current?.contains(event.target as Node) && !hasContractDomesticDraft) {
+        setIsContractDomesticFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractDomesticDraft, isContractDomesticFormOpen]);
+
+  useEffect(() => {
+    if (!isContractCustomsFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractCustomsInlineFormRef.current?.contains(event.target as Node) && !hasContractCustomsDraft) {
+        setIsContractCustomsFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractCustomsDraft, isContractCustomsFormOpen]);
+
+  useEffect(() => {
+    if (!isContractDocumentFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractDocumentInlineFormRef.current?.contains(event.target as Node) && !hasContractDocumentDraft) {
+        setIsContractDocumentFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractDocumentDraft, isContractDocumentFormOpen]);
+
+  useEffect(() => {
+    if (!isContractWarehouseFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractWarehouseInlineFormRef.current?.contains(event.target as Node) && !hasContractWarehouseDraft) {
+        setIsContractWarehouseFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractWarehouseDraft, isContractWarehouseFormOpen]);
 
   useEffect(() => {
     if (!toast) {
@@ -4146,6 +4995,30 @@ export default function Page() {
     setIsCustomerTitleMenuOpen(false);
   };
 
+  const exportServiceRecords = () => {
+    const header = ["Nhom dich vu", "Ten dich vu", "Khach hang su dung", "Hop dong su dung"];
+    const rows = visibleServiceConfigRows.map((row) => [
+      row.serviceLabelWithoutEmoji,
+      row.item,
+      row.customerCount,
+      row.contractCount,
+    ]);
+    const csvContent = [header, ...rows]
+      .map((columns) => columns.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csvContent}`], { type: "text/csv;charset=utf-8;" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = downloadUrl;
+    link.download = "service-records.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
+    setIsCustomerTitleMenuOpen(false);
+  };
+
   const handleCustomerImportFileChange = (file?: File | null) => {
     if (!file) {
       return;
@@ -4310,6 +5183,28 @@ export default function Page() {
     });
   };
 
+  const validateContractCreateForm = () => {
+    const nextErrors: ContractCreateFormErrors = {};
+
+    if (!contractCreateForm.customer) {
+      nextErrors.customer = "Vui lòng chọn khách hàng.";
+    }
+
+    if (!contractCreateForm.contractType) {
+      nextErrors.contractType = "Vui lòng chọn loại hợp đồng.";
+    }
+
+    if (!contractCreateForm.validFrom) {
+      nextErrors.validFrom = "Vui lòng chọn ngày hiệu lực.";
+    }
+
+    if (!contractCreateForm.validTo) {
+      nextErrors.validTo = "Vui lòng chọn ngày hết hạn.";
+    }
+
+    return nextErrors;
+  };
+
   const handleSaveCustomerDraft = () => {
     setCustomerCreateErrors({});
     setToast({
@@ -4319,9 +5214,129 @@ export default function Page() {
   };
 
   const handleSaveContract = () => {
+    const nextErrors = validateContractCreateForm();
+    setContractCreateErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setToast(null);
+      return;
+    }
+
     setToast({
       kind: "success",
-      message: "Tạo mới hợp đồng thành công."
+      message: isContractDetailsPage ? "Cập nhật hợp đồng thành công." : "Tạo mới hợp đồng thành công."
+    });
+  };
+
+  const submitContractForApproval = () => {
+    if (!isContractDetailsPage || !selectedContractRow) {
+      return;
+    }
+
+    setContractStatusOverrides((current) => ({
+      ...current,
+      [selectedContractRow.code]: "pending"
+    }));
+    setContractCreateForm((current) => ({ ...current, status: "pending" }));
+    setToast({
+      kind: "success",
+      message: "Đã gửi hợp đồng chờ duyệt."
+    });
+  };
+
+  const approveContractFromDetails = () => {
+    if (!isContractDetailsPage || !selectedContractRow) {
+      return;
+    }
+
+    setContractStatusOverrides((current) => ({
+      ...current,
+      [selectedContractRow.code]: "active"
+    }));
+    setContractCreateForm((current) => ({ ...current, status: "active" }));
+    setToast({
+      kind: "success",
+      message: "Đã phê duyệt hợp đồng."
+    });
+  };
+
+  const rejectContractFromDetails = () => {
+    if (!isContractDetailsPage || !selectedContractRow) {
+      return;
+    }
+
+    setContractStatusOverrides((current) => ({
+      ...current,
+      [selectedContractRow.code]: "draft"
+    }));
+    setContractCreateForm((current) => ({ ...current, status: "draft" }));
+    setToast({
+      kind: "success",
+      message: "Đã từ chối hợp đồng và chuyển về nháp."
+    });
+  };
+
+  const deleteContractFromDetails = () => {
+    if (!selectedContractRow) {
+      return;
+    }
+
+    setIsDetailsActionMenuOpen(false);
+    setDeletedContractCodes((current) =>
+      current.includes(selectedContractRow.code) ? current : [...current, selectedContractRow.code]
+    );
+    performShowCustomerContracts();
+    setToast({
+      kind: "success",
+      message: "Đã xóa hợp đồng."
+    });
+  };
+
+  const duplicateContractFromDetails = () => {
+    if (!selectedContractRow) {
+      return;
+    }
+
+    const nextCode = `${(selectedContractRow.contractCompany.split(" / ")[0] ?? "PIL")}-CNT-2025-${String(
+      contractRows.length + 1
+    ).padStart(3, "0")}`;
+
+    setIsDetailsActionMenuOpen(false);
+    performOpenCreateContract();
+    setContractCreateForm({
+      ...contractCreateForm,
+      code: nextCode,
+      status: "draft",
+      signedAt: ""
+    });
+    setContractRateRows(contractRateRows.map((row) => ({ ...row })));
+    setContractDomesticRows(contractDomesticRows.map((row) => ({ ...row })));
+    setContractCustomsRows(contractCustomsRows.map((row) => ({ ...row })));
+    setContractWarehouseRows(contractWarehouseRows.map((row) => ({ ...row })));
+    setContractDocumentRows(contractDocumentRows.map((row) => ({ ...row })));
+    setToast({
+      kind: "success",
+      message: "Đã tạo bản sao hợp đồng."
+    });
+  };
+
+  const toggleContractTerminationFromDetails = () => {
+    if (!selectedContractRow) {
+      return;
+    }
+
+    const nextStatus: ContractRow["status"] =
+      selectedContractRow.status === "terminated" ? "active" : "terminated";
+
+    setIsDetailsActionMenuOpen(false);
+    setContractStatusOverrides((current) => ({
+      ...current,
+      [selectedContractRow.code]: nextStatus
+    }));
+    setContractCreateForm((current) => ({ ...current, status: nextStatus }));
+    setToast({
+      kind: "success",
+      message: nextStatus === "terminated" ? "Đã chấm dứt hợp đồng." : "Đã kích hoạt lại hợp đồng."
     });
   };
 
@@ -4418,9 +5433,24 @@ export default function Page() {
     setSelectedBookingCode(null);
     setSelectedCustomerKey(null);
     setSelectedContractCode(null);
+    setContractCreateErrors({});
     setContractCreateForm(initialContractCreateForm);
-    setContractCreateUploadFileName("");
-    setContractCreateWorkspaceTab("services");
+    setContractRateForm(initialContractRateForm);
+    setContractRateRows([]);
+    setIsContractRateFormOpen(false);
+    setContractDomesticForm(initialContractDomesticForm);
+    setContractDomesticRows([]);
+    setIsContractDomesticFormOpen(false);
+    setContractCustomsForm(initialContractCustomsForm);
+    setContractCustomsRows([]);
+    setIsContractCustomsFormOpen(false);
+    setContractWarehouseForm(initialContractWarehouseForm);
+    setContractWarehouseRows([]);
+    setIsContractWarehouseFormOpen(false);
+    setContractDocumentForm(initialContractDocumentForm);
+    setContractDocumentRows([]);
+    setIsContractDocumentFormOpen(false);
+    setContractCreateWorkspaceTab("documents");
   };
 
   const openCreateContract = () => {
@@ -4428,7 +5458,7 @@ export default function Page() {
   };
 
   const goBackFromCreatePage = () => {
-    if (isCustomerContractCreatePage) {
+    if (isCustomerContractCreatePage || isContractDetailsPage) {
       showCustomerContracts();
       return;
     }
@@ -4753,8 +5783,14 @@ export default function Page() {
     contractCreateForm.validTo !== initialContractCreateForm.validTo ||
     contractCreateForm.status !== initialContractCreateForm.status ||
     !arraysEqual(contractCreateForm.services, initialContractCreateForm.services) ||
+    JSON.stringify(contractCreateForm.serviceItems) !== JSON.stringify(initialContractCreateForm.serviceItems) ||
     contractCreateForm.notes !== initialContractCreateForm.notes ||
-    contractCreateUploadFileName !== "";
+    contractRateRows.length > 0 ||
+    hasContractRateDraft ||
+    contractDomesticRows.length > 0 ||
+    hasContractDomesticDraft ||
+    contractDocumentRows.length > 0 ||
+    hasContractDocumentDraft;
   const runWithLeaveGuard = (action: () => void) => {
     action();
   };
@@ -5205,19 +6241,19 @@ export default function Page() {
                           <span>Thêm mới</span>
                         </button>
                       ) : null}
-                      {isCustomerCreateLikePage || isCustomerContractCreatePage ? (
+                      {isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={goBackFromCreatePage}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full transition hover:bg-[#fafafa]"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white transition hover:bg-[#fafafa]"
                             aria-label="Quay lại"
                           >
                             <ChevronLeft className="h-5 w-5 text-[#2054a3]" strokeWidth={2.2} />
                           </button>
                           <div className="leading-[1.2]">
                             <div className="text-[16px] font-medium text-foreground">
-                              {isCustomerDetailsPage ? "Khách hàng" : currentPageTitle}
+                              {isCustomerDetailsPage ? "Khách hàng" : isContractDetailsPage ? "Hợp đồng" : currentPageTitle}
                             </div>
                             {isCustomerDetailsPage && selectedCustomerRow ? (
                               <div ref={customerTitleMenuRef} className="relative mt-[2px]">
@@ -5250,6 +6286,54 @@ export default function Page() {
                                         label: selectedCustomerToggleLabel,
                                         icon: selectedCustomerRow?.status === "locked" ? LockOpen : Lock,
                                         onClick: toggleCustomerLockFromDetails,
+                                      },
+                                    ].map((item, itemIndex) => (
+                                      <button
+                                        key={item.label}
+                                        type="button"
+                                        onClick={item.onClick}
+                                        className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
+                                          itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
+                                        }`}
+                                      >
+                                        <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                        <span>{item.label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : isContractDetailsPage && selectedContractRow ? (
+                              <div ref={detailsActionMenuRef} className="relative mt-[2px]">
+                                <button
+                                  type="button"
+                                  onClick={() => setIsDetailsActionMenuOpen((current) => !current)}
+                                  className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                                >
+                                  <span>{selectedContractRow.code}</span>
+                                  <ChevronDown
+                                    className={`h-4 w-4 text-muted-foreground transition-transform ${isDetailsActionMenuOpen ? "rotate-180" : ""}`}
+                                    strokeWidth={1.8}
+                                  />
+                                </button>
+
+                                {isDetailsActionMenuOpen ? (
+                                  <div className="absolute left-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                                    {[
+                                      {
+                                        label: "Xóa",
+                                        icon: Trash2,
+                                        onClick: deleteContractFromDetails,
+                                      },
+                                      {
+                                        label: "Nhân bản",
+                                        icon: Copy,
+                                        onClick: duplicateContractFromDetails,
+                                      },
+                                      {
+                                        label: selectedContractRow.status === "terminated" ? "Mở lại" : "Chấm dứt",
+                                        icon: selectedContractRow.status === "terminated" ? LockOpen : Lock,
+                                        onClick: toggleContractTerminationFromDetails,
                                       },
                                     ].map((item, itemIndex) => (
                                       <button
@@ -5311,7 +6395,7 @@ export default function Page() {
                             </>
                           ) : null}
                         </div>
-                      ) : isCustomerListPage || isCustomerContractsPage ? (
+                      ) : isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
                         <div ref={customerTitleMenuRef} className="relative">
                           <button
                             type="button"
@@ -5337,6 +6421,15 @@ export default function Page() {
                                         openContractImportModal();
                                       },
                                     }
+                                  : isCustomerServicesPage
+                                    ? {
+                                        label: "Import Dịch vụ",
+                                        icon: Upload,
+                                        onClick: () => {
+                                          setIsCustomerTitleMenuOpen(false);
+                                          openServiceConfigModal();
+                                        },
+                                      }
                                   : {
                                       label: "Import khách hàng",
                                       icon: Upload,
@@ -5351,6 +6444,12 @@ export default function Page() {
                                       icon: Download,
                                       onClick: exportContractRecords,
                                     }
+                                  : isCustomerServicesPage
+                                    ? {
+                                        label: "Export Dịch vụ",
+                                        icon: Download,
+                                        onClick: exportServiceRecords,
+                                      }
                                   : {
                                       label: "Export khách hàng",
                                       icon: Download,
@@ -5390,6 +6489,18 @@ export default function Page() {
                         {isCustomerCreateLikePage ? (
                           <div className="relative z-30 flex flex-wrap items-center justify-center gap-2">
                             {customerCreateHeaderMetrics.map((item) => (
+                              <button
+                                key={item.label}
+                                type="button"
+                                className="inline-flex h-10 items-center rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground shadow-subtle transition hover:bg-[#fafafa] active:bg-[#f2f2f2]"
+                              >
+                                <span>{`${item.value} ${item.label}`}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : isCustomerContractCreatePage || isContractDetailsPage ? (
+                          <div className="relative z-30 flex flex-wrap items-center justify-center gap-2">
+                            {contractCreateHeaderMetrics.map((item) => (
                               <button
                                 key={item.label}
                                 type="button"
@@ -5473,7 +6584,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage ? "hidden" : ""
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -5649,6 +6760,40 @@ export default function Page() {
                               }}
                               disabled={!nextCustomerDetail}
                               aria-label="Khách hàng sau"
+                            >
+                              <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                          </div>
+                        </>
+                      ) : isContractDetailsPage && selectedContractRow ? (
+                        <>
+                          <div className="text-[14px] font-normal text-foreground">
+                            {`${contractDetailIndex >= 0 ? contractDetailIndex + 1 : 0} / ${contractDetailNavigationRows.length}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (previousContractDetail) {
+                                  openContractDetails(previousContractDetail.code);
+                                }
+                              }}
+                              disabled={!previousContractDetail}
+                              aria-label="Hợp đồng trước"
+                            >
+                              <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (nextContractDetail) {
+                                  openContractDetails(nextContractDetail.code);
+                                }
+                              }}
+                              disabled={!nextContractDetail}
+                              aria-label="Hợp đồng sau"
                             >
                               <ChevronRight className="h-5 w-5" strokeWidth={2} />
                             </button>
@@ -6056,7 +7201,7 @@ export default function Page() {
                           </div>
                           <div className="space-y-2">
                             <div className="text-base font-medium text-muted-foreground">Dịch vụ</div>
-                            <div className="text-base text-foreground">{selectedContractRow.services.join(", ") || "-"}</div>
+                            <div className="text-base text-foreground">{formatContractServiceLabels(selectedContractRow.services)}</div>
                           </div>
                           <div className="space-y-2">
                             <div className="text-base font-medium text-muted-foreground">Loại hợp đồng</div>
@@ -7590,7 +8735,7 @@ export default function Page() {
                       paddingRight: customerTableScrollbarWidth ? `${customerTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["", "Mã KH", "Tên khách hàng", "Loại KH", "Công ty phụ trách", "Trạng thái"].map((label, index) => (
+                    {["", "Mã KH", "Tên khách hàng", "MST", "Công ty phụ trách", "Phân khúc", "Trạng thái"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
@@ -7652,7 +8797,7 @@ export default function Page() {
                             <span className="block truncate whitespace-nowrap">{row.customer}</span>
                           </div>
                           <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <span className="block truncate whitespace-nowrap">{row.customerType}</span>
+                            <span className="block truncate whitespace-nowrap">{row.taxId}</span>
                           </div>
                           <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -7665,6 +8810,9 @@ export default function Page() {
                                 </span>
                               ))}
                             </div>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.customerGroup}</span>
                           </div>
                           <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedCustomerRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <CustomerAccountStatusTag status={row.status} />
@@ -7694,10 +8842,6 @@ export default function Page() {
                               <span className="text-muted-foreground">MST: </span>
                               {row.taxId}
                             </div>
-                            <div>
-                              <span className="text-muted-foreground">Loại KH: </span>
-                              {row.customerType}
-                            </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-muted-foreground">Công ty PT: </span>
                               {row.contractCompany.split(" / ").map((company) => (
@@ -7710,14 +8854,14 @@ export default function Page() {
                               ))}
                             </div>
                             <div>
+                              <span className="text-muted-foreground">Phân khúc: </span>
+                              {row.customerGroup}
+                            </div>
+                            <div>
                               <span className="text-muted-foreground">Trạng thái: </span>
                               <span className="inline-flex align-middle">
                                 <CustomerAccountStatusTag status={row.status} />
                               </span>
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Nhóm khách hàng: </span>
-                              {row.customerGroup}
                             </div>
                             <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
                               <span className="text-muted-foreground">Dịch vụ: </span>
@@ -7792,143 +8936,156 @@ export default function Page() {
                           </div>
                         </div>
 
-                        <div className="grid gap-x-8 gap-y-5 px-5 pb-5 pt-0 lg:grid-cols-2">
-                          <div className="space-y-0">
-                            <FormField
-                              label="Tên pháp lý (VN)"
-                              value={customerCreateForm.customerName}
-                              error={customerCreateErrors.customerName}
-                              placeholder="Tên đầy đủ theo GPKD"
-                              variant="inlineUnderline"
-                              allowWrapWhenReadOnly
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("customerName", value)}
-                            />
-                            <FormField
-                              label="Tên tiếng Anh"
-                              value={customerCreateForm.englishName}
-                              error={customerCreateErrors.englishName}
-                              placeholder="Tên trên B/L, AWB, thư gửi đối tác quốc tế"
-                              variant="inlineUnderline"
-                              allowWrapWhenReadOnly
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("englishName", value)}
-                            />
-                            <FormField
-                              label="Mã số thuế (MST)"
-                              value={customerCreateForm.taxId}
-                              error={customerCreateErrors.taxId}
-                              placeholder="10 hoặc 13 chữ số"
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("taxId", value.replace(/\D/g, ""))}
-                            />
-                            <FormField
-                              label="Nhóm KH"
-                              value={customerCreateForm.customerGroup}
-                              error={customerCreateErrors.customerGroup}
-                              options={customerGroupOptions}
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("customerGroup", value)}
-                            />
-                            <FormField
-                              label="Loại KH"
-                              value={customerCreateForm.customerType}
-                              error={customerCreateErrors.customerType}
-                              options={customerTypeOptions}
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("customerType", value)}
-                            />
-                            <InlineDropdownField
-                              label="Dịch vụ"
-                              values={customerCreateForm.services}
-                              options={customerCreateServiceOptions}
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onToggle={(value) => toggleCustomerCreateMultiValue("services", value)}
-                              error={customerCreateErrors.services}
-                            />
-                            <FormField
-                              label="Mức độ ưu tiên"
-                              value={customerCreateForm.priority}
-                              options={customerPriorityOptions.map((option) => ({
-                                label: option.label,
-                                value: option.value
-                              }))}
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("priority", value)}
-                            />
+                        <div className="space-y-6 px-5 pb-5 pt-0">
+                          <div className="space-y-3">
+                            <div className="text-[16px] font-medium text-foreground">THÔNG TIN KHÁCH HÀNG</div>
+                            <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                              <div className="space-y-0">
+                                {isCustomerDetailsPage ? (
+                                  <FormField
+                                    label="Mã KH"
+                                    value={selectedCustomerRow?.customerCode ?? ""}
+                                    placeholder="Tự động tạo sau khi lưu"
+                                    variant="inlineUnderline"
+                                    readOnly
+                                  />
+                                ) : null}
+                                <FormField
+                                  label="Tên pháp lý (VN)"
+                                  value={customerCreateForm.customerName}
+                                  error={customerCreateErrors.customerName}
+                                  placeholder="Tên đầy đủ theo GPKD"
+                                  variant="inlineUnderline"
+                                  allowWrapWhenReadOnly
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) => updateCustomerCreateForm("customerName", value)}
+                                />
+                                <FormField
+                                  label="Tên tiếng Anh"
+                                  value={customerCreateForm.englishName}
+                                  error={customerCreateErrors.englishName}
+                                  placeholder="Tên trên B/L, AWB, thư gửi đối tác quốc tế"
+                                  variant="inlineUnderline"
+                                  allowWrapWhenReadOnly
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) => updateCustomerCreateForm("englishName", value)}
+                                />
+                                <FormField
+                                  label="Mã số thuế (MST)"
+                                  value={customerCreateForm.taxId}
+                                  error={customerCreateErrors.taxId}
+                                  placeholder="10 hoặc 13 chữ số"
+                                  variant="inlineUnderline"
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) => updateCustomerCreateForm("taxId", value.replace(/\D/g, ""))}
+                                />
+                                <FormField
+                                  label="SĐT"
+                                  value={customerCreateForm.phone}
+                                  error={customerCreateErrors.phone}
+                                  placeholder="Nhập SĐT"
+                                  variant="inlineUnderline"
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) =>
+                                    updateCustomerCreateForm(
+                                      "phone",
+                                      value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "")
+                                    )
+                                  }
+                                />
+                              </div>
+
+                              <div className="space-y-0">
+                                <FormField
+                                  label="Email"
+                                  value={customerCreateForm.email}
+                                  error={customerCreateErrors.email}
+                                  placeholder="Nhập email"
+                                  variant="inlineUnderline"
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) => updateCustomerCreateForm("email", value)}
+                                />
+                                <FormField
+                                  label="Website"
+                                  value={customerCreateForm.website}
+                                  error={customerCreateErrors.website}
+                                  placeholder="https://example.com"
+                                  variant="inlineUnderline"
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onChange={(value) => updateCustomerCreateForm("website", value)}
+                                />
+                                <InlineDropdownField
+                                  label="Tags / Phân khúc"
+                                  values={customerCreateForm.tags}
+                                  options={customerSegmentOptions}
+                                  readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
+                                  onToggle={(value) => toggleCustomerCreateMultiValue("tags", value)}
+                                  error={customerCreateErrors.tags}
+                                />
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="space-y-0">
-                            <FormField
-                              label="Nhân viên KD"
-                              value={customerCreateForm.salesperson}
-                              error={customerCreateErrors.salesperson}
-                              options={customerSalespersonOptions}
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("salesperson", value)}
-                            />
-                            <FormField
-                              label="Nguồn KH"
-                              value={customerCreateForm.source}
-                              error={customerCreateErrors.source}
-                              options={customerSourceOptions}
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("source", value)}
-                            />
-                            <InlineDropdownField
-                              label="Công ty phụ trách"
-                              values={customerCreateForm.responsibleCompanies}
-                              options={customerResponsibleCompanyOptions}
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onToggle={(value) => toggleCustomerCreateMultiValue("responsibleCompanies", value)}
-                              error={customerCreateErrors.responsibleCompanies}
-                            />
-                            <FormField
-                              label="SĐT"
-                              value={customerCreateForm.phone}
-                              error={customerCreateErrors.phone}
-                              placeholder="Nhập SĐT"
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) =>
-                                updateCustomerCreateForm(
-                                  "phone",
-                                  value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "")
-                                )
-                              }
-                            />
-                            <FormField
-                              label="Email"
-                              value={customerCreateForm.email}
-                              error={customerCreateErrors.email}
-                              placeholder="Nhập email"
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("email", value)}
-                            />
-                            <FormField
-                              label="Website"
-                              value={customerCreateForm.website}
-                              error={customerCreateErrors.website}
-                              placeholder="https://example.com"
-                              variant="inlineUnderline"
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onChange={(value) => updateCustomerCreateForm("website", value)}
-                            />
-                            <InlineDropdownField
-                              label="Tags / Phân khúc"
-                              values={customerCreateForm.tags}
-                              options={customerSegmentOptions}
-                              readOnly={isCustomerDetailsPage && !isCustomerDetailEditable}
-                              onToggle={(value) => toggleCustomerCreateMultiValue("tags", value)}
-                              error={customerCreateErrors.tags}
-                            />
+                          <div className="my-3 h-[0.5px] w-full bg-[#E7E6E9]" />
+
+                          <div className="space-y-3">
+                            <div className="text-[16px] font-medium text-foreground">THÔNG TIN CÔNG TY PHỤ TRÁCH</div>
+                            <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                              <div className="space-y-0">
+                                {isCustomerDetailsPage ? (
+                                  <FormField
+                                    label="Công ty phụ trách"
+                                    value={selectedResponsibleCompany}
+                                    variant="inlineUnderline"
+                                    readOnly
+                                  />
+                                ) : (
+                                  <InlineDropdownField
+                                    label="Công ty phụ trách"
+                                    values={customerCreateForm.responsibleCompanies}
+                                    options={customerResponsibleCompanyOptions}
+                                    readOnly={false}
+                                    onToggle={(value) => toggleCustomerCreateMultiValue("responsibleCompanies", value)}
+                                    error={customerCreateErrors.responsibleCompanies}
+                                  />
+                                )}
+                                <FormField
+                                  label="Mã số thuế (MST)"
+                                  value={selectedResponsibleCompanyInfo?.taxId ?? ""}
+                                  error={customerCreateErrors.taxId}
+                                  placeholder="MST"
+                                  variant="inlineUnderline"
+                                  readOnly
+                                  onChange={(value) => updateCustomerCreateForm("taxId", value.replace(/\D/g, ""))}
+                                />
+                              </div>
+
+                              <div className="space-y-0">
+                                <FormField
+                                  label="SĐT"
+                                  value={selectedResponsibleCompanyInfo?.phone ?? ""}
+                                  error={customerCreateErrors.phone}
+                                  placeholder="Nhập SĐT"
+                                  variant="inlineUnderline"
+                                  readOnly
+                                  onChange={(value) =>
+                                    updateCustomerCreateForm(
+                                      "phone",
+                                      value.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "")
+                                    )
+                                  }
+                                />
+                                <FormField
+                                  label="Email"
+                                  value={selectedResponsibleCompanyInfo?.email ?? ""}
+                                  error={customerCreateErrors.email}
+                                  placeholder="Nhập email"
+                                  variant="inlineUnderline"
+                                  readOnly
+                                  onChange={(value) => updateCustomerCreateForm("email", value)}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -7937,7 +9094,6 @@ export default function Page() {
                             {[
                               { key: "address", label: "Địa chỉ" },
                               { key: "contacts", label: "Liên hệ" },
-                              { key: "routes", label: "Tuyến hàng" },
                               { key: "notes", label: "Ghi chú" }
                             ].map((tab) => {
                               const isActive = customerCreateWorkspaceTab === tab.key;
@@ -7987,7 +9143,7 @@ export default function Page() {
                                       ref={customerAddressInlineFormRef}
                                       className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
                                     >
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerAddressForm.line1}
                                           onChange={(event) =>
@@ -7997,7 +9153,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerAddressForm.line2}
                                           onChange={(event) =>
@@ -8007,7 +9163,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
                                           value={customerAddressForm.country}
                                           options={customerAddressCountryOptions}
@@ -8020,7 +9176,7 @@ export default function Page() {
                                           }
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
                                           value={customerAddressForm.city}
                                           options={customerAddressCityOptions}
@@ -8029,7 +9185,7 @@ export default function Page() {
                                           }
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerAddressForm.postalCode}
                                           onChange={(event) =>
@@ -8042,7 +9198,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
                                           value={customerAddressForm.addressType}
                                           options={customerAddressTypeOptions}
@@ -8108,7 +9264,7 @@ export default function Page() {
                                       ref={customerContactInlineFormRef}
                                       className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
                                     >
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerContactForm.fullName}
                                           onChange={(event) =>
@@ -8118,7 +9274,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
                                           value={customerContactForm.role}
                                           options={customerContactRoleOptions}
@@ -8127,7 +9283,7 @@ export default function Page() {
                                           }
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerContactForm.phone}
                                           onChange={(event) =>
@@ -8140,7 +9296,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerContactForm.email}
                                           onChange={(event) =>
@@ -8150,7 +9306,7 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerContactForm.department}
                                           onChange={(event) =>
@@ -8172,7 +9328,7 @@ export default function Page() {
                                           />
                                         </label>
                                       </div>
-                                      <div className="px-4 py-2">
+                                      <div className="flex items-center px-4 py-2">
                                         <input
                                           value={customerContactForm.notes}
                                           onChange={(event) =>
@@ -8399,25 +9555,74 @@ export default function Page() {
               </div>
             ) : null}
 
-            {isCustomerContractCreatePage ? (
-              <div className={`mt-1 pr-1 ${isAnyCreatePage ? "min-h-fit overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}>
+            {isCustomerContractCreatePage || isContractDetailsPage ? (
+              <div className={`${isContractDetailsPage ? "-mt-3" : "mt-1"} pr-1 ${isAnyCreatePage ? "min-h-fit overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}>
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-0">
-                    <button
-                      type="button"
-                      disabled
-                      aria-disabled="true"
-                      className="inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-[#F3F4F6] px-2.5 text-[13px] font-medium text-[#9CA3AF] opacity-100"
-                    >
-                      <Mail className="h-4 w-4 text-[#9CA3AF]" strokeWidth={1.9} />
-                      Gửi email
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isContractDetailsPage && contractCreateForm.status === "draft" ? (
+                        <button
+                          type="button"
+                          onClick={submitContractForApproval}
+                          className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#18478D]"
+                        >
+                          Submit
+                        </button>
+                      ) : null}
+                      {isContractDetailsPage && contractCreateForm.status === "pending" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={approveContractFromDetails}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#18478D]"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={rejectContractFromDetails}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-[#B42318] transition hover:bg-[#FFF5F5]"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : null}
+                      {isContractDetailsPage ? (
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-foreground transition hover:bg-[#F8FAFF]"
+                        >
+                          <Printer className="h-4 w-4 text-muted-foreground" strokeWidth={1.9} />
+                          In
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          aria-disabled="true"
+                          className="inline-flex h-8 cursor-not-allowed items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-[#F3F4F6] px-2.5 text-[13px] font-medium text-[#9CA3AF] opacity-100"
+                        >
+                          <Mail className="h-4 w-4 text-[#9CA3AF]" strokeWidth={1.9} />
+                          Gửi email
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
                       {contractCreateWorkflowSteps.map((step, index) => (
                         <div
                           key={step}
                           className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
-                            ((contractCreateForm.status === "draft" ? index === 0 : index === 1))
+                            ((contractCreateForm.status === "draft" && index === 0) ||
+                            (contractCreateForm.status === "pending" && index === 1) ||
+                            (contractCreateForm.status === "accepted" && index === 2) ||
+                            (contractCreateForm.status === "active" && index === 3) ||
+                            (contractCreateForm.status === "expiring_soon" &&
+                              index === contractCreateWorkflowSteps.indexOf("Sắp hết hạn")) ||
+                            (contractCreateForm.status === "expired" &&
+                              index === contractCreateWorkflowSteps.indexOf("Hết hiệu lực")) ||
+                            (contractCreateForm.status === "terminated" &&
+                              index === contractCreateWorkflowSteps.indexOf("Đã chấm dứt")))
                               ? "bg-[#2054a3] text-white"
                               : "bg-[#EAF1FB] text-[#245698]"
                           } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
@@ -8435,168 +9640,940 @@ export default function Page() {
                           <div className="flex items-center gap-3">
                             <Star className="h-7 w-7 text-muted-foreground" strokeWidth={1.8} />
                             <div className="text-[24px] font-semibold leading-none text-foreground">
-                              Thêm mới Hợp đồng
+                              {isContractDetailsPage && selectedContractRow ? selectedContractRow.code : "Thêm mới Hợp đồng"}
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid gap-x-8 gap-y-5 px-5 pb-5 pt-0 lg:grid-cols-2">
-                          <div className="space-y-0">
-                            <FormField
-                              label="Khách hàng"
-                              value={contractCreateForm.customer}
-                              options={[
-                                { label: "Chọn khách hàng", value: "" },
-                                ...customerRows
-                                  .filter((row) => row.status === "active")
-                                  .map((row) => ({ label: row.customer, value: row.customer }))
-                              ]}
-                              placeholder="Chọn khách hàng"
-                              variant="inlineUnderline"
-                              autoSelectFirstOption={false}
-                              matchDropdownWidth
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, customer: value }))}
-                            />
-                            <FormField
-                              label="Công ty"
-                              value={contractCreateForm.contractCompany}
-                              options={[
-                                { label: "Chọn công ty", value: "" },
-                                { label: "PIL", value: "PIL" },
-                                { label: "TDB", value: "TDB" }
-                              ]}
-                              variant="inlineUnderline"
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, contractCompany: value }))}
-                            />
-                            <FormField
-                              label="Loại hợp đồng"
-                              value={contractCreateForm.contractType}
-                              options={[
-                                { label: "Chọn loại hợp đồng", value: "" },
-                                { label: "Service Contract", value: "Service Contract" },
-                                { label: "Framework Agreement", value: "Framework Agreement" },
-                                { label: "Spot Agreement", value: "Spot Agreement" }
-                              ]}
-                              variant="inlineUnderline"
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, contractType: value }))}
-                            />
-                            <InlineDropdownField
-                              label="Dịch vụ áp dụng"
-                              values={contractCreateForm.services}
-                              options={["Ocean FCL", "Air Freight", "Trucking", "Warehouse"]}
-                              onToggle={(value) =>
-                                setContractCreateForm((current) => ({
-                                  ...current,
-                                  services: current.services.includes(value as CustomerService)
-                                    ? current.services.filter((item) => item !== value)
-                                    : [...current.services, value as CustomerService]
-                                }))
-                              }
-                            />
+                        <div className="px-5 pb-5 pt-0">
+                          <div className="space-y-3">
+                            <div className="text-[16px] font-medium text-foreground">THÔNG TIN HỢP ĐỒNG</div>
+                            <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                              <div className="space-y-0">
+                                <FormField
+                                  label="Khách hàng"
+                                  value={contractCreateForm.customer}
+                                  readOnly={isContractDetailReadOnly}
+                                  error={contractCreateErrors.customer}
+                                  options={[
+                                    { label: "Chọn khách hàng", value: "" },
+                                    ...Array.from(
+                                      new Map(
+                                        [
+                                          ...(isContractDetailsPage && selectedContractRow
+                                            ? [{ label: selectedContractRow.customer, value: selectedContractRow.customer }]
+                                            : []),
+                                          ...customerRows
+                                            .filter((row) => row.status === "active")
+                                            .map((row) => ({ label: row.customer, value: row.customer }))
+                                        ].map((option) => [option.value, option] as const)
+                                      ).values()
+                                    )
+                                  ]}
+                                  placeholder="Chọn khách hàng"
+                                  variant="inlineUnderline"
+                                  autoSelectFirstOption={false}
+                                  matchDropdownWidth
+                                  onChange={(value) => {
+                                    const selectedCustomer = customerRows.find((row) => row.customer === value);
+                                    setContractCreateErrors((current) => {
+                                      const nextErrors = { ...current };
+                                      delete nextErrors.customer;
+                                      return nextErrors;
+                                    });
+                                    setContractCreateForm((current) => ({
+                                      ...current,
+                                      customer: value,
+                                      contractCompany: selectedCustomer?.contractCompany ?? ""
+                                    }));
+                                  }}
+                                />
+                                <FormField
+                                  label="Loại hợp đồng"
+                                  value={contractCreateForm.contractType}
+                                  readOnly={isContractDetailReadOnly}
+                                  error={contractCreateErrors.contractType}
+                                  options={[
+                                    { label: "Chọn loại hợp đồng", value: "" },
+                                    { label: "Hợp đồng thương mại", value: "Hợp đồng thương mại" },
+                                    { label: "Hợp đồng nguyên tắc", value: "Hợp đồng nguyên tắc" },
+                                    { label: "Hợp đồng kinh tế", value: "Hợp đồng kinh tế" }
+                                  ]}
+                                  variant="inlineUnderline"
+                                  onChange={(value) => {
+                                    setContractCreateErrors((current) => {
+                                      const nextErrors = { ...current };
+                                      delete nextErrors.contractType;
+                                      return nextErrors;
+                                    });
+                                    setContractCreateForm((current) => ({ ...current, contractType: value }));
+                                  }}
+                                />
+                              </div>
+                              <div className="space-y-0">
+                                <FormField
+                                  label="Ngày hiệu lực"
+                                  type="date"
+                                  value={contractCreateForm.validFrom}
+                                  readOnly={isContractDetailReadOnly}
+                                  error={contractCreateErrors.validFrom}
+                                  variant="inlineUnderline"
+                                  onChange={(value) => {
+                                    setContractCreateErrors((current) => {
+                                      const nextErrors = { ...current };
+                                      delete nextErrors.validFrom;
+                                      return nextErrors;
+                                    });
+                                    setContractCreateForm((current) => ({ ...current, validFrom: value }));
+                                  }}
+                                />
+                                <FormField
+                                  label="Ngày hết hạn"
+                                  type="date"
+                                  value={contractCreateForm.validTo}
+                                  readOnly={isContractDetailReadOnly}
+                                  error={contractCreateErrors.validTo}
+                                  variant="inlineUnderline"
+                                  onChange={(value) => {
+                                    setContractCreateErrors((current) => {
+                                      const nextErrors = { ...current };
+                                      delete nextErrors.validTo;
+                                      return nextErrors;
+                                    });
+                                    setContractCreateForm((current) => ({ ...current, validTo: value }));
+                                  }}
+                                />
+                                <FormField
+                                  label="Ngày ký kết"
+                                  type="date"
+                                  value={contractCreateForm.signedAt}
+                                  readOnly={isContractDetailReadOnly}
+                                  variant="inlineUnderline"
+                                  onChange={(value) => setContractCreateForm((current) => ({ ...current, signedAt: value }))}
+                                />
+                              </div>
+                            </div>
                           </div>
-                          <div className="space-y-0">
-                            <FormField
-                              label="Ngày hiệu lực"
-                              type="date"
-                              value={contractCreateForm.validFrom}
-                              variant="inlineUnderline"
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, validFrom: value }))}
-                            />
-                            <FormField
-                              label="Ngày hết hạn"
-                              type="date"
-                              value={contractCreateForm.validTo}
-                              variant="inlineUnderline"
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, validTo: value }))}
-                            />
-                            <FormField
-                              label="Ngày ký kết"
-                              type="date"
-                              value={contractCreateForm.signedAt}
-                              variant="inlineUnderline"
-                              onChange={(value) => setContractCreateForm((current) => ({ ...current, signedAt: value }))}
-                            />
+
+                          <div className="my-3 h-[0.5px] w-full bg-[#E7E6E9]" />
+
+                          <div className="space-y-3">
+                            <div className="text-[16px] font-medium text-foreground">PHẠM VI DỊCH VỤ</div>
+                            <div className="grid grid-cols-1 divide-y-[0.5px] divide-[#E7E6E9] rounded-[8px] border-[0.5px] border-[#E7E6E9] bg-white lg:grid-cols-4 lg:divide-x-[0.5px] lg:divide-y-0">
+                              {contractDisplayServiceOptions.map((service) => {
+                                const checked = contractCreateForm.services.includes(service);
+                                const selectedItems = contractCreateForm.serviceItems[service] ?? [];
+                                return (
+                                  <div key={service} className="px-4 py-4">
+                                    <label className="flex min-h-[32px] cursor-pointer items-center gap-3 text-[15px] font-semibold text-foreground">
+                                      <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={isContractDetailReadOnly}
+                                        className="h-5 w-5 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                        onChange={() =>
+                                          setContractCreateForm((current) => ({
+                                            ...current,
+                                            services: current.services.includes(service)
+                                              ? current.services.filter((item) => item !== service)
+                                              : [...current.services, service],
+                                            serviceItems: current.services.includes(service)
+                                              ? Object.fromEntries(
+                                                  Object.entries(current.serviceItems).filter(([key]) => key !== service)
+                                                )
+                                              : {
+                                                  ...current.serviceItems,
+                                                  [service]: current.serviceItems[service] ?? []
+                                                }
+                                          }))
+                                        }
+                                      />
+                                      <span>{service}</span>
+                                    </label>
+                                    {checked ? (
+                                      <div className="mt-3 space-y-2 pl-8">
+                                        {contractDisplayServiceItemOptions[service].map((item) => {
+                                          const itemChecked = selectedItems.includes(item);
+                                          return (
+                                            <label
+                                              key={item}
+                                              className="flex cursor-pointer items-start gap-2 text-[14px] text-foreground"
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={itemChecked}
+                                                disabled={isContractDetailReadOnly}
+                                                className="mt-[2px] h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                                onChange={() =>
+                                                  setContractCreateForm((current) => {
+                                                    const currentItems = current.serviceItems[service] ?? [];
+                                                    const nextItems = currentItems.includes(item)
+                                                      ? currentItems.filter((entry) => entry !== item)
+                                                      : [...currentItems, item];
+                                                    return {
+                                                      ...current,
+                                                      serviceItems: {
+                                                        ...current.serviceItems,
+                                                        [service]: nextItems
+                                                      }
+                                                    };
+                                                  })
+                                                }
+                                              />
+                                              <span>{item}</span>
+                                            </label>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
 
                         <div className="mt-0 border-t border-[#E7E6E9]">
-                          <div className="flex flex-wrap items-end gap-0 border-b border-[#E7E6E9] px-5 pt-0">
-                            {[
-                              { key: "services", label: "Dịch vụ" },
-                              { key: "file", label: "Tệp hợp đồng" },
-                              { key: "notes", label: "Ghi chú" }
-                            ].map((tab) => {
-                              const isActive = contractCreateWorkspaceTab === tab.key;
-                              return (
-                                <button
-                                  key={tab.key}
-                                  type="button"
-                                  onClick={() => setContractCreateWorkspaceTab(tab.key as "services" | "file" | "notes")}
-                                  className={`inline-flex h-9 items-center border-r border-[#CDD3E3] px-4 text-[14px] font-medium ${
-                                    isActive
-                                      ? "border-b-2 border-b-[#4A63B8] bg-[#F3F4F6] text-foreground"
-                                      : "text-muted-foreground"
-                                  }`}
-                                >
-                                  {tab.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-
                           <div className="px-5 py-0">
-                            {contractCreateWorkspaceTab === "services" ? (
-                              <div className="px-4 py-4">
-                                <div className="text-[14px] text-muted-foreground">
-                                  Dịch vụ áp dụng được cấu hình trong phần thông tin chung của hợp đồng.
+                            {contractCreateTabs.length === 0 ? (
+                              <div className="px-4 py-4 text-[13px] text-muted-foreground">
+                                Chọn phạm vi dịch vụ để hiển thị tab cấu hình tương ứng.
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap items-end gap-0 border-b border-[#E7E6E9] pt-0">
+                                  {contractCreateTabs.map((tab) => {
+                                    const isActive = contractCreateWorkspaceTab === tab.key;
+                                    return (
+                                      <button
+                                        key={tab.key}
+                                        type="button"
+                                          onClick={() =>
+                                            setContractCreateWorkspaceTab(
+                                              tab.key as "services" | "domestic" | "customs" | "warehouse" | "documents" | "notes"
+                                            )
+                                          }
+                                        className={`inline-flex h-9 items-center border-r border-[#CDD3E3] px-4 text-[14px] font-medium ${
+                                          isActive
+                                            ? "border-b-2 border-b-[#4A63B8] bg-[#F3F4F6] text-foreground"
+                                            : "text-muted-foreground"
+                                        }`}
+                                      >
+                                        {tab.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                                {contractCreateWorkspaceTab === "services" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Tên dịch vụ", "Mod", "Container", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {contractRateRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-rate-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractFareNameOptions, row.fareName) || row.fareName || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractModOptions, row.mod) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractContainerOptions, row.container) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
+                                      <div className="px-4 py-2">{row.rate || "-"}</div>
+                                    </div>
+                                  ))}
+                                  {isContractRateFormOpen ? (
+                                    <div
+                                      ref={contractRateInlineFormRef}
+                                      className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractRateForm.fareName}
+                                          options={contractFareNameOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractRateForm((current) => ({ ...current, fareName: value }))}
+                                          placeholder="Chọn tên dịch vụ"
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractRateForm.mod}
+                                          options={contractModOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractRateForm((current) => ({ ...current, mod: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractRateForm.container}
+                                          options={contractContainerOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractRateForm((current) => ({ ...current, container: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractRateForm.unit}
+                                          options={contractUnitOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractRateForm((current) => ({ ...current, unit: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractRateForm.currency}
+                                          options={contractCurrencyOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractRateForm((current) => ({ ...current, currency: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractRateForm.rate}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractRateForm((current) => ({
+                                              ...current,
+                                              rate: event.target.value.replace(/[^\d.]/g, "")
+                                            }))
+                                          }
+                                          placeholder="Nhập số"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractRateRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-rate-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractRateRow}
+                                      >
+                                        <div className="col-span-6 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-rate-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 6 }).map((__, cellIndex) => (
+                                          <div key={`contract-rate-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               </div>
-                            ) : contractCreateWorkspaceTab === "file" ? (
-                              <div className="px-4 py-4">
+                                ) : contractCreateWorkspaceTab === "domestic" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Điểm lấy hàng", "Điểm giao hàng", "Đơn vị tính", "Container", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {contractDomesticRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-domestic-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">{row.pickupPoint || "-"}</div>
+                                      <div className="px-4 py-2">{row.deliveryPoint || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractContainerOptions, row.container) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
+                                      <div className="px-4 py-2">{row.rate || "-"}</div>
+                                    </div>
+                                  ))}
+                                  {isContractDomesticFormOpen ? (
+                                    <div
+                                      ref={contractDomesticInlineFormRef}
+                                      className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractDomesticForm.pickupPoint}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractDomesticForm((current) => ({ ...current, pickupPoint: event.target.value }))
+                                          }
+                                          placeholder="Địa chỉ lấy hàng"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractDomesticForm.deliveryPoint}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractDomesticForm((current) => ({ ...current, deliveryPoint: event.target.value }))
+                                          }
+                                          placeholder="Địa chỉ giao hàng"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractDomesticForm.unit}
+                                          options={contractUnitOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractDomesticForm((current) => ({ ...current, unit: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractDomesticForm.container}
+                                          options={contractContainerOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractDomesticForm((current) => ({ ...current, container: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractDomesticForm.currency}
+                                          options={contractCurrencyOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractDomesticForm((current) => ({ ...current, currency: value }))}
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={contractDomesticForm.rate}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractDomesticForm((current) => ({
+                                              ...current,
+                                              rate: event.target.value.replace(/[^\d.]/g, "")
+                                            }))
+                                          }
+                                          placeholder="Nhập giá tiền dịch vụ"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractDomesticRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-domestic-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractDomesticRow}
+                                      >
+                                        <div className="col-span-6 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-domestic-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 6 }).map((__, cellIndex) => (
+                                          <div key={`contract-domestic-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                                ) : contractCreateWorkspaceTab === "customs" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Tên dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {contractCustomsRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-customs-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">{row.serviceName || "-"}</div>
+                                      {row.isPreset ? (
+                                        <>
+                                          <div className="flex items-center px-4 py-2">
+                                            <TableDropdownField
+                                              value={row.unit}
+                                              options={contractUnitOptions}
+                                              disabled={isContractDetailReadOnly}
+                                              onChange={(value) =>
+                                                setContractCustomsRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex ? { ...currentRow, unit: value } : currentRow
+                                                  )
+                                                )
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-center px-4 py-2">
+                                            <TableDropdownField
+                                              value={row.currency}
+                                              options={contractCurrencyOptions}
+                                              disabled={isContractDetailReadOnly}
+                                              onChange={(value) =>
+                                                setContractCustomsRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex ? { ...currentRow, currency: value } : currentRow
+                                                  )
+                                                )
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-center px-4 py-2">
+                                            <input
+                                              value={row.rate}
+                                              readOnly={isContractDetailReadOnly}
+                                              onChange={(event) =>
+                                                setContractCustomsRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex
+                                                      ? {
+                                                          ...currentRow,
+                                                          rate: event.target.value.replace(/[^\d.]/g, "")
+                                                        }
+                                                      : currentRow
+                                                  )
+                                                )
+                                              }
+                                              placeholder="Nhập đơn giá"
+                                              className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                                isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                              }`}
+                                            />
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
+                                          <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
+                                          <div className="px-4 py-2">{row.rate || "-"}</div>
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {isContractCustomsFormOpen ? (
+                                    <div
+                                      ref={contractCustomsInlineFormRef}
+                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractCustomsForm.serviceName}
+                                          options={(selectedCustomsServiceItems.length > 0
+                                            ? selectedCustomsServiceItems
+                                            : contractDisplayServiceItemOptions["📑 Thủ tục hải quan"] ?? []
+                                          ).map((item) => ({
+                                            label: item,
+                                            value: item
+                                          }))}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractCustomsForm((current) => ({ ...current, serviceName: value }))}
+                                          placeholder="Chọn tên dịch vụ"
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractCustomsForm.unit}
+                                          options={contractUnitOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractCustomsForm((current) => ({ ...current, unit: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractCustomsForm.currency}
+                                          options={contractCurrencyOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractCustomsForm((current) => ({ ...current, currency: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractCustomsForm.rate}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractCustomsForm((current) => ({
+                                              ...current,
+                                              rate: event.target.value.replace(/[^\d.]/g, "")
+                                            }))
+                                          }
+                                          placeholder="Nhập đơn giá"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractCustomsRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-customs-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractCustomsRow}
+                                      >
+                                        <div className="col-span-4 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-customs-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 4 }).map((__, cellIndex) => (
+                                          <div key={`contract-customs-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                                ) : contractCreateWorkspaceTab === "warehouse" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Tên dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {contractWarehouseRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-warehouse-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">{row.serviceName || "-"}</div>
+                                      {row.isPreset ? (
+                                        <>
+                                          <div className="flex items-center px-4 py-2">
+                                            <TableDropdownField
+                                              value={row.unit}
+                                              options={contractUnitOptions}
+                                              disabled={isContractDetailReadOnly}
+                                              onChange={(value) =>
+                                                setContractWarehouseRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex ? { ...currentRow, unit: value } : currentRow
+                                                  )
+                                                )
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-center px-4 py-2">
+                                            <TableDropdownField
+                                              value={row.currency}
+                                              options={contractCurrencyOptions}
+                                              disabled={isContractDetailReadOnly}
+                                              onChange={(value) =>
+                                                setContractWarehouseRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex ? { ...currentRow, currency: value } : currentRow
+                                                  )
+                                                )
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-center px-4 py-2">
+                                            <input
+                                              value={row.rate}
+                                              readOnly={isContractDetailReadOnly}
+                                              onChange={(event) =>
+                                                setContractWarehouseRows((current) =>
+                                                  current.map((currentRow, currentIndex) =>
+                                                    currentIndex === rowIndex
+                                                      ? {
+                                                          ...currentRow,
+                                                          rate: event.target.value.replace(/[^\d.]/g, "")
+                                                        }
+                                                      : currentRow
+                                                  )
+                                                )
+                                              }
+                                              placeholder="Nhập đơn giá"
+                                              className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                                isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                              }`}
+                                            />
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
+                                          <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
+                                          <div className="px-4 py-2">{row.rate || "-"}</div>
+                                        </>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {isContractWarehouseFormOpen ? (
+                                    <div
+                                      ref={contractWarehouseInlineFormRef}
+                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractWarehouseForm.serviceName}
+                                          options={(selectedWarehouseServiceItems.length > 0
+                                            ? selectedWarehouseServiceItems
+                                            : contractDisplayServiceItemOptions["🏭 Kho bãi & phân phối"] ?? []
+                                          ).map((item) => ({
+                                            label: item,
+                                            value: item
+                                          }))}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractWarehouseForm((current) => ({ ...current, serviceName: value }))}
+                                          placeholder="Chọn tên dịch vụ"
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractWarehouseForm.unit}
+                                          options={contractUnitOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractWarehouseForm((current) => ({ ...current, unit: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractWarehouseForm.currency}
+                                          options={contractCurrencyOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractWarehouseForm((current) => ({ ...current, currency: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractWarehouseForm.rate}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractWarehouseForm((current) => ({
+                                              ...current,
+                                              rate: event.target.value.replace(/[^\d.]/g, "")
+                                            }))
+                                          }
+                                          placeholder="Nhập đơn giá"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractWarehouseRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-warehouse-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractWarehouseRow}
+                                      >
+                                        <div className="col-span-4 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-warehouse-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 4 }).map((__, cellIndex) => (
+                                          <div key={`contract-warehouse-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                                ) : null}
+                              </>
+                            )}
+                            {contractCreateTabs.length === 0 ? null : contractCreateWorkspaceTab === "documents" ? (
+                              <div className="space-y-0 px-4 pt-0 pb-4">
                                 <input
-                                  ref={contractCreateUploadInputRef}
+                                  ref={contractDocumentUploadInputRef}
                                   type="file"
-                                  accept=".pdf,.doc,.docx,.xlsx,.xls"
+                                  accept=".pdf,.doc,.docx"
+                                  disabled={isContractDetailReadOnly}
                                   className="hidden"
                                   onChange={(event) => {
                                     const file = event.target.files?.[0];
-                                    setContractCreateUploadFileName(file?.name ?? "");
-                                    if (file?.name) {
-                                      setToast({
-                                        kind: "success",
-                                        message: `Đã đính kèm file ${file.name}.`
-                                      });
+                                    if (!file?.name) {
+                                      return;
                                     }
+
+                                    setContractDocumentForm((current) => ({
+                                      ...current,
+                                      fileName: file.name,
+                                      documentName: current.documentName || file.name.replace(/\.[^.]+$/, ""),
+                                      uploadedBy: currentUserName
+                                    }));
+                                    event.currentTarget.value = "";
                                   }}
                                 />
-
-                                <button
-                                  type="button"
-                                  className="flex min-h-[180px] w-full flex-col items-center justify-center rounded-[16px] border border-dashed border-[#CBD5E1] bg-[#F8FAFC] px-6 text-center transition hover:border-[#245698] hover:bg-[#F2F7FD]"
-                                  onClick={() => contractCreateUploadInputRef.current?.click()}
-                                >
-                                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#245698] shadow-[0_6px_18px_rgba(36,86,152,0.12)]">
-                                    <Upload className="h-5 w-5" strokeWidth={1.8} />
-                                  </span>
-                                  <div className="mt-4 text-sm font-semibold text-foreground">
-                                    {contractCreateUploadFileName ? contractCreateUploadFileName : "Chọn file hợp đồng"}
+                                <div>
+                                  <div className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["File HĐ chính thức", "Loại tài liệu", "Tên tài liệu", "Ngày tài liệu", "Upload bởi"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
                                   </div>
-                                  <p className="mt-2 text-xs text-muted-foreground">
-                                    Hỗ trợ `.pdf`, `.doc`, `.docx`, `.xlsx`, `.xls`.
-                                  </p>
-                                </button>
+                                  {contractDocumentRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-document-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="truncate px-4 py-2">{row.fileName || "-"}</div>
+                                      <div className="px-4 py-2">{row.documentType || "-"}</div>
+                                      <div className="px-4 py-2">{row.documentName || "-"}</div>
+                                      <div className="px-4 py-2">{row.documentDate || "-"}</div>
+                                      <div className="px-4 py-2">{row.uploadedBy || "-"}</div>
+                                    </div>
+                                  ))}
+                                  {isContractDocumentFormOpen ? (
+                                    <div
+                                      ref={contractDocumentInlineFormRef}
+                                      className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="px-4 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (!isContractDetailReadOnly) {
+                                              contractDocumentUploadInputRef.current?.click();
+                                            }
+                                          }}
+                                          className={`flex h-10 w-full items-center gap-2 border-b border-transparent bg-transparent px-0 text-left text-[15px] text-foreground outline-none transition-colors ${
+                                            isContractDetailReadOnly ? "cursor-default" : "hover:border-black"
+                                          }`}
+                                        >
+                                          <Upload className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+                                          <span className={contractDocumentForm.fileName ? "truncate text-foreground" : "truncate text-[#9CA3AF]"}>
+                                            {contractDocumentForm.fileName || "Chọn file"}
+                                          </span>
+                                        </button>
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <TableDropdownField
+                                          heightClass="h-10"
+                                          textSizeClass="text-[15px]"
+                                          value={contractDocumentForm.documentType}
+                                          options={contractDocumentTypeOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) =>
+                                            setContractDocumentForm((current) => ({ ...current, documentType: value }))
+                                          }
+                                          placeholder="Chọn loại"
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <input
+                                          value={contractDocumentForm.documentName}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractDocumentForm((current) => ({
+                                              ...current,
+                                              documentName: event.target.value
+                                            }))
+                                          }
+                                          placeholder="Tên tài liệu"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <InlineCompactDateField
+                                          value={contractDocumentForm.documentDate}
+                                          onChange={(value) =>
+                                            setContractDocumentForm((current) => ({ ...current, documentDate: value }))
+                                          }
+                                          textSizeClass="text-[15px]"
+                                          heightClass="h-10"
+                                          readOnly={isContractDetailReadOnly}
+                                        />
+                                      </div>
+                                      <div className="px-4 py-2">
+                                        <div className="flex h-10 items-center text-[15px] text-foreground">
+                                          {contractDocumentForm.uploadedBy || currentUserName}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractDocumentRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-document-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractDocumentRow}
+                                      >
+                                        <div className="col-span-5 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-document-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 5 }).map((__, cellIndex) => (
+                                          <div key={`contract-document-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
                               </div>
-                            ) : (
+                            ) : contractCreateWorkspaceTab === "notes" ? (
                               <div className="px-4 py-4">
                                 <div className="max-w-[980px] space-y-3">
                                   <TiptapRichTextEditor
                                     value={contractCreateForm.notes}
                                     onChange={(value) => setContractCreateForm((current) => ({ ...current, notes: value }))}
-                                    placeholder="Ghi chú nội bộ. Không gửi cho KH. Ghi thông tin đặc biệt về hợp đồng"
+                                    placeholder="Ghi chú nội bộ. Điều khoản đặc biệt không in trên HĐ chính thức"
+                                    readOnly={isContractDetailReadOnly}
                                   />
                                 </div>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -8645,7 +10622,7 @@ export default function Page() {
                       paddingRight: contractTableScrollbarWidth ? `${contractTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["Số HĐ", "Khách hàng", "Loại HĐ", "Công ty", "Dịch vụ", "Ngày hiệu lực", "Ngày hết hạn", "Trạng thái"].map((label, index) => (
+                    {["Số HĐ", "Khách hàng", "Loại HĐ", "Dịch vụ", "Ngày hiệu lực", "Ngày hết hạn", "Trạng thái"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
@@ -8695,19 +10672,7 @@ export default function Page() {
                               </span>
                             </div>
                             <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                {row.contractCompany.split(" / ").map((company) => (
-                                  <span
-                                    key={`${row.code}-${company}`}
-                                    className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground"
-                                  >
-                                    {company}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                            <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                              <span className="block truncate whitespace-nowrap">{row.services.join(", ") || "-"}</span>
+                              <span className="block truncate whitespace-nowrap">{formatContractServiceLabels(row.services)}</span>
                             </div>
                             <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === filteredRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                               <span className="block truncate whitespace-nowrap">{row.term.split(" - ")[0] ?? row.term}</span>
@@ -8767,18 +10732,7 @@ export default function Page() {
                               {row.contractType}
                             </span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-muted-foreground">Công ty ký hợp đồng: </span>
-                            {row.contractCompany.split(" / ").map((company) => (
-                              <span
-                                key={`${row.code}-mobile-${company}`}
-                                className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#F2F4F7] px-2.5 py-1 text-xs font-medium text-foreground"
-                              >
-                                {company}
-                              </span>
-                            ))}
-                          </div>
-                          <div><span className="text-muted-foreground">Dịch vụ: </span>{row.services.join(", ") || "-"}</div>
+                          <div><span className="text-muted-foreground">Dịch vụ: </span>{formatContractServiceLabels(row.services)}</div>
                           <div>
                             <span className="text-muted-foreground">Ngày hết hạn: </span>
                             <span className={getContractExpiryTextClass(row)}>
@@ -8809,7 +10763,7 @@ export default function Page() {
                       paddingRight: serviceConfigTableScrollbarWidth ? `${serviceConfigTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["Dịch vụ", "Mô tả", "Khách hàng sử dụng", "Hợp đồng sử dụng", "Trạng thái", ""].map((label, index) => (
+                    {["Nhóm dịch vụ", "Dịch vụ con", "Khách hàng sử dụng", "Hợp đồng sử dụng"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
@@ -8825,33 +10779,21 @@ export default function Page() {
                     {paginatedServiceConfigRows.length > 0 ? (
                       paginatedServiceConfigRows.map((row, index) => (
                         <div
-                          key={row.service}
+                          key={`${row.service}-${row.item}`}
                           className="grid bg-card transition-colors hover:bg-[#B6E1FF]"
                           style={{ gridTemplateColumns: serviceConfigTableColumns }}
                         >
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.service}
+                          <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            {row.isFirstInGroup ? row.service : ""}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.description}
+                          <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.item}</span>
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.customerCount}
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             {row.contractCount}
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <CustomerAccountStatusTag status={row.status} />
-                          </div>
-                          <div className={`flex h-12 items-center justify-center px-3 ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <button
-                              type="button"
-                              aria-label={`Tác vụ cho ${row.service}`}
-                              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                            >
-                              <MoreVertical className="h-4 w-4" strokeWidth={1.8} />
-                            </button>
                           </div>
                         </div>
                       ))
@@ -8867,12 +10809,12 @@ export default function Page() {
                   <div className="grid gap-3">
                     {paginatedServiceConfigRows.length > 0 ? (
                       paginatedServiceConfigRows.map((row) => (
-                        <article key={row.service} className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]">
-                          <div className="text-sm font-semibold text-foreground">{row.service}</div>
+                        <article key={`${row.service}-${row.item}`} className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]">
+                          <div className="text-sm font-semibold text-foreground">{row.serviceLabelWithoutEmoji}</div>
                           <div className="mt-3 space-y-2 text-sm text-foreground">
                             <div>
-                              <span className="text-muted-foreground">Mô tả: </span>
-                              {row.description}
+                              <span className="text-muted-foreground">Dịch vụ con: </span>
+                              {row.item}
                             </div>
                             <div>
                               <span className="text-muted-foreground">Khách hàng sử dụng: </span>
@@ -8881,12 +10823,6 @@ export default function Page() {
                             <div>
                               <span className="text-muted-foreground">Hợp đồng sử dụng: </span>
                               {row.contractCount}
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Trạng thái: </span>
-                              <span className="inline-flex align-middle">
-                                <CustomerAccountStatusTag status={row.status} />
-                              </span>
                             </div>
                           </div>
                         </article>
