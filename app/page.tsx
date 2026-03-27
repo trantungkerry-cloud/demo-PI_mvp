@@ -134,10 +134,11 @@ type ServiceConfigRow = {
   status: ServiceConfigStatus;
 };
 
-type ServiceConfigFormState = {
-  service: string;
-  description: string;
-  status: ServiceConfigStatus;
+type ServiceDetailFeeRowState = {
+  feeType: string;
+  unit: string;
+  rate: string;
+  required: boolean;
 };
 
 type CustomerCreateFormState = {
@@ -234,6 +235,12 @@ type ContractWarehouseFormState = {
   currency: string;
   rate: string;
   isPreset?: boolean;
+};
+
+type ContractServiceFeeDraftFormState = {
+  feeName: string;
+  currency: string;
+  rate: string;
 };
 
 type ContractDocumentFormState = {
@@ -568,14 +575,96 @@ const contractDisplayServiceOptions = [
   "🌍 Vận tải quốc tế",
   "🚚 Vận tải nội địa",
   "📑 Thủ tục hải quan",
-  "🏭 Kho bãi & phân phối"
+  "🏭 Kho bãi & phân phối",
+  "🧩 Dịch vụ khác"
 ] as const;
+type ServicePageScope = Exclude<(typeof contractDisplayServiceOptions)[number], "🧩 Dịch vụ khác">;
+const servicePageMenuOptions = contractDisplayServiceOptions.filter(
+  (service) => service !== "🧩 Dịch vụ khác"
+) as ServicePageScope[];
+const servicePageScopeOptions = ["🌍 Vận tải quốc tế"] as ServicePageScope[];
+const serviceScopeCodeMap: Record<ServicePageScope, string> = {
+  "🌍 Vận tải quốc tế": "VQT",
+  "🚚 Vận tải nội địa": "VND",
+  "📑 Thủ tục hải quan": "TTH",
+  "🏭 Kho bãi & phân phối": "KBP"
+};
+const serviceScopeUpdatedAtMap: Record<ServicePageScope, string> = {
+  "🌍 Vận tải quốc tế": "26/03/2026",
+  "🚚 Vận tải nội địa": "24/03/2026",
+  "📑 Thủ tục hải quan": "22/03/2026",
+  "🏭 Kho bãi & phân phối": "20/03/2026"
+};
+const serviceItemCodeMap: Record<string, string> = {
+  "FCL (Full Container Load)": "FCL",
+  "LCL (Less than Container Load)": "LCL",
+  "Dangerous Goods (DG)": "DGD",
+  "Door-to-Door quốc tế": "D2D",
+  "Trucking container": "TRC",
+  "Trucking hàng lẻ": "TRL",
+  "Last-mile delivery": "LMD",
+  "Linehaul (liên tỉnh)": "LIN",
+  "Door-to-Door nội địa": "D2D",
+  "Express delivery": "EXP",
+  "Khai báo hải quan xuất khẩu": "XKH",
+  "Khai báo hải quan nhập khẩu": "NKH",
+  "Xin giấy phép chuyên ngành": "GPL",
+  "Kiểm hóa hàng hóa": "KHH",
+  "Tư vấn HS code": "HSC",
+  "Dịch vụ chứng từ": "CTU",
+  "Lưu kho": "LKH",
+  "Cross-docking": "CRD",
+  "Pick & pack": "PAP",
+  "Quản lý tồn kho": "QLT",
+  "Phân phối hàng hóa": "PPH",
+  "Dán nhãn / đóng gói lại": "DNG"
+};
+const serviceConfigCreators = ["An Phạm", "Linh Trần", "Huy Nguyễn", "Mai Lê"] as const;
+const serviceDetailFeeUnitOptions: SelectOption[] = [
+  { label: "Chọn đơn vị tính", value: "" },
+  { label: "USD", value: "USD" },
+  { label: "USD / container", value: "USD / container" },
+  { label: "USD / CBM", value: "USD / CBM" },
+  { label: "USD / shipment", value: "USD / shipment" },
+  { label: "USD / kg", value: "USD / kg" },
+  { label: "VND", value: "VND" },
+  { label: "EUR", value: "EUR" }
+];
+const serviceDetailFeePresets: Record<string, ServiceDetailFeeRowState[]> = {
+  "FCL (Full Container Load)": [
+    { feeType: "Ocean Freight", unit: "USD / container", rate: "1200", required: true },
+    { feeType: "THC", unit: "USD", rate: "150", required: true },
+    { feeType: "BAF / LSS", unit: "USD", rate: "120", required: true },
+    { feeType: "Documentation fee", unit: "USD", rate: "50", required: false },
+    { feeType: "Seal fee", unit: "USD", rate: "15", required: false },
+    { feeType: "Local charges (POL/POD)", unit: "USD", rate: "180", required: false }
+  ],
+  "LCL (Less than Container Load)": [
+    { feeType: "Ocean Freight", unit: "USD / CBM", rate: "85", required: true },
+    { feeType: "CFS fee", unit: "USD / CBM", rate: "35", required: true },
+    { feeType: "THC", unit: "USD / CBM", rate: "25", required: true },
+    { feeType: "BAF / LSS", unit: "USD / CBM", rate: "20", required: false },
+    { feeType: "Consolidation fee", unit: "USD / shipment", rate: "30", required: false },
+    { feeType: "Documentation fee", unit: "USD", rate: "45", required: false }
+  ],
+  "Dangerous Goods (DG)": [
+    { feeType: "DG surcharge", unit: "USD", rate: "250", required: true },
+    { feeType: "Special handling fee", unit: "USD", rate: "120", required: true },
+    { feeType: "DG Documentation", unit: "USD", rate: "80", required: false },
+    { feeType: "Inspection fee", unit: "USD", rate: "100", required: false },
+    { feeType: "Emergency handling fee", unit: "USD", rate: "70", required: false }
+  ],
+  "Door-to-Door quốc tế": [
+    { feeType: "Pickup fee", unit: "USD / shipment", rate: "95", required: true },
+    { feeType: "Linehaul", unit: "USD / shipment", rate: "320", required: true },
+    { feeType: "Destination delivery", unit: "USD / shipment", rate: "140", required: true },
+    { feeType: "Documentation fee", unit: "USD", rate: "45", required: false }
+  ]
+};
 const contractDisplayServiceItemOptions: Record<(typeof contractDisplayServiceOptions)[number], readonly string[]> = {
   "🌍 Vận tải quốc tế": [
     "FCL (Full Container Load)",
     "LCL (Less than Container Load)",
-    "Air Freight",
-    "Reefer (hàng lạnh)",
     "Dangerous Goods (DG)",
     "Door-to-Door quốc tế"
   ],
@@ -602,6 +691,47 @@ const contractDisplayServiceItemOptions: Record<(typeof contractDisplayServiceOp
     "Quản lý tồn kho",
     "Phân phối hàng hóa",
     "Dán nhãn / đóng gói lại"
+  ],
+  "🧩 Dịch vụ khác": []
+};
+const contractInternationalServiceFeeNotes: Record<
+  string,
+  readonly { label: string; amount: string }[]
+> = {
+  "FCL (Full Container Load)": [
+    { label: "Ocean Freight", amount: "1,200 USD / container" },
+    { label: "THC", amount: "150 USD" },
+    { label: "BAF / LSS", amount: "120 USD" },
+    { label: "Documentation fee", amount: "50 USD" },
+    { label: "Seal fee", amount: "15 USD" },
+    { label: "Local charges (POL/POD)", amount: "180 USD" }
+  ],
+  "LCL (Less than Container Load)": [
+    { label: "Ocean Freight", amount: "85 USD / CBM" },
+    { label: "CFS fee", amount: "35 USD / CBM" },
+    { label: "THC", amount: "25 USD / CBM" },
+    { label: "BAF / LSS", amount: "20 USD / CBM" },
+    { label: "Consolidation fee", amount: "30 USD / shipment" },
+    { label: "Documentation fee", amount: "45 USD" }
+  ],
+  "Air Freight": [
+    { label: "Air Freight", amount: "3.5 USD / kg" },
+    { label: "Fuel surcharge", amount: "0.8 USD / kg" },
+    { label: "Security surcharge", amount: "0.3 USD / kg" },
+    { label: "Handling fee", amount: "60 USD" },
+    { label: "AWB fee", amount: "40 USD" },
+    { label: "Screening fee", amount: "25 USD" }
+  ],
+  "Dangerous Goods (DG)": [
+    { label: "DG surcharge", amount: "250 USD" },
+    { label: "Special handling fee", amount: "120 USD" },
+    { label: "DG Documentation", amount: "80 USD" },
+    { label: "Inspection fee", amount: "100 USD" },
+    { label: "Emergency handling fee", amount: "70 USD" }
+  ],
+  "Door-to-Door quốc tế": [
+    { label: "Phí local charge", amount: "95 USD" },
+    { label: "Phí delivery order", amount: "28 USD" }
   ]
 };
 const contractStatusCreateOptions: SelectOption[] = [
@@ -620,10 +750,14 @@ const contractFareCodeOptions: SelectOption[] = [
   { label: "WHS-FEE", value: "WHS-FEE" }
 ];
 const contractFareNameOptions: SelectOption[] = [
-  { label: "Ocean Freight", value: "Ocean Freight" },
-  { label: "Air Freight", value: "Air Freight" },
-  { label: "Trucking Fee", value: "Trucking Fee" },
-  { label: "Warehouse Fee", value: "Warehouse Fee" }
+  { label: "OF Shanghai - Haiphong", value: "OF Shanghai - Haiphong" },
+  { label: "OF Shenzhen - Haiphong", value: "OF Shenzhen - Haiphong" },
+  { label: "OF Ningbo - Haiphong", value: "OF Ningbo - Haiphong" },
+  { label: "OF Shanghai - Ho Chi Minh", value: "OF Shanghai - Ho Chi Minh" },
+  { label: "OF Busan - Haiphong", value: "OF Busan - Haiphong" },
+  { label: "OF Singapore - Ho Chi Minh", value: "OF Singapore - Ho Chi Minh" },
+  { label: "OF Bangkok - Ho Chi Minh", value: "OF Bangkok - Ho Chi Minh" },
+  { label: "OF Hong Kong - Haiphong", value: "OF Hong Kong - Haiphong" }
 ];
 const contractDomesticFareCodeOptions: SelectOption[] = [
   { label: "CUSTOM-HQ", value: "CUSTOM-HQ" },
@@ -642,9 +776,12 @@ const contractCarrierOptions: SelectOption[] = [
   { label: "Vietnam Airlines Cargo", value: "Vietnam Airlines Cargo" }
 ];
 const contractModOptions: SelectOption[] = [
-  { label: "LCL (CBM)", value: "LCL (CBM)" },
-  { label: "Air (KG)", value: "Air (KG)" },
-  { label: "FCL", value: "FCL" }
+  { label: "FCL", value: "FCL" },
+  { label: "LCL", value: "LCL" },
+  { label: "Air Freight", value: "Air Freight" },
+  { label: "Express", value: "Express" },
+  { label: "Rail", value: "Rail" },
+  { label: "Road (Cross-border)", value: "Road (Cross-border)" }
 ];
 const contractContainerOptions: SelectOption[] = [
   { label: "20GP", value: "20GP" },
@@ -757,6 +894,10 @@ function getStatusFromCode(code: string): BookingStatus {
 function parseDisplayDate(date: string) {
   const [day, month, year] = date.split("/").map(Number);
   return new Date(year, (month ?? 1) - 1, day ?? 1).getTime();
+}
+
+function stripServiceDisplayLabel(service: string) {
+  return service.replace(/^[^\p{L}\p{N}]+\s*/u, "");
 }
 
 function arraysEqual<T>(left: T[], right: T[]) {
@@ -1483,7 +1624,7 @@ const contractStatusMeta: Record<ContractRow["status"], { label: string; classNa
     className: "bg-[#FEF3C7] text-[#92400E]"
   },
   accepted: {
-    label: "Đã chấp thuận",
+    label: "Đã duyệt",
     className: "bg-[#DBEAFE] text-[#1D4ED8]"
   },
   active: {
@@ -1495,11 +1636,11 @@ const contractStatusMeta: Record<ContractRow["status"], { label: string; classNa
     className: "bg-[#F59E0B] text-white"
   },
   expired: {
-    label: "Hết hiệu lực",
+    label: "Hết hạn",
     className: "bg-[#F33233] text-white"
   },
   terminated: {
-    label: "Đã chấm dứt",
+    label: "Hủy hợp đồng",
     className: "bg-[#6B7280] text-white"
   }
 };
@@ -2055,7 +2196,11 @@ function TableDropdownField({
   placeholder = "Chọn",
   textSizeClass = "text-[15px]",
   heightClass = "h-7",
-  disabled = false
+  disabled = false,
+  dropdownWidthClass = "w-[50%]",
+  searchable = false,
+  searchPlaceholder = "Tìm kiếm",
+  placeholderClassName = "text-[#9CA3AF]"
 }: {
   value: string;
   options: SelectOption[];
@@ -2064,12 +2209,18 @@ function TableDropdownField({
   textSizeClass?: string;
   heightClass?: string;
   disabled?: boolean;
+  dropdownWidthClass?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  placeholderClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
+      setSearchQuery("");
       return;
     }
 
@@ -2082,6 +2233,10 @@ function TableDropdownField({
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [isOpen]);
+
+  const filteredOptions = searchable
+    ? options.filter((option) => option.label.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    : options;
 
   return (
     <div ref={containerRef} className="relative">
@@ -2096,7 +2251,7 @@ function TableDropdownField({
           disabled ? "cursor-default" : ""
         }`}
       >
-        <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>
+        <span className={value ? "text-foreground" : placeholderClassName}>
           {options.find((option) => option.value === value)?.label ?? placeholder}
         </span>
         <ChevronDown
@@ -2108,8 +2263,18 @@ function TableDropdownField({
       </button>
 
       {isOpen && !disabled ? (
-        <div className="absolute left-0 top-full z-30 mt-1 max-h-64 min-w-[180px] w-[50%] overflow-y-auto rounded-[12px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)]">
-          {options.map((option, index) => {
+        <div className={`absolute left-0 top-full z-30 mt-1 max-h-64 min-w-[180px] overflow-y-auto rounded-[12px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)] ${dropdownWidthClass}`}>
+          {searchable ? (
+            <div className="border-b border-[#E7E6E9] px-3 py-2">
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-9 w-full rounded-[8px] border border-[#DADCE3] bg-white px-3 text-[14px] text-foreground outline-none placeholder:text-[#9CA3AF] focus:border-[#245698]"
+              />
+            </div>
+          ) : null}
+          {filteredOptions.map((option, index) => {
             const isSelected = option.value === value;
             return (
               <button
@@ -2128,6 +2293,9 @@ function TableDropdownField({
               </button>
             );
           })}
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-[14px] text-muted-foreground">Không có kết quả</div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -2533,6 +2701,7 @@ export default function Page() {
   const contractDocumentUploadInputRef = useRef<HTMLInputElement | null>(null);
   const contractImportInputRef = useRef<HTMLInputElement | null>(null);
   const customerImportInputRef = useRef<HTMLInputElement | null>(null);
+  const serviceDetailFeeInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerAddressInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerContactInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerRouteInlineFormRef = useRef<HTMLDivElement | null>(null);
@@ -2540,6 +2709,7 @@ export default function Page() {
   const contractDomesticInlineFormRef = useRef<HTMLDivElement | null>(null);
   const contractCustomsInlineFormRef = useRef<HTMLDivElement | null>(null);
   const contractWarehouseInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const contractOtherInlineFormRef = useRef<HTMLDivElement | null>(null);
   const contractDocumentInlineFormRef = useRef<HTMLDivElement | null>(null);
   const statusFilterRef = useRef<HTMLDivElement | null>(null);
   const customerStatusFilterRef = useRef<HTMLDivElement | null>(null);
@@ -2597,7 +2767,6 @@ export default function Page() {
   const [selectedSearchGroupOptions, setSelectedSearchGroupOptions] = useState<string[]>([]);
   const [isCustomerImportModalOpen, setIsCustomerImportModalOpen] = useState(false);
   const [isContractImportModalOpen, setIsContractImportModalOpen] = useState(false);
-  const [isServiceConfigModalOpen, setIsServiceConfigModalOpen] = useState(false);
   const [selectedRowCodes, setSelectedRowCodes] = useState<string[]>([]);
   const [selectedCustomerRowKeys, setSelectedCustomerRowKeys] = useState<string[]>([]);
   const [destinationOpenSignal, setDestinationOpenSignal] = useState(0);
@@ -2610,6 +2779,15 @@ export default function Page() {
   const [contractListPageNumber, setContractListPageNumber] = useState(1);
   const [serviceConfigListPageNumber, setServiceConfigListPageNumber] = useState(1);
   const [customerShipmentPage, setCustomerShipmentPage] = useState(1);
+  const [selectedServiceScope, setSelectedServiceScope] =
+    useState<(typeof contractDisplayServiceOptions)[number]>(servicePageScopeOptions[0]);
+  const [selectedServiceDetailKey, setSelectedServiceDetailKey] = useState<string | null>(null);
+  const initialServiceDetailFeeForm: ServiceDetailFeeRowState = {
+    feeType: "",
+    unit: "",
+    rate: "",
+    required: false
+  };
   const [contractScanFileName, setContractScanFileName] = useState("");
   const [contractCreateUploadFileName, setContractCreateUploadFileName] = useState("");
   const [customerImportFileName, setCustomerImportFileName] = useState("");
@@ -2618,16 +2796,14 @@ export default function Page() {
   const [contractScanUpdatedAt, setContractScanUpdatedAt] = useState("");
   const [customerCreateWorkspaceTab, setCustomerCreateWorkspaceTab] = useState<"address" | "contacts" | "routes" | "notes">("address");
   const [contractCreateWorkspaceTab, setContractCreateWorkspaceTab] =
-    useState<"services" | "domestic" | "customs" | "warehouse" | "documents" | "notes">("documents");
+    useState<"services" | "domestic" | "customs" | "warehouse" | "other" | "documents" | "notes">("documents");
   const [recentCustomerSearches, setRecentCustomerSearches] = useState<string[]>([]);
   const [recentOriginPortSearches, setRecentOriginPortSearches] = useState<string[]>([]);
   const [recentDestinationPortSearches, setRecentDestinationPortSearches] = useState<string[]>([]);
   const [openSidebarGroups, setOpenSidebarGroups] = useState<string[]>([]);
-  const [serviceConfigForm, setServiceConfigForm] = useState<ServiceConfigFormState>({
-    service: "",
-    description: "",
-    status: "draft"
-  });
+  const [serviceDetailFeeForm, setServiceDetailFeeForm] = useState<ServiceDetailFeeRowState>(initialServiceDetailFeeForm);
+  const [serviceDetailFeeRows, setServiceDetailFeeRows] = useState<ServiceDetailFeeRowState[]>([]);
+  const [isServiceDetailFeeFormOpen, setIsServiceDetailFeeFormOpen] = useState(false);
   const initialCustomerCreateForm: CustomerCreateFormState = {
     customerName: "",
     englishName: "",
@@ -2661,7 +2837,7 @@ export default function Page() {
   };
   const initialContractRateForm: ContractRateFormState = {
     fareCode: "OCEAN-FRT",
-    fareName: "Ocean Freight",
+    fareName: "OF Shanghai - Haiphong",
     pol: "",
     pod: "",
     carrier: "",
@@ -2694,6 +2870,17 @@ export default function Page() {
     serviceName: "",
     unit: "/container",
     currency: "USD",
+    rate: ""
+  };
+  const initialContractOtherForm: ContractWarehouseFormState = {
+    serviceName: "",
+    unit: "/container",
+    currency: "USD",
+    rate: ""
+  };
+  const initialContractServiceFeeDraftForm: ContractServiceFeeDraftFormState = {
+    feeName: "",
+    currency: "",
     rate: ""
   };
   const initialContractDocumentForm: ContractDocumentFormState = {
@@ -2766,6 +2953,13 @@ export default function Page() {
     useState<ContractWarehouseFormState>(initialContractWarehouseForm);
   const [contractWarehouseRows, setContractWarehouseRows] = useState<ContractWarehouseFormState[]>([]);
   const [isContractWarehouseFormOpen, setIsContractWarehouseFormOpen] = useState(false);
+  const [contractOtherForm, setContractOtherForm] =
+    useState<ContractWarehouseFormState>(initialContractOtherForm);
+  const [contractOtherRows, setContractOtherRows] = useState<ContractWarehouseFormState[]>([]);
+  const [isContractOtherFormOpen, setIsContractOtherFormOpen] = useState(false);
+  const [contractInternationalFeeDrafts, setContractInternationalFeeDrafts] = useState<
+    Record<string, ContractServiceFeeDraftFormState>
+  >({});
   const [contractDocumentForm, setContractDocumentForm] =
     useState<ContractDocumentFormState>(initialContractDocumentForm);
   const [contractDocumentRows, setContractDocumentRows] = useState<ContractDocumentFormState[]>([]);
@@ -2777,7 +2971,10 @@ export default function Page() {
   const isCustomerContractCreatePage = currentPage === "customers" && customerSubPage === "create-contract";
   const isCustomerContractsPage =
     currentPage === "customers" && customerSubPage === "contracts" && !selectedContractCode;
-  const isCustomerServicesPage = currentPage === "customers" && customerSubPage === "services";
+  const isCustomerServicesPage =
+    currentPage === "customers" && customerSubPage === "services" && !selectedServiceDetailKey;
+  const isServiceDetailsPage =
+    currentPage === "customers" && customerSubPage === "services" && !!selectedServiceDetailKey;
   const isCustomerDetailsPage = currentPage === "customers" && customerSubPage === "list" && !!selectedCustomerKey;
   const isCustomerCreateLikePage = isCustomerCreatePage || isCustomerDetailsPage;
   const isContractDetailsPage = currentPage === "customers" && customerSubPage === "contracts" && !!selectedContractCode;
@@ -3132,14 +3329,92 @@ export default function Page() {
 
     return contractDisplayServiceItemOptions[service].map((item, index) => ({
       service,
+      serviceCode: serviceItemCodeMap[item] ?? item.slice(0, 3).toUpperCase(),
       serviceLabelWithoutEmoji,
       item,
+      feeCount: 2 + ((index + serviceLabelWithoutEmoji.length) % 4),
+      createdBy: serviceConfigCreators[(index + serviceLabelWithoutEmoji.length) % serviceConfigCreators.length],
       customerCount: meta.customerCount,
       contractCount: meta.contractCount,
       status: meta.status,
       isFirstInGroup: index === 0
     }));
   });
+  const selectedServiceDetailRow = selectedServiceDetailKey
+    ? serviceConfigNestedRows.find((row) => `${row.service}__${row.item}` === selectedServiceDetailKey) ?? null
+    : null;
+  const selectedServiceDetailScope = selectedServiceDetailRow?.service ?? null;
+  const selectedServiceDetailRows = selectedServiceDetailScope
+    ? serviceConfigNestedRows.filter((row) => row.service === selectedServiceDetailScope)
+    : [];
+  const selectedServiceDetailDisplayName = selectedServiceDetailScope
+    ? stripServiceDisplayLabel(selectedServiceDetailScope)
+    : "";
+  const selectedServiceDetailStatus = selectedServiceDetailRow?.status ?? "active";
+  const selectedServiceDetailMetrics = [
+    {
+      label: "Loại hình",
+      value: selectedServiceDetailRows.length
+    },
+    {
+      label: "Loại phí",
+      value: selectedServiceDetailRows.reduce((total, row) => total + row.feeCount, 0)
+    },
+    {
+      label: "Khách hàng",
+      value: selectedServiceDetailRows[0]?.customerCount ?? 0
+    },
+    {
+      label: "Hợp đồng",
+      value: selectedServiceDetailRows[0]?.contractCount ?? 0
+    }
+  ].filter((item) => item.value > 0);
+  const serviceDetailNavigationRows = selectedServiceDetailScope
+    ? serviceConfigNestedRows.filter((row) => row.service === selectedServiceDetailScope)
+    : [];
+  const serviceDetailIndex = selectedServiceDetailKey
+    ? serviceDetailNavigationRows.findIndex((row) => `${row.service}__${row.item}` === selectedServiceDetailKey)
+    : -1;
+  const previousServiceDetail =
+    serviceDetailIndex > 0 ? serviceDetailNavigationRows[serviceDetailIndex - 1] : null;
+  const nextServiceDetail =
+    serviceDetailIndex >= 0 && serviceDetailIndex < serviceDetailNavigationRows.length - 1
+      ? serviceDetailNavigationRows[serviceDetailIndex + 1]
+      : null;
+  const serviceDetailActivityRows = selectedServiceDetailScope
+    ? [
+        {
+          actor: selectedServiceDetailRows[0]?.createdBy ?? "An Phạm",
+          time: "Hôm nay lúc 10:15",
+          message: `Cập nhật phạm vi ${selectedServiceDetailDisplayName} và đồng bộ ${selectedServiceDetailRows.length} loại hình dịch vụ.`
+        },
+        {
+          actor: "Admin PI Logistics",
+          time: "Hôm nay lúc 08:40",
+          message: `Điều chỉnh tổng số lượng phí mặc định cho ${selectedServiceDetailDisplayName}.`
+        },
+        {
+          actor: "System",
+          time: "Hôm qua lúc 17:20",
+          message: `Khởi tạo cấu hình chi tiết cho ${selectedServiceDetailDisplayName}.`
+        }
+      ]
+    : [];
+  const serviceDetailActivityGroups = [
+    {
+      label: "Hôm nay",
+      entries: serviceDetailActivityRows.filter((entry) => entry.time.startsWith("Hôm nay"))
+    },
+    {
+      label: "Hôm qua",
+      entries: serviceDetailActivityRows.filter((entry) => entry.time.startsWith("Hôm qua"))
+    }
+  ].filter((group) => group.entries.length > 0);
+  const hasServiceDetailFeeDraft =
+    serviceDetailFeeForm.feeType.trim() !== "" ||
+    serviceDetailFeeForm.unit.trim() !== "" ||
+    serviceDetailFeeForm.rate.trim() !== "" ||
+    serviceDetailFeeForm.required;
   const selectedCustomerRow = selectedCustomerKey
     ? customerRows.find((row) => row.customer === selectedCustomerKey) ?? null
     : null;
@@ -3301,6 +3576,11 @@ export default function Page() {
     contractWarehouseForm.unit !== initialContractWarehouseForm.unit ||
     contractWarehouseForm.currency !== initialContractWarehouseForm.currency ||
     contractWarehouseForm.rate.trim() !== "";
+  const hasContractOtherDraft =
+    contractOtherForm.serviceName.trim() !== "" ||
+    contractOtherForm.unit !== initialContractOtherForm.unit ||
+    contractOtherForm.currency !== initialContractOtherForm.currency ||
+    contractOtherForm.rate.trim() !== "";
   const hasContractDocumentDraft =
     contractDocumentForm.fileName.trim() !== "" ||
     contractDocumentForm.documentType !== "" ||
@@ -3312,6 +3592,7 @@ export default function Page() {
   const emptyContractDomesticRows = Math.max(0, 5 - contractDomesticRows.length);
   const emptyContractCustomsRows = Math.max(0, 5 - contractCustomsRows.length);
   const emptyContractWarehouseRows = Math.max(0, 5 - contractWarehouseRows.length);
+  const emptyContractOtherRows = Math.max(0, 5 - contractOtherRows.length);
   const emptyContractDocumentRows = Math.max(0, 5 - contractDocumentRows.length);
   const openNextCustomerAddressRow = () => {
     if (hasCustomerAddressDraft) {
@@ -3344,6 +3625,16 @@ export default function Page() {
     }
 
     setIsCustomerRouteFormOpen(true);
+  };
+  const openNextServiceDetailFeeRow = () => {
+    if (hasServiceDetailFeeDraft) {
+      setServiceDetailFeeRows((current) => [...current, serviceDetailFeeForm]);
+      setServiceDetailFeeForm(initialServiceDetailFeeForm);
+      setIsServiceDetailFeeFormOpen(true);
+      return;
+    }
+
+    setIsServiceDetailFeeFormOpen(true);
   };
   const openNextContractRateRow = () => {
     if (isContractDetailReadOnly) {
@@ -3401,6 +3692,20 @@ export default function Page() {
 
     setIsContractWarehouseFormOpen(true);
   };
+  const openNextContractOtherRow = () => {
+    if (isContractDetailReadOnly) {
+      return;
+    }
+
+    if (hasContractOtherDraft) {
+      setContractOtherRows((current) => [...current, contractOtherForm]);
+      setContractOtherForm(initialContractOtherForm);
+      setIsContractOtherFormOpen(true);
+      return;
+    }
+
+    setIsContractOtherFormOpen(true);
+  };
   const openNextContractDocumentRow = () => {
     if (isContractDetailReadOnly) {
       return;
@@ -3441,6 +3746,8 @@ export default function Page() {
             ? `${selectedContractRow.code} | PI Digital`
           : isCustomerDetailsPage && selectedCustomerRow
             ? `${selectedCustomerRow.customer} | PI Digital`
+            : isServiceDetailsPage && selectedServiceDetailRow
+              ? `${selectedServiceDetailDisplayName} | PI Digital`
             : isCustomerServicesPage
               ? "Cấu hình dịch vụ | PI Digital"
             : isCustomerCreatePage
@@ -3463,6 +3770,8 @@ export default function Page() {
             ? `Chi tiết hợp đồng ${selectedContractRow.code} trong hệ thống PI Digital.`
           : isCustomerDetailsPage && selectedCustomerRow
             ? `Chi tiết khách hàng ${selectedCustomerRow.customer} trong hệ thống PI Digital.`
+            : isServiceDetailsPage && selectedServiceDetailRow
+              ? `Chi tiết loại hình dịch vụ ${selectedServiceDetailDisplayName} trong hệ thống PI Digital.`
             : isCustomerServicesPage
               ? "Cấu hình dịch vụ dùng chung cho khách hàng và hợp đồng trong hệ thống PI Digital."
             : isCustomerCreatePage
@@ -3492,6 +3801,9 @@ export default function Page() {
     isCustomerDetailsPage,
     isCustomerListPage,
     isCustomerServicesPage,
+    isServiceDetailsPage,
+    selectedServiceScope,
+    selectedServiceDetailKey,
     selectedBookingCode,
     selectedContractRow,
     selectedCustomerRow
@@ -3594,7 +3906,7 @@ export default function Page() {
   const serviceSearchFilterSections = [
     {
       title: "Nhóm dịch vụ",
-      items: contractDisplayServiceOptions.map((service) => service.replace(/^[^\p{L}\p{N}]+\s*/u, "")),
+      items: servicePageScopeOptions.map((service) => service.replace(/^[^\p{L}\p{N}]+\s*/u, "")),
     },
   ] as const;
   const activeSearchFilterSections = isCustomerContractsPage
@@ -3616,8 +3928,10 @@ export default function Page() {
         ? "Hợp đồng"
           : isCustomerContractsPage
             ? "Hợp đồng"
+          : isServiceDetailsPage
+            ? selectedServiceDetailDisplayName
           : isCustomerServicesPage
-            ? "Dịch vụ"
+            ? selectedServiceScope
             : isCustomerDetailsPage && selectedCustomerRow
               ? selectedCustomerRow.customer
               : isContractDetailsPage && selectedContractRow
@@ -3635,27 +3949,30 @@ export default function Page() {
       : (["Nháp", "Đang hoạt động"] as const);
   const contractCreateWorkflowSteps: readonly string[] = (
     isContractDetailsPage && activeContractDetailStatus === "expiring_soon"
-      ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Sắp hết hạn"]
+      ? ["Nháp", "Chờ duyệt", "Đã duyệt", "Đang hiệu lực", "Sắp hết hạn"]
       : isContractDetailsPage && activeContractDetailStatus === "expired"
-        ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Hết hiệu lực"]
+        ? ["Nháp", "Chờ duyệt", "Đã duyệt", "Đang hiệu lực", "Hết hạn"]
         : isContractDetailsPage && activeContractDetailStatus === "terminated"
-          ? ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực", "Đã chấm dứt"]
-        : ["Nháp", "Chờ duyệt", "Đã chấp thuận", "Đang hiệu lực"]
+          ? ["Nháp", "Chờ duyệt", "Đã duyệt", "Đang hiệu lực", "Hủy hợp đồng"]
+        : ["Nháp", "Chờ duyệt", "Đã duyệt", "Đang hiệu lực"]
   );
   const customerCreateSummaryRow = isCustomerDetailsPage ? selectedCustomerRow : matchedCustomerCreateRow;
   const shouldHideCustomerDetailMetrics = isCustomerDetailsPage && selectedCustomerRow?.status === "draft";
+  const relatedCustomerContracts = customerCreateSummaryRow
+    ? contractRows.filter((row) => row.customer === customerCreateSummaryRow.customer)
+    : [];
   const customerCreateHeaderMetrics = [
     {
       label: "Hợp đồng",
       value: shouldHideCustomerDetailMetrics
         ? 0
-        : customerCreateSummaryRow
-          ? contractRows.filter((row) => row.customer === customerCreateSummaryRow.customer).length
-          : 0,
+        : relatedCustomerContracts.length,
+      contractCode: relatedCustomerContracts[0]?.code ?? null,
     },
     {
       label: "Shipments",
       value: shouldHideCustomerDetailMetrics ? 0 : customerCreateSummaryRow?.totalBookings ?? 0,
+      contractCode: null,
     },
     {
       label: "Báo giá",
@@ -3664,16 +3981,9 @@ export default function Page() {
         : customerCreateSummaryRow
           ? Math.max(1, Math.ceil(customerCreateSummaryRow.totalBookings / 2))
           : 0,
+      contractCode: null,
     },
-    {
-      label: "Phân tích",
-      value: shouldHideCustomerDetailMetrics
-        ? 0
-        : customerCreateSummaryRow
-          ? Math.max(1, Math.ceil(customerCreateSummaryRow.totalBookings / 3))
-          : 0,
-    },
-  ] as const;
+  ].filter((item) => item.value > 0);
   const contractCreateHeaderMetrics = [
     { label: "Báo giá", value: 0 },
     { label: "Shipments", value: 0 },
@@ -3761,7 +4071,8 @@ export default function Page() {
       entries: activeContractActivityRows.filter((entry) => entry.time.startsWith("Hôm qua"))
     }
   ].filter((group) => group.entries.length > 0);
-  const isAnyCreatePage = isCreatePage || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage;
+  const isAnyCreatePage =
+    isCreatePage || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage;
   const listPageSize = 80;
   const customerTaxIdByName = new Map(customerRows.map((row) => [row.customer, row.taxId] as const));
   const selectedContractSearchStatuses = selectedSearchFilters["Trạng thái"] ?? [];
@@ -3935,6 +4246,10 @@ export default function Page() {
       return left.code.localeCompare(right.code, "vi");
     });
   const visibleServiceConfigRows = serviceConfigNestedRows.filter((row) => {
+    if (row.service !== selectedServiceScope) {
+      return false;
+    }
+
     if (!normalizedSearchQuery) {
       return true;
     }
@@ -4029,6 +4344,7 @@ export default function Page() {
   const contractHasDomesticService = contractCreateForm.services.includes("🚚 Vận tải nội địa");
   const contractHasCustomsService = contractCreateForm.services.includes("📑 Thủ tục hải quan");
   const contractHasWarehouseService = contractCreateForm.services.includes("🏭 Kho bãi & phân phối");
+  const contractHasOtherService = contractCreateForm.services.includes("🧩 Dịch vụ khác");
   const selectedCustomsServiceItems = contractCreateForm.serviceItems["📑 Thủ tục hải quan"] ?? [];
   const selectedWarehouseServiceItems = contractCreateForm.serviceItems["🏭 Kho bãi & phân phối"] ?? [];
   const contractCreateTabs = [
@@ -4036,13 +4352,14 @@ export default function Page() {
     contractHasDomesticService ? { key: "domestic", label: "Vận tải nội địa" } : null,
     contractHasCustomsService ? { key: "customs", label: "Thủ tục hải quan" } : null,
     contractHasWarehouseService ? { key: "warehouse", label: "Kho bãi & phân phối" } : null,
+    contractHasOtherService ? { key: "other", label: "Dịch vụ khác" } : null,
     { key: "documents", label: "Chứng từ hợp đồng" },
     { key: "notes", label: "Ghi chú" }
   ].filter(
     (
       tab
     ): tab is {
-      key: "services" | "domestic" | "customs" | "warehouse" | "documents" | "notes";
+      key: "services" | "domestic" | "customs" | "warehouse" | "other" | "documents" | "notes";
       label: string;
     } => tab !== null
   );
@@ -4130,6 +4447,22 @@ export default function Page() {
       setSelectedContractCode(
         nextPage === "customers" && nextParams.get("view") === "contracts" ? nextParams.get("contract") : null
       );
+      const nextServiceScope = nextPage === "customers" && nextParams.get("view") === "services"
+        ? nextParams.get("service")
+        : null;
+      if (nextServiceScope && servicePageScopeOptions.includes(nextServiceScope as (typeof servicePageScopeOptions)[number])) {
+        setSelectedServiceScope(nextServiceScope as (typeof servicePageScopeOptions)[number]);
+      }
+      const nextServiceItem = nextPage === "customers" && nextParams.get("view") === "services"
+        ? nextParams.get("service_item")
+        : null;
+      setSelectedServiceDetailKey(
+        nextServiceScope &&
+          nextServiceItem &&
+          serviceConfigNestedRows.some((row) => row.service === nextServiceScope && row.item === nextServiceItem)
+          ? `${nextServiceScope}__${nextServiceItem}`
+          : null
+      );
       setSelectedBookingCode(
         nextPage === "customers"
           ? null
@@ -4159,6 +4492,19 @@ export default function Page() {
   useEffect(() => {
     setCustomerShipmentPage(1);
   }, [selectedCustomerKey]);
+
+  useEffect(() => {
+    if (!selectedServiceDetailRow) {
+      setServiceDetailFeeRows([]);
+      setServiceDetailFeeForm(initialServiceDetailFeeForm);
+      setIsServiceDetailFeeFormOpen(false);
+      return;
+    }
+
+    setServiceDetailFeeRows((serviceDetailFeePresets[selectedServiceDetailRow.item] ?? []).map((row) => ({ ...row })));
+    setServiceDetailFeeForm(initialServiceDetailFeeForm);
+    setIsServiceDetailFeeFormOpen(false);
+  }, [selectedServiceDetailKey]);
 
   useEffect(() => {
     if (!selectedCustomerRow) {
@@ -4317,7 +4663,9 @@ export default function Page() {
         ? "domestic"
         : nextServices[0] === "📑 Thủ tục hải quan"
           ? "customs"
-          : "warehouse") : "documents");
+          : nextServices[0] === "🏭 Kho bãi & phân phối"
+            ? "warehouse"
+            : "other") : "documents");
   }, [currentUserName, isContractDetailsPage, selectedContractCode]);
 
   useEffect(() => {
@@ -4630,6 +4978,21 @@ export default function Page() {
   }, [hasCustomerContactDraft, isCustomerContactFormOpen]);
 
   useEffect(() => {
+    if (!isServiceDetailFeeFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!serviceDetailFeeInlineFormRef.current?.contains(event.target as Node) && !hasServiceDetailFeeDraft) {
+        setIsServiceDetailFeeFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasServiceDetailFeeDraft, isServiceDetailFeeFormOpen]);
+
+  useEffect(() => {
     if (!isCustomerRouteFormOpen) {
       return;
     }
@@ -4764,6 +5127,21 @@ export default function Page() {
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [hasContractWarehouseDraft, isContractWarehouseFormOpen]);
+
+  useEffect(() => {
+    if (!isContractOtherFormOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!contractOtherInlineFormRef.current?.contains(event.target as Node) && !hasContractOtherDraft) {
+        setIsContractOtherFormOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [hasContractOtherDraft, isContractOtherFormOpen]);
 
   useEffect(() => {
     if (!toast) {
@@ -4996,12 +5374,12 @@ export default function Page() {
   };
 
   const exportServiceRecords = () => {
-    const header = ["Nhom dich vu", "Ten dich vu", "Khach hang su dung", "Hop dong su dung"];
+    const header = ["Ma loai hinh", "Loai hinh", "So luong phi", "Nguoi tao"];
     const rows = visibleServiceConfigRows.map((row) => [
-      row.serviceLabelWithoutEmoji,
+      row.serviceCode,
       row.item,
-      row.customerCount,
-      row.contractCount,
+      row.feeCount,
+      row.createdBy,
     ]);
     const csvContent = [header, ...rows]
       .map((columns) => columns.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
@@ -5276,6 +5654,22 @@ export default function Page() {
     });
   };
 
+  const cancelApprovedContractFromDetails = () => {
+    if (!isContractDetailsPage || !selectedContractRow) {
+      return;
+    }
+
+    setContractStatusOverrides((current) => ({
+      ...current,
+      [selectedContractRow.code]: "terminated"
+    }));
+    setContractCreateForm((current) => ({ ...current, status: "terminated" }));
+    setToast({
+      kind: "success",
+      message: "Đã hủy hợp đồng."
+    });
+  };
+
   const deleteContractFromDetails = () => {
     if (!selectedContractRow) {
       return;
@@ -5463,6 +5857,11 @@ export default function Page() {
       return;
     }
 
+    if (isServiceDetailsPage) {
+      showCustomerServices();
+      return;
+    }
+
     if (isCustomerCreateLikePage) {
       showCustomerList();
     }
@@ -5473,6 +5872,8 @@ export default function Page() {
     nextParams.delete("booking");
     nextParams.delete("customer");
     nextParams.delete("contract");
+    nextParams.delete("service");
+    nextParams.delete("service_item");
     nextParams.set("page", "customers");
     nextParams.set("view", "services");
     const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
@@ -5482,19 +5883,35 @@ export default function Page() {
     setSelectedBookingCode(null);
     setSelectedCustomerKey(null);
     setSelectedContractCode(null);
+    setSelectedServiceDetailKey(null);
   };
 
   const showCustomerServices = () => {
     runWithLeaveGuard(performShowCustomerServices);
   };
 
-  const openServiceConfigModal = () => {
-    setServiceConfigForm({
-      service: "",
-      description: "",
-      status: "draft"
-    });
-    setIsServiceConfigModalOpen(true);
+  const performOpenServiceDetails = (service: ServicePageScope, item: string) => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "services");
+    nextParams.set("service", service);
+    nextParams.set("service_item", item);
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("services");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setSelectedServiceScope(service);
+    setSelectedServiceDetailKey(`${service}__${item}`);
+  };
+
+  const openServiceDetails = (service: ServicePageScope, item: string) => {
+    runWithLeaveGuard(() => performOpenServiceDetails(service, item));
   };
 
   const performOpenCustomerDetails = (customer: string) => {
@@ -6080,6 +6497,12 @@ export default function Page() {
     };
   }, [selectedBookingCode]);
 
+  useEffect(() => {
+    if (isCustomerServicesPage) {
+      setServiceConfigListPageNumber(1);
+    }
+  }, [isCustomerServicesPage, selectedServiceScope, searchQuery]);
+
   return (
     <main className="h-screen overflow-hidden bg-background">
       <div className="flex h-screen w-full flex-col overflow-visible bg-background">
@@ -6224,15 +6647,15 @@ export default function Page() {
                         <button
                           type="button"
                           onClick={() => {
-                            if (isCustomerServicesPage) {
-                              openServiceConfigModal();
-                              return;
-                            }
-
                             if (isCustomerContractsPage) {
                               openCreateContract();
                               return;
                             }
+
+                            if (isCustomerServicesPage) {
+                              return;
+                            }
+
                             openCreateCustomer();
                           }}
                           className="inline-flex h-8 items-center gap-1 rounded-full bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
@@ -6241,7 +6664,7 @@ export default function Page() {
                           <span>Thêm mới</span>
                         </button>
                       ) : null}
-                      {isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage ? (
+                      {isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage ? (
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
@@ -6253,7 +6676,13 @@ export default function Page() {
                           </button>
                           <div className="leading-[1.2]">
                             <div className="text-[16px] font-medium text-foreground">
-                              {isCustomerDetailsPage ? "Khách hàng" : isContractDetailsPage ? "Hợp đồng" : currentPageTitle}
+                              {isCustomerDetailsPage
+                                ? "Khách hàng"
+                                : isContractDetailsPage
+                                  ? "Hợp đồng"
+                                  : isServiceDetailsPage
+                                    ? "Dịch vụ"
+                                    : currentPageTitle}
                             </div>
                             {isCustomerDetailsPage && selectedCustomerRow ? (
                               <div ref={customerTitleMenuRef} className="relative mt-[2px]">
@@ -6351,6 +6780,10 @@ export default function Page() {
                                   </div>
                                 ) : null}
                               </div>
+                            ) : isServiceDetailsPage && selectedServiceDetailScope ? (
+                              <div className="mt-[2px] text-[12px] font-medium text-muted-foreground">
+                                {selectedServiceDetailDisplayName}
+                              </div>
                             ) : null}
                           </div>
                           {isCustomerCreateLikePage && (!isCustomerDetailsPage || (isCustomerDetailEditable && hasCustomerDetailChanges)) ? (
@@ -6411,51 +6844,49 @@ export default function Page() {
 
                           {isCustomerTitleMenuOpen ? (
                             <div className="absolute left-0 top-full z-20 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
-                              {[
-                                isCustomerContractsPage
-                                  ? {
-                                      label: "Import Hợp đồng",
-                                      icon: Upload,
+                              {(
+                                isCustomerServicesPage
+                                  ? servicePageMenuOptions.map((service) => ({
+                                      label: service,
+                                      icon: null,
                                       onClick: () => {
+                                        if (service === "🌍 Vận tải quốc tế") {
+                                          setSelectedServiceScope(service);
+                                        }
                                         setIsCustomerTitleMenuOpen(false);
-                                        openContractImportModal();
                                       },
-                                    }
-                                  : isCustomerServicesPage
-                                    ? {
-                                        label: "Import Dịch vụ",
-                                        icon: Upload,
-                                        onClick: () => {
-                                          setIsCustomerTitleMenuOpen(false);
-                                          openServiceConfigModal();
-                                        },
-                                      }
-                                  : {
-                                      label: "Import khách hàng",
-                                      icon: Upload,
-                                      onClick: () => {
-                                        setIsCustomerTitleMenuOpen(false);
-                                        openCustomerImportModal();
-                                      },
-                                    },
-                                isCustomerContractsPage
-                                  ? {
-                                      label: "Export Hợp đồng",
-                                      icon: Download,
-                                      onClick: exportContractRecords,
-                                    }
-                                  : isCustomerServicesPage
-                                    ? {
-                                        label: "Export Dịch vụ",
-                                        icon: Download,
-                                        onClick: exportServiceRecords,
-                                      }
-                                  : {
-                                      label: "Export khách hàng",
-                                      icon: Download,
-                                      onClick: exportCustomerRecords,
-                                    },
-                              ].map((item, itemIndex) => (
+                                    }))
+                                  : [
+                                      isCustomerContractsPage
+                                        ? {
+                                            label: "Import Hợp đồng",
+                                            icon: Upload,
+                                            onClick: () => {
+                                              setIsCustomerTitleMenuOpen(false);
+                                              openContractImportModal();
+                                            },
+                                          }
+                                        : {
+                                            label: "Import khách hàng",
+                                            icon: Upload,
+                                            onClick: () => {
+                                              setIsCustomerTitleMenuOpen(false);
+                                              openCustomerImportModal();
+                                            },
+                                          },
+                                      isCustomerContractsPage
+                                        ? {
+                                            label: "Export Hợp đồng",
+                                            icon: Download,
+                                            onClick: exportContractRecords,
+                                          }
+                                        : {
+                                            label: "Export khách hàng",
+                                            icon: Download,
+                                            onClick: exportCustomerRecords,
+                                          },
+                                    ]
+                              ).map((item, itemIndex) => (
                                 <button
                                   key={item.label}
                                   type="button"
@@ -6464,7 +6895,7 @@ export default function Page() {
                                     itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
                                   }`}
                                 >
-                                  <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                  {item.icon ? <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} /> : null}
                                   <span>{item.label}</span>
                                 </button>
                               ))}
@@ -6492,6 +6923,11 @@ export default function Page() {
                               <button
                                 key={item.label}
                                 type="button"
+                                onClick={() => {
+                                  if (item.label === "Hợp đồng" && item.contractCode) {
+                                    openContractDetails(item.contractCode);
+                                  }
+                                }}
                                 className="inline-flex h-10 items-center rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground shadow-subtle transition hover:bg-[#fafafa] active:bg-[#f2f2f2]"
                               >
                                 <span>{`${item.value} ${item.label}`}</span>
@@ -6510,6 +6946,8 @@ export default function Page() {
                               </button>
                             ))}
                           </div>
+                        ) : isServiceDetailsPage ? (
+                          <div />
                         ) : null}
                         {isCustomerSelectionMode ? (
                           <div className="relative z-30 flex items-center justify-center gap-2">
@@ -6584,7 +7022,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage ? "hidden" : ""
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -6794,6 +7232,40 @@ export default function Page() {
                               }}
                               disabled={!nextContractDetail}
                               aria-label="Hợp đồng sau"
+                            >
+                              <ChevronRight className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                          </div>
+                        </>
+                      ) : isServiceDetailsPage && selectedServiceDetailScope ? (
+                        <>
+                          <div className="text-[14px] font-normal text-foreground">
+                            {`${serviceDetailIndex >= 0 ? serviceDetailIndex + 1 : 0} / ${serviceDetailNavigationRows.length}`}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (previousServiceDetail) {
+                                  openServiceDetails(previousServiceDetail.service as ServicePageScope, previousServiceDetail.item);
+                                }
+                              }}
+                              disabled={!previousServiceDetail}
+                              aria-label="Loại hình dịch vụ trước"
+                            >
+                              <ChevronLeft className="h-5 w-5" strokeWidth={2} />
+                            </button>
+                            <button
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white text-[#5B6BC0] transition hover:bg-[#F5F8FF] disabled:cursor-not-allowed disabled:border-[#D7D7D7] disabled:text-[#B7B7B7]"
+                              onClick={() => {
+                                if (nextServiceDetail) {
+                                  openServiceDetails(nextServiceDetail.service as ServicePageScope, nextServiceDetail.item);
+                                }
+                              }}
+                              disabled={!nextServiceDetail}
+                              aria-label="Loại hình dịch vụ sau"
                             >
                               <ChevronRight className="h-5 w-5" strokeWidth={2} />
                             </button>
@@ -9135,13 +9607,32 @@ export default function Page() {
                                       <div className="px-4 py-2">{row.city || "-"}</div>
                                       <div className="px-4 py-2">{row.country || "-"}</div>
                                       <div className="px-4 py-2">{row.postalCode || "-"}</div>
-                                      <div className="px-4 py-2">{row.addressType || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.addressType || "-"}</span>
+                                        {canEditCustomerDetailTabs ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setCustomerAddressRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   ))}
                                   {isCustomerAddressFormOpen ? (
                                     <div
                                       ref={customerAddressInlineFormRef}
-                                      className="grid grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasCustomerAddressDraft
+                                          ? "grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr_auto]"
+                                          : "grid-cols-[1.45fr_1.45fr_1.1fr_1fr_0.9fr_1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <input
@@ -9207,6 +9698,20 @@ export default function Page() {
                                           }
                                         />
                                       </div>
+                                      {hasCustomerAddressDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setCustomerAddressForm(initialCustomerAddressForm);
+                                              setIsCustomerAddressFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {!canEditCustomerDetailTabs ? null : Array.from({ length: emptyCustomerAddressRows }).map((_, rowIndex) =>
@@ -9256,13 +9761,32 @@ export default function Page() {
                                       <div className="px-4 py-2">{row.email || "-"}</div>
                                       <div className="px-4 py-2">{row.department || "-"}</div>
                                       <div className="px-4 py-2">{row.isPrimary ? "Có" : "-"}</div>
-                                      <div className="px-4 py-2">{row.notes || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.notes || "-"}</span>
+                                        {canEditCustomerDetailTabs ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setCustomerContactRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   ))}
                                   {isCustomerContactFormOpen ? (
                                     <div
                                       ref={customerContactInlineFormRef}
-                                      className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasCustomerContactDraft
+                                          ? "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr_auto]"
+                                          : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_0.9fr_1.1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <input
@@ -9338,6 +9862,20 @@ export default function Page() {
                                           className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                         />
                                       </div>
+                                      {hasCustomerContactDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setCustomerContactForm(initialCustomerContactForm);
+                                              setIsCustomerContactFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {!canEditCustomerDetailTabs ? null : Array.from({ length: emptyCustomerContactRows }).map((_, rowIndex) =>
@@ -9561,13 +10099,29 @@ export default function Page() {
                   <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-0">
                     <div className="flex flex-wrap items-center gap-2">
                       {isContractDetailsPage && contractCreateForm.status === "draft" ? (
-                        <button
-                          type="button"
-                          onClick={submitContractForApproval}
-                          className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#18478D]"
-                        >
-                          Submit
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={submitContractForApproval}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#18478D]"
+                          >
+                            Gửi duyệt
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveContract}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-foreground transition hover:bg-[#F8FAFF]"
+                          >
+                            Lưu
+                          </button>
+                          <button
+                            type="button"
+                            onClick={goBackFromCreatePage}
+                            className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-foreground transition hover:bg-[#F8FAFF]"
+                          >
+                            Hủy
+                          </button>
+                        </>
                       ) : null}
                       {isContractDetailsPage && contractCreateForm.status === "pending" ? (
                         <>
@@ -9576,16 +10130,25 @@ export default function Page() {
                             onClick={approveContractFromDetails}
                             className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-2.5 text-[13px] font-medium text-white transition hover:bg-[#18478D]"
                           >
-                            Approve
+                            Duyệt
                           </button>
                           <button
                             type="button"
                             onClick={rejectContractFromDetails}
                             className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-[#B42318] transition hover:bg-[#FFF5F5]"
                           >
-                            Reject
+                            Từ chối
                           </button>
                         </>
+                      ) : null}
+                      {isContractDetailsPage && contractCreateForm.status === "accepted" ? (
+                        <button
+                          type="button"
+                          onClick={cancelApprovedContractFromDetails}
+                          className="inline-flex h-8 items-center gap-1 rounded-full border-[0.5px] border-[#D8D8D8] bg-white px-2.5 text-[13px] font-medium text-[#B42318] transition hover:bg-[#FFF5F5]"
+                        >
+                          Hủy hợp đồng
+                        </button>
                       ) : null}
                       {isContractDetailsPage ? (
                         <button
@@ -9620,9 +10183,9 @@ export default function Page() {
                             (contractCreateForm.status === "expiring_soon" &&
                               index === contractCreateWorkflowSteps.indexOf("Sắp hết hạn")) ||
                             (contractCreateForm.status === "expired" &&
-                              index === contractCreateWorkflowSteps.indexOf("Hết hiệu lực")) ||
+                              index === contractCreateWorkflowSteps.indexOf("Hết hạn")) ||
                             (contractCreateForm.status === "terminated" &&
-                              index === contractCreateWorkflowSteps.indexOf("Đã chấm dứt")))
+                              index === contractCreateWorkflowSteps.indexOf("Hủy hợp đồng")))
                               ? "bg-[#2054a3] text-white"
                               : "bg-[#EAF1FB] text-[#245698]"
                           } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
@@ -9759,10 +10322,11 @@ export default function Page() {
 
                           <div className="space-y-3">
                             <div className="text-[16px] font-medium text-foreground">PHẠM VI DỊCH VỤ</div>
-                            <div className="grid grid-cols-1 divide-y-[0.5px] divide-[#E7E6E9] rounded-[8px] border-[0.5px] border-[#E7E6E9] bg-white lg:grid-cols-4 lg:divide-x-[0.5px] lg:divide-y-0">
+                            <div className="grid grid-cols-1 divide-y-[0.5px] divide-[#E7E6E9] rounded-[8px] border-[0.5px] border-[#E7E6E9] bg-white">
                               {contractDisplayServiceOptions.map((service) => {
                                 const checked = contractCreateForm.services.includes(service);
                                 const selectedItems = contractCreateForm.serviceItems[service] ?? [];
+                                const shouldShowNestedItems = checked && service === "🌍 Vận tải quốc tế";
                                 return (
                                   <div key={service} className="px-4 py-4">
                                     <label className="flex min-h-[32px] cursor-pointer items-center gap-3 text-[15px] font-semibold text-foreground">
@@ -9790,14 +10354,26 @@ export default function Page() {
                                       />
                                       <span>{service}</span>
                                     </label>
-                                    {checked ? (
+                                    {shouldShowNestedItems ? (
                                       <div className="mt-3 space-y-2 pl-8">
                                         {contractDisplayServiceItemOptions[service].map((item) => {
                                           const itemChecked = selectedItems.includes(item);
+                                          const feeNotes =
+                                            service === "🌍 Vận tải quốc tế"
+                                              ? contractInternationalServiceFeeNotes[item] ?? []
+                                              : [];
+                                          const feeDraft =
+                                            contractInternationalFeeDrafts[item] ?? initialContractServiceFeeDraftForm;
+                                          const hasFeeDraftValue =
+                                            feeDraft.feeName.trim().length > 0 ||
+                                            feeDraft.currency.trim().length > 0 ||
+                                            feeDraft.rate.trim().length > 0;
                                           return (
                                             <label
                                               key={item}
-                                              className="flex cursor-pointer items-start gap-2 text-[14px] text-foreground"
+                                              className={`flex cursor-pointer items-start gap-2 rounded-[8px] px-3 py-2 text-[14px] text-foreground ${
+                                                service === "🌍 Vận tải quốc tế" ? "bg-[#F7F7F8]" : ""
+                                              }`}
                                             >
                                               <input
                                                 type="checkbox"
@@ -9820,7 +10396,138 @@ export default function Page() {
                                                   })
                                                 }
                                               />
-                                              <span>{item}</span>
+                                              <div className="min-w-0">
+                                                <div>{item}</div>
+                                                {feeNotes.length > 0 ? (
+                                                  <div className="mt-1 space-y-1">
+                                                    <div className="text-[12px] leading-[1.4] text-muted-foreground">
+                                                      {feeNotes.map((fee, index) => (
+                                                        <span key={fee.label}>
+                                                          {index > 0 ? "; " : ""}
+                                                          {fee.label}:{" "}
+                                                          <span className="font-semibold text-foreground">
+                                                            {fee.amount}
+                                                          </span>
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                    <button
+                                                      type="button"
+                                                      disabled={isContractDetailReadOnly}
+                                                      onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        if (isContractDetailReadOnly) {
+                                                          return;
+                                                        }
+                                                        setContractInternationalFeeDrafts((current) => ({
+                                                          ...current,
+                                                          [item]: current[item] ?? initialContractServiceFeeDraftForm
+                                                        }));
+                                                      }}
+                                                      className="inline-flex items-center gap-1 text-[12px] font-medium text-[#245698] hover:text-[#1d447e]"
+                                                    >
+                                                      <Plus className="h-3 w-3" />
+                                                      <span>Thêm loại phí</span>
+                                                    </button>
+                                                    {contractInternationalFeeDrafts[item] ? (
+                                                      <div
+                                                        className={`grid text-[14px] text-foreground ${
+                                                          hasFeeDraftValue
+                                                            ? "grid-cols-[1.5fr_1.2fr_1fr_auto]"
+                                                            : "grid-cols-[1.5fr_1.2fr_1fr]"
+                                                        }`}
+                                                        onClick={(event) => {
+                                                          event.preventDefault();
+                                                          event.stopPropagation();
+                                                        }}
+                                                      >
+                                                        <div className="flex items-center px-4 py-2">
+                                                          <input
+                                                            value={feeDraft.feeName}
+                                                            readOnly={isContractDetailReadOnly}
+                                                            placeholder="Tên loại phí"
+                                                            onChange={(event) =>
+                                                              setContractInternationalFeeDrafts((current) => ({
+                                                                ...current,
+                                                                [item]: {
+                                                                  ...feeDraft,
+                                                                  feeName: event.target.value
+                                                                }
+                                                              }))
+                                                            }
+                                                            className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                                              isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                                            }`}
+                                                          />
+                                                        </div>
+                                                        <div className="flex items-center px-4 py-2">
+                                                          <input
+                                                            value={feeDraft.currency}
+                                                            readOnly={isContractDetailReadOnly}
+                                                            placeholder="Đơn vị tính (VD: USD, USD/Shipment,...)"
+                                                            onChange={(event) =>
+                                                              setContractInternationalFeeDrafts((current) => ({
+                                                                ...current,
+                                                                [item]: {
+                                                                  ...feeDraft,
+                                                                  currency: event.target.value
+                                                                }
+                                                              }))
+                                                            }
+                                                            className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                                              isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                                            }`}
+                                                          />
+                                                        </div>
+                                                        <div className="flex items-center px-4 py-2">
+                                                          <input
+                                                            value={feeDraft.rate}
+                                                            readOnly={isContractDetailReadOnly}
+                                                            placeholder="Đơn giá"
+                                                            inputMode="decimal"
+                                                            onChange={(event) =>
+                                                              setContractInternationalFeeDrafts((current) => ({
+                                                                ...current,
+                                                                [item]: {
+                                                                  ...feeDraft,
+                                                                  rate: event.target.value
+                                                                }
+                                                              }))
+                                                            }
+                                                            className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                                              isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                                            }`}
+                                                          />
+                                                        </div>
+                                                        {hasFeeDraftValue ? (
+                                                          <div className="flex items-center justify-end px-2 py-2">
+                                                            <button
+                                                              type="button"
+                                                              disabled={isContractDetailReadOnly}
+                                                              onClick={(event) => {
+                                                                event.preventDefault();
+                                                                event.stopPropagation();
+                                                                if (isContractDetailReadOnly) {
+                                                                  return;
+                                                                }
+                                                                setContractInternationalFeeDrafts((current) => {
+                                                                  const nextDrafts = { ...current };
+                                                                  delete nextDrafts[item];
+                                                                  return nextDrafts;
+                                                                });
+                                                              }}
+                                                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                                            >
+                                                              <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                                            </button>
+                                                          </div>
+                                                        ) : null}
+                                                      </div>
+                                                    ) : null}
+                                                  </div>
+                                                ) : null}
+                                              </div>
                                             </label>
                                           );
                                         })}
@@ -9850,7 +10557,7 @@ export default function Page() {
                                         type="button"
                                           onClick={() =>
                                             setContractCreateWorkspaceTab(
-                                              tab.key as "services" | "domestic" | "customs" | "warehouse" | "documents" | "notes"
+                                              tab.key as "services" | "domestic" | "customs" | "warehouse" | "other" | "documents" | "notes"
                                             )
                                           }
                                         className={`inline-flex h-9 items-center border-r border-[#CDD3E3] px-4 text-[14px] font-medium ${
@@ -9884,13 +10591,32 @@ export default function Page() {
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractContainerOptions, row.container) || "-"}</div>
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
-                                      <div className="px-4 py-2">{row.rate || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.rate || "-"}</span>
+                                        {!isContractDetailReadOnly ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setContractRateRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   ))}
                                   {isContractRateFormOpen ? (
                                     <div
                                       ref={contractRateInlineFormRef}
-                                      className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractRateDraft
+                                          ? "grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
@@ -9899,6 +10625,9 @@ export default function Page() {
                                           disabled={isContractDetailReadOnly}
                                           onChange={(value) => setContractRateForm((current) => ({ ...current, fareName: value }))}
                                           placeholder="Chọn tên dịch vụ"
+                                          dropdownWidthClass="w-[150%] min-w-[520px]"
+                                          searchable
+                                          searchPlaceholder="Tìm tên dịch vụ"
                                         />
                                       </div>
                                       <div className="flex items-center px-4 py-2">
@@ -9943,12 +10672,27 @@ export default function Page() {
                                               rate: event.target.value.replace(/[^\d.]/g, "")
                                             }))
                                           }
-                                          placeholder="Nhập số"
+                                          placeholder="Nhập đơn giá"
                                           className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
                                             isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
                                           }`}
                                         />
                                       </div>
+                                      {hasContractRateDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractRateForm(initialContractRateForm);
+                                              setIsContractRateFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {Array.from({ length: emptyContractRateRows }).map((_, rowIndex) =>
@@ -9998,13 +10742,32 @@ export default function Page() {
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractContainerOptions, row.container) || "-"}</div>
                                       <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
-                                      <div className="px-4 py-2">{row.rate || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.rate || "-"}</span>
+                                        {!isContractDetailReadOnly ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setContractDomesticRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   ))}
                                   {isContractDomesticFormOpen ? (
                                     <div
                                       ref={contractDomesticInlineFormRef}
-                                      className="grid grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractDomesticDraft
+                                          ? "grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <input
@@ -10066,12 +10829,27 @@ export default function Page() {
                                               rate: event.target.value.replace(/[^\d.]/g, "")
                                             }))
                                           }
-                                          placeholder="Nhập giá tiền dịch vụ"
+                                          placeholder="Nhập đơn giá"
                                           className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
                                             isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
                                           }`}
                                         />
                                       </div>
+                                      {hasContractDomesticDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractDomesticForm(initialContractDomesticForm);
+                                              setIsContractDomesticFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {Array.from({ length: emptyContractDomesticRows }).map((_, rowIndex) =>
@@ -10105,7 +10883,7 @@ export default function Page() {
                               <div className="space-y-0 pt-0 pb-4">
                                 <div>
                                   <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
-                                    {["Tên dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                    {["Loại dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
                                       <div key={label} className="whitespace-nowrap px-4 py-3">
                                         {label}
                                       </div>
@@ -10147,7 +10925,7 @@ export default function Page() {
                                               }
                                             />
                                           </div>
-                                          <div className="flex items-center px-4 py-2">
+                                          <div className="flex items-center justify-between gap-2 px-4 py-2">
                                             <input
                                               value={row.rate}
                                               readOnly={isContractDetailReadOnly}
@@ -10168,13 +10946,41 @@ export default function Page() {
                                                 isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
                                               }`}
                                             />
+                                            {!isContractDetailReadOnly ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setContractCustomsRows((current) =>
+                                                    current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                                  )
+                                                }
+                                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                              >
+                                                <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                              </button>
+                                            ) : null}
                                           </div>
                                         </>
                                       ) : (
                                         <>
                                           <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
                                           <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
-                                          <div className="px-4 py-2">{row.rate || "-"}</div>
+                                          <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                            <span className="truncate">{row.rate || "-"}</span>
+                                            {!isContractDetailReadOnly ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setContractCustomsRows((current) =>
+                                                    current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                                  )
+                                                }
+                                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                              >
+                                                <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                              </button>
+                                            ) : null}
+                                          </div>
                                         </>
                                       )}
                                     </div>
@@ -10182,7 +10988,11 @@ export default function Page() {
                                   {isContractCustomsFormOpen ? (
                                     <div
                                       ref={contractCustomsInlineFormRef}
-                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractCustomsDraft
+                                          ? "grid-cols-[1.6fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.6fr_1fr_1fr_1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
@@ -10196,7 +11006,8 @@ export default function Page() {
                                           }))}
                                           disabled={isContractDetailReadOnly}
                                           onChange={(value) => setContractCustomsForm((current) => ({ ...current, serviceName: value }))}
-                                          placeholder="Chọn tên dịch vụ"
+                                          placeholder="Chọn loại dịch vụ"
+                                          placeholderClassName="text-foreground"
                                         />
                                       </div>
                                       <div className="flex items-center px-4 py-2">
@@ -10231,6 +11042,21 @@ export default function Page() {
                                           }`}
                                         />
                                       </div>
+                                      {hasContractCustomsDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractCustomsForm(initialContractCustomsForm);
+                                              setIsContractCustomsFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {Array.from({ length: emptyContractCustomsRows }).map((_, rowIndex) =>
@@ -10264,7 +11090,7 @@ export default function Page() {
                               <div className="space-y-0 pt-0 pb-4">
                                 <div>
                                   <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
-                                    {["Tên dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                    {["Loại dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
                                       <div key={label} className="whitespace-nowrap px-4 py-3">
                                         {label}
                                       </div>
@@ -10306,7 +11132,7 @@ export default function Page() {
                                               }
                                             />
                                           </div>
-                                          <div className="flex items-center px-4 py-2">
+                                          <div className="flex items-center justify-between gap-2 px-4 py-2">
                                             <input
                                               value={row.rate}
                                               readOnly={isContractDetailReadOnly}
@@ -10327,13 +11153,41 @@ export default function Page() {
                                                 isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
                                               }`}
                                             />
+                                            {!isContractDetailReadOnly ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setContractWarehouseRows((current) =>
+                                                    current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                                  )
+                                                }
+                                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                              >
+                                                <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                              </button>
+                                            ) : null}
                                           </div>
                                         </>
                                       ) : (
                                         <>
                                           <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
                                           <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
-                                          <div className="px-4 py-2">{row.rate || "-"}</div>
+                                          <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                            <span className="truncate">{row.rate || "-"}</span>
+                                            {!isContractDetailReadOnly ? (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setContractWarehouseRows((current) =>
+                                                    current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                                  )
+                                                }
+                                                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                              >
+                                                <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                              </button>
+                                            ) : null}
+                                          </div>
                                         </>
                                       )}
                                     </div>
@@ -10341,7 +11195,11 @@ export default function Page() {
                                   {isContractWarehouseFormOpen ? (
                                     <div
                                       ref={contractWarehouseInlineFormRef}
-                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractWarehouseDraft
+                                          ? "grid-cols-[1.6fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.6fr_1fr_1fr_1fr]"
+                                      }`}
                                     >
                                       <div className="flex items-center px-4 py-2">
                                         <TableDropdownField
@@ -10355,7 +11213,8 @@ export default function Page() {
                                           }))}
                                           disabled={isContractDetailReadOnly}
                                           onChange={(value) => setContractWarehouseForm((current) => ({ ...current, serviceName: value }))}
-                                          placeholder="Chọn tên dịch vụ"
+                                          placeholder="Chọn loại dịch vụ"
+                                          placeholderClassName="text-foreground"
                                         />
                                       </div>
                                       <div className="flex items-center px-4 py-2">
@@ -10390,6 +11249,21 @@ export default function Page() {
                                           }`}
                                         />
                                       </div>
+                                      {hasContractWarehouseDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractWarehouseForm(initialContractWarehouseForm);
+                                              setIsContractWarehouseFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {Array.from({ length: emptyContractWarehouseRows }).map((_, rowIndex) =>
@@ -10413,6 +11287,140 @@ export default function Page() {
                                       >
                                         {Array.from({ length: 4 }).map((__, cellIndex) => (
                                           <div key={`contract-warehouse-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
+                                        ))}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                                ) : contractCreateWorkspaceTab === "other" ? (
+                              <div className="space-y-0 pt-0 pb-4">
+                                <div>
+                                  <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                    {["Loại dịch vụ", "Đơn vị tính", "Đơn vị tiền tệ", "Đơn giá"].map((label) => (
+                                      <div key={label} className="whitespace-nowrap px-4 py-3">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {contractOtherRows.map((row, rowIndex) => (
+                                    <div
+                                      key={`contract-other-row-${rowIndex}`}
+                                      className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                    >
+                                      <div className="flex items-center px-4 py-2">{row.serviceName || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractUnitOptions, row.unit) || "-"}</div>
+                                      <div className="px-4 py-2">{resolveSelectOptionLabel(contractCurrencyOptions, row.currency) || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.rate || "-"}</span>
+                                        {!isContractDetailReadOnly ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setContractOtherRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {isContractOtherFormOpen ? (
+                                    <div
+                                      ref={contractOtherInlineFormRef}
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractOtherDraft
+                                          ? "grid-cols-[1.6fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.6fr_1fr_1fr_1fr]"
+                                      }`}
+                                    >
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractOtherForm.serviceName}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractOtherForm((current) => ({ ...current, serviceName: event.target.value }))
+                                          }
+                                          placeholder="Nhập loại dịch vụ"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractOtherForm.unit}
+                                          options={contractUnitOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractOtherForm((current) => ({ ...current, unit: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <TableDropdownField
+                                          value={contractOtherForm.currency}
+                                          options={contractCurrencyOptions}
+                                          disabled={isContractDetailReadOnly}
+                                          onChange={(value) => setContractOtherForm((current) => ({ ...current, currency: value }))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center px-4 py-2">
+                                        <input
+                                          value={contractOtherForm.rate}
+                                          readOnly={isContractDetailReadOnly}
+                                          onChange={(event) =>
+                                            setContractOtherForm((current) => ({
+                                              ...current,
+                                              rate: event.target.value.replace(/[^\d.]/g, "")
+                                            }))
+                                          }
+                                          placeholder="Nhập đơn giá"
+                                          className={`h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] ${
+                                            isContractDetailReadOnly ? "cursor-default" : "focus:border-black"
+                                          }`}
+                                        />
+                                      </div>
+                                      {hasContractOtherDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractOtherForm(initialContractOtherForm);
+                                              setIsContractOtherFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                  {Array.from({ length: emptyContractOtherRows }).map((_, rowIndex) =>
+                                    rowIndex === 0 && !isContractDetailReadOnly ? (
+                                      <button
+                                        key="contract-other-add-row"
+                                        type="button"
+                                        disabled={isContractDetailReadOnly}
+                                        className="grid w-full grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                        onClick={openNextContractOtherRow}
+                                      >
+                                        <div className="col-span-4 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          Thêm một dòng
+                                        </div>
+                                      </button>
+                                    ) : (
+                                      <div
+                                        key={`contract-other-empty-row-${rowIndex}`}
+                                        className="grid grid-cols-[1.6fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD]"
+                                      >
+                                        {Array.from({ length: 4 }).map((__, cellIndex) => (
+                                          <div key={`contract-other-empty-cell-${rowIndex}-${cellIndex}`} className="h-[36px] px-4 py-2" />
                                         ))}
                                       </div>
                                     )
@@ -10462,13 +11470,32 @@ export default function Page() {
                                       <div className="px-4 py-2">{row.documentType || "-"}</div>
                                       <div className="px-4 py-2">{row.documentName || "-"}</div>
                                       <div className="px-4 py-2">{row.documentDate || "-"}</div>
-                                      <div className="px-4 py-2">{row.uploadedBy || "-"}</div>
+                                      <div className="flex items-center justify-between gap-2 px-4 py-2">
+                                        <span className="truncate">{row.uploadedBy || "-"}</span>
+                                        {!isContractDetailReadOnly ? (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setContractDocumentRows((current) =>
+                                                current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                              )
+                                            }
+                                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   ))}
                                   {isContractDocumentFormOpen ? (
                                     <div
                                       ref={contractDocumentInlineFormRef}
-                                      className="grid grid-cols-[1.3fr_1fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                      className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                        hasContractDocumentDraft
+                                          ? "grid-cols-[1.3fr_1fr_1fr_1fr_1fr_auto]"
+                                          : "grid-cols-[1.3fr_1fr_1fr_1fr_1fr]"
+                                      }`}
                                     >
                                       <div className="px-4 py-2">
                                         <button
@@ -10533,6 +11560,21 @@ export default function Page() {
                                           {contractDocumentForm.uploadedBy || currentUserName}
                                         </div>
                                       </div>
+                                      {hasContractDocumentDraft ? (
+                                        <div className="flex items-center justify-end px-2 py-2">
+                                          <button
+                                            type="button"
+                                            disabled={isContractDetailReadOnly}
+                                            onClick={() => {
+                                              setContractDocumentForm(initialContractDocumentForm);
+                                              setIsContractDocumentFormOpen(false);
+                                            }}
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698] disabled:cursor-default disabled:opacity-40"
+                                          >
+                                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                   {Array.from({ length: emptyContractDocumentRows }).map((_, rowIndex) =>
@@ -10763,7 +11805,7 @@ export default function Page() {
                       paddingRight: serviceConfigTableScrollbarWidth ? `${serviceConfigTableScrollbarWidth}px` : undefined
                     }}
                   >
-                    {["Nhóm dịch vụ", "Dịch vụ con", "Khách hàng sử dụng", "Hợp đồng sử dụng"].map((label, index) => (
+                    {["Mã loại hình", "Loại hình", "Số lượng phí", "Người tạo"].map((label, index) => (
                       <div
                         key={`${label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
@@ -10780,20 +11822,29 @@ export default function Page() {
                       paginatedServiceConfigRows.map((row, index) => (
                         <div
                           key={`${row.service}-${row.item}`}
-                          className="grid bg-card transition-colors hover:bg-[#B6E1FF]"
+                          className="grid cursor-pointer bg-card transition-colors hover:bg-[#B6E1FF]"
                           style={{ gridTemplateColumns: serviceConfigTableColumns }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openServiceDetails(row.service as ServicePageScope, row.item)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openServiceDetails(row.service as ServicePageScope, row.item);
+                            }
+                          }}
                         >
                           <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.isFirstInGroup ? row.service : ""}
+                            {row.serviceCode}
                           </div>
                           <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <span className="block truncate whitespace-nowrap">{row.item}</span>
                           </div>
                           <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.customerCount}
+                            {row.feeCount}
                           </div>
                           <div className={`flex min-h-[34px] w-full min-w-0 items-center justify-start px-4 text-left text-sm text-foreground ${index === paginatedServiceConfigRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            {row.contractCount}
+                            {row.createdBy}
                           </div>
                         </div>
                       ))
@@ -10809,20 +11860,32 @@ export default function Page() {
                   <div className="grid gap-3">
                     {paginatedServiceConfigRows.length > 0 ? (
                       paginatedServiceConfigRows.map((row) => (
-                        <article key={`${row.service}-${row.item}`} className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]">
-                          <div className="text-sm font-semibold text-foreground">{row.serviceLabelWithoutEmoji}</div>
+                        <article
+                          key={`${row.service}-${row.item}`}
+                          className="rounded-2xl border border-border bg-card p-4 transition-colors hover:bg-[#B6E1FF]"
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openServiceDetails(row.service as ServicePageScope, row.item)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openServiceDetails(row.service as ServicePageScope, row.item);
+                            }
+                          }}
+                        >
+                          <div className="text-sm font-semibold text-foreground">{row.serviceCode}</div>
                           <div className="mt-3 space-y-2 text-sm text-foreground">
                             <div>
-                              <span className="text-muted-foreground">Dịch vụ con: </span>
+                              <span className="text-muted-foreground">Loại hình: </span>
                               {row.item}
                             </div>
                             <div>
-                              <span className="text-muted-foreground">Khách hàng sử dụng: </span>
-                              {row.customerCount}
+                              <span className="text-muted-foreground">Số lượng phí: </span>
+                              {row.feeCount}
                             </div>
                             <div>
-                              <span className="text-muted-foreground">Hợp đồng sử dụng: </span>
-                              {row.contractCount}
+                              <span className="text-muted-foreground">Người tạo: </span>
+                              {row.createdBy}
                             </div>
                           </div>
                         </article>
@@ -10836,108 +11899,270 @@ export default function Page() {
                 </div>
               </>
             ) : null}
+
+            {isServiceDetailsPage && selectedServiceDetailScope ? (
+              <div className="mt-1 pr-1 min-h-fit overflow-visible">
+                <div className="space-y-2">
+                  <div className="rounded-[14px] bg-card">
+                    <div className="p-4">
+                      <div className="rounded-[14px] border border-[#DADCE3] bg-white shadow-[0_2px_10px_rgba(17,17,17,0.04)]">
+                        <div className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <Star className="h-7 w-7 text-muted-foreground" strokeWidth={1.8} />
+                            <div className="text-[24px] font-semibold leading-none text-foreground">
+                              {selectedServiceDetailRow?.item ?? selectedServiceDetailDisplayName}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6 px-5 pb-5 pt-0">
+                          <div className="space-y-3">
+                            <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                              <div className="space-y-0">
+                                <FormField
+                                  label="Mã loại hình"
+                                  value={selectedServiceDetailRow?.serviceCode ?? ""}
+                                  readOnly
+                                  variant="inlineUnderline"
+                                />
+                                <FormField
+                                  label="Loại hình"
+                                  value={selectedServiceDetailRow?.item ?? ""}
+                                  readOnly
+                                  variant="inlineUnderline"
+                                  allowWrapWhenReadOnly
+                                />
+                              </div>
+
+                              <div className="space-y-0">
+                                <FormField
+                                  label="Người tạo"
+                                  value={selectedServiceDetailRows[0]?.createdBy ?? "-"}
+                                  readOnly
+                                  variant="inlineUnderline"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="border-t-[0.5px] border-[#E7E6E9] pt-5">
+                            <div className="overflow-x-auto">
+                              <div className="inline-flex min-w-full border-b border-[#D9D9D9]">
+                                <button
+                                  type="button"
+                                  className="inline-flex h-9 items-center border-b border-[#245698] bg-[#F2F4F7] px-4 text-[14px] font-medium text-foreground"
+                                >
+                                  Danh sách phí
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="mt-0">
+                              <div>
+                                <div className="grid grid-cols-[1.2fr_1.1fr_1fr_0.8fr] border-b border-[#E7E6E9] text-[13px] font-medium text-foreground">
+                                  {["Loại phí", "Đơn vị tính", "Đơn giá", "Bắt buộc"].map((label) => (
+                                    <div key={`service-fee-heading-${label}`} className="whitespace-nowrap px-4 py-3">
+                                      {label}
+                                    </div>
+                                  ))}
+                                </div>
+                                {serviceDetailFeeRows.map((row, rowIndex) => (
+                                  <div
+                                    key={`service-fee-row-${rowIndex}`}
+                                    className="grid grid-cols-[1.2fr_1.1fr_1fr_0.8fr_auto] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground"
+                                  >
+                                    <div className="flex items-center px-4 py-2">
+                                      <input
+                                        value={row.feeType}
+                                        onChange={(event) =>
+                                          setServiceDetailFeeRows((current) =>
+                                            current.map((currentRow, currentIndex) =>
+                                              currentIndex === rowIndex ? { ...currentRow, feeType: event.target.value } : currentRow
+                                            )
+                                          )
+                                        }
+                                        placeholder="Nhập loại phí"
+                                        className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <TableDropdownField
+                                        value={row.unit}
+                                        options={serviceDetailFeeUnitOptions}
+                                        onChange={(value) =>
+                                          setServiceDetailFeeRows((current) =>
+                                            current.map((currentRow, currentIndex) =>
+                                              currentIndex === rowIndex ? { ...currentRow, unit: value } : currentRow
+                                            )
+                                          )
+                                        }
+                                        placeholder="Chọn đơn vị tính"
+                                        placeholderClassName="text-foreground"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <input
+                                        value={row.rate}
+                                        onChange={(event) =>
+                                          setServiceDetailFeeRows((current) =>
+                                            current.map((currentRow, currentIndex) =>
+                                              currentIndex === rowIndex ? { ...currentRow, rate: event.target.value } : currentRow
+                                            )
+                                          )
+                                        }
+                                        placeholder="Nhập đơn giá"
+                                        className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={row.required}
+                                          onChange={(event) =>
+                                            setServiceDetailFeeRows((current) =>
+                                              current.map((currentRow, currentIndex) =>
+                                                currentIndex === rowIndex ? { ...currentRow, required: event.target.checked } : currentRow
+                                              )
+                                            )
+                                          }
+                                          className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                        />
+                                      </label>
+                                    </div>
+                                    <div className="flex items-center justify-end px-2 py-2">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setServiceDetailFeeRows((current) =>
+                                            current.filter((_, currentIndex) => currentIndex !== rowIndex)
+                                          )
+                                        }
+                                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                      >
+                                        <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                                {isServiceDetailFeeFormOpen ? (
+                                  <div
+                                    ref={serviceDetailFeeInlineFormRef}
+                                    className={`grid border-b border-[#E7E6E9] bg-[#FCFCFD] text-[14px] text-foreground ${
+                                      hasServiceDetailFeeDraft
+                                        ? "grid-cols-[1.2fr_1.1fr_1fr_0.8fr_auto]"
+                                        : "grid-cols-[1.2fr_1.1fr_1fr_0.8fr]"
+                                    }`}
+                                  >
+                                    <div className="flex items-center px-4 py-2">
+                                      <input
+                                        value={serviceDetailFeeForm.feeType}
+                                        onChange={(event) =>
+                                          setServiceDetailFeeForm((current) => ({ ...current, feeType: event.target.value }))
+                                        }
+                                        placeholder="Nhập loại phí"
+                                        className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <TableDropdownField
+                                        value={serviceDetailFeeForm.unit}
+                                        options={serviceDetailFeeUnitOptions}
+                                        onChange={(value) => setServiceDetailFeeForm((current) => ({ ...current, unit: value }))}
+                                        placeholder="Chọn đơn vị tính"
+                                        placeholderClassName="text-foreground"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <input
+                                        value={serviceDetailFeeForm.rate}
+                                        onChange={(event) =>
+                                          setServiceDetailFeeForm((current) => ({ ...current, rate: event.target.value }))
+                                        }
+                                        placeholder="Nhập đơn giá"
+                                        className="h-10 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                      />
+                                    </div>
+                                    <div className="flex items-center px-4 py-2">
+                                      <label className="flex h-8 w-8 cursor-pointer items-center justify-center">
+                                        <input
+                                          type="checkbox"
+                                          checked={serviceDetailFeeForm.required}
+                                          onChange={(event) =>
+                                            setServiceDetailFeeForm((current) => ({ ...current, required: event.target.checked }))
+                                          }
+                                          className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                        />
+                                      </label>
+                                    </div>
+                                    {hasServiceDetailFeeDraft ? (
+                                      <div className="flex items-center justify-end px-2 py-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setServiceDetailFeeForm(initialServiceDetailFeeForm);
+                                            setIsServiceDetailFeeFormOpen(false);
+                                          }}
+                                          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                        >
+                                          <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="grid w-full grid-cols-[1.2fr_1.1fr_1fr_0.8fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-left transition hover:bg-[#F8FAFF]"
+                                  onClick={openNextServiceDetailFeeRow}
+                                >
+                                  <div className="col-span-4 flex h-[36px] items-center gap-2 px-4 text-[14px] text-[#4A63B8]">
+                                    <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                    Thêm một dòng
+                                  </div>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-5 py-4">
+                      <div className="space-y-5">
+                        {serviceDetailActivityGroups.map((group) => (
+                          <div key={group.label}>
+                            <div className="relative flex items-center justify-center">
+                              <div className="absolute inset-x-0 top-1/2 h-[0.5px] -translate-y-1/2 bg-[#E7E6E9]" />
+                              <div className="relative bg-background px-3 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">{group.label}</div>
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              {group.entries.map((entry) => (
+                                <div key={`${group.label}-${entry.actor}-${entry.time}`} className="flex items-start gap-3">
+                                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-white ${getAvatarColorClass(entry.actor)}`}>
+                                    {entry.actor.trim().charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-foreground">
+                                      <span>{entry.actor}</span>
+                                      <span className="text-[12px] font-normal text-muted-foreground">{entry.time}</span>
+                                    </div>
+                                    <div className="mt-1 text-[14px] text-foreground">{entry.message}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
         </div>
       </div>
-
-      {isServiceConfigModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4" onClick={() => setIsServiceConfigModalOpen(false)}>
-          <div
-            className="w-full max-w-[560px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
-              <div>
-                <div className="text-lg font-semibold text-foreground">Thêm dịch vụ</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Tạo cấu hình dịch vụ dùng chung cho khách hàng và hợp đồng.
-                </p>
-              </div>
-              <button
-                type="button"
-                aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                onClick={() => setIsServiceConfigModalOpen(false)}
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-5 py-5">
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Tên dịch vụ</div>
-                <input
-                  value={serviceConfigForm.service}
-                  onChange={(event) =>
-                    setServiceConfigForm((current) => ({
-                      ...current,
-                      service: event.target.value
-                    }))
-                  }
-                  placeholder="Nhập tên dịch vụ"
-                  className="min-h-[46px] w-full rounded-2xl border border-input bg-card px-4 text-base text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Mô tả</div>
-                <textarea
-                  value={serviceConfigForm.description}
-                  onChange={(event) =>
-                    setServiceConfigForm((current) => ({
-                      ...current,
-                      description: event.target.value
-                    }))
-                  }
-                  placeholder="Nhập mô tả dịch vụ"
-                  rows={4}
-                  className="min-h-[110px] w-full resize-none rounded-2xl border border-input bg-card px-4 py-3 text-base text-foreground outline-none transition placeholder:text-muted-foreground focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-sm font-medium text-foreground">Trạng thái</div>
-                <div className="relative">
-                  <select
-                    value={serviceConfigForm.status}
-                    onChange={(event) =>
-                      setServiceConfigForm((current) => ({
-                        ...current,
-                        status: event.target.value as ServiceConfigStatus
-                      }))
-                    }
-                    className="min-h-[46px] w-full appearance-none rounded-2xl border border-input bg-card px-4 pr-10 text-base text-foreground outline-none transition focus:border-[var(--sidebar-accent-foreground)] focus:shadow-[0_0_0_3px_rgba(36,86,152,0.12)]"
-                  >
-                    <option value="draft">Nháp</option>
-                    <option value="active">Đang hoạt động</option>
-                  </select>
-                  <ChevronDown
-                    className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                    strokeWidth={1.8}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 border-t-[0.5px] border-border px-5 py-4">
-              <button
-                type="button"
-                className="ui-hover-card inline-flex h-10 items-center rounded-full border border-border bg-white px-4 text-sm font-medium text-foreground transition hover:border-foreground/20 hover:bg-[#fcfcfc]"
-                onClick={() => setIsServiceConfigModalOpen(false)}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-10 items-center rounded-full bg-[#245698] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1d467d]"
-                onClick={() => setIsServiceConfigModalOpen(false)}
-              >
-                Lưu
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {isCustomerImportModalOpen ? (
         <div
