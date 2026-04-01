@@ -788,7 +788,7 @@ const sidebarGroups: SidebarGroup[] = [
     ]
   },
   {
-    title: "Quản lý hóa đơn/chứng từ",
+    title: "Hóa đơn/Chứng từ",
     icon: "documents",
     items: [
       { label: "Customs (Hải quan)", icon: "description" },
@@ -5048,20 +5048,20 @@ export default function Page() {
 
   useEffect(() => {
     if (isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage) {
-      setOpenSidebarGroups(["Quản lý hóa đơn/chứng từ"]);
+      setOpenSidebarGroups(["Hóa đơn/Chứng từ"]);
       return;
     }
 
     if (isCustomerPage) {
       setOpenSidebarGroups((current) => {
-        const next = current.filter((title) => title !== "Quản lý hóa đơn/chứng từ");
+        const next = current.filter((title) => title !== "Hóa đơn/Chứng từ");
         return next.includes("Quản lý khách hàng") ? next : [...next, "Quản lý khách hàng"];
       });
       return;
     }
 
     setOpenSidebarGroups((current) =>
-      current.filter((title) => title !== "Quản lý khách hàng" && title !== "Quản lý hóa đơn/chứng từ")
+      current.filter((title) => title !== "Quản lý khách hàng" && title !== "Hóa đơn/Chứng từ")
     );
   }, [isCustomerCustomsPage, isCustomerInlandPage, isCustomerOverseaPage, isCustomerPage]);
 
@@ -7965,7 +7965,7 @@ export default function Page() {
                     {(() => {
                       const isGroupOpen = group.items ? openSidebarGroups.includes(group.title) : false;
                       const isCustomersGroup = group.title === "Quản lý khách hàng";
-                      const isDocumentsGroup = group.title === "Quản lý hóa đơn/chứng từ";
+                      const isDocumentsGroup = group.title === "Hóa đơn/Chứng từ";
                       const isGroupActive = group.title === "Xuất khẩu" ? !isCustomerPage : false;
                       return (
                         <>
@@ -8086,7 +8086,7 @@ export default function Page() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
-                      <span>{isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "Quản lý hóa đơn/chứng từ" : isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
+                      <span>{isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "Hóa đơn/Chứng từ" : isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
