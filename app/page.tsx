@@ -31,9 +31,11 @@ import {
   Printer,
   Plus,
   Route,
+  RotateCcw,
   Search,
   Settings,
   Settings2,
+  ShieldAlert,
   UsersRound,
   ShieldPlus,
   Copy,
@@ -51,7 +53,7 @@ type SidebarGroup = {
   title: string;
   open?: boolean;
   active?: boolean;
-  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "settings";
+  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "settings" | "documents";
   items?: { label: string; icon: SidebarIconName; active?: boolean }[];
 };
 
@@ -90,6 +92,314 @@ function createEmptyEquipmentRow(): BookingEquipmentRow {
   };
 }
 
+function formatAuditTimestamp(date = new Date()) {
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+const COST_CURRENCY_OPTIONS = ["VND", "USD", "EUR"] as const;
+
+function sanitizeCostAmountInput(value: string) {
+  const trimmed = value.replace(/,/g, "").replace(/[^\d.\-]/g, "");
+  const isNegative = trimmed.startsWith("-");
+  const unsigned = trimmed.replace(/-/g, "");
+  const [rawInteger = "", ...decimalParts] = unsigned.split(".");
+  const rawDecimal = decimalParts.join("");
+  const integerPart = rawInteger.replace(/\D/g, "").slice(0, 18);
+  const remainingDigits = Math.max(0, 18 - integerPart.length);
+  const decimalPart = rawDecimal.replace(/\D/g, "").slice(0, remainingDigits);
+  const hasDecimal = unsigned.includes(".") && integerPart.length < 18;
+  const normalizedInteger = integerPart || (hasDecimal ? "0" : "");
+
+  return `${isNegative ? "-" : ""}${normalizedInteger}${hasDecimal ? `.${decimalPart}` : ""}`;
+}
+
+function normalizeCostAmountForEdit(value: string) {
+  return value.replace(/,/g, "");
+}
+
+function formatCostAmountDisplay(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) {
+    return "";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(numberValue);
+}
+
+function finalizeCostAmount(value: string) {
+  const normalized = normalizeCostAmountForEdit(value).trim();
+  if (!normalized || normalized === "-" || normalized === "." || normalized === "-.") {
+    return { value: "", error: null as string | null };
+  }
+
+  const parsedValue = Number(normalized);
+  if (!Number.isFinite(parsedValue)) {
+    return { value: "", error: "Số tiền không hợp lệ." };
+  }
+
+  if (parsedValue < 0) {
+    return { value: "", error: "Số tiền phải lớn hơn hoặc bằng 0." };
+  }
+
+  const roundedValue = parsedValue.toFixed(2);
+  const digitCount = roundedValue.replace(".", "").replace("-", "").length;
+  if (digitCount > 18) {
+    return { value: "", error: "Số tiền vượt quá giới hạn decimal(18,2)." };
+  }
+
+  return { value: roundedValue, error: null as string | null };
+}
+
+function buildCostAuditValue(amount: string, currency: string) {
+  return amount ? `${formatCostAmountDisplay(amount)} ${currency}` : "Trống";
+}
+
+function createInitialCustomsCostRows(tradeType: CustomsTradeType): CustomsCostRow[] {
+  const baseRows = [
+    "Phí mở tờ khai hải quan",
+    "Phụ phí tờ khai nhánh",
+    "Phụ phí kiểm hóa",
+    "Phụ phí thông quan ngoài giờ",
+    "Phụ phí sửa tờ khai sau thông quan",
+    "Phụ phí hủy tờ khai hải quan"
+  ];
+
+  return baseRows.map((feeName, index) => ({
+    id: `${tradeType}-cost-${index + 1}`,
+    feeName,
+    amount: index < 2 ? String((index + 1) * 250000) : "",
+    currency: "VND",
+    updatedBy: index < 2 ? "An Phạm" : "",
+    updatedAt: index < 2 ? `12/03/2026 ${index === 0 ? "09:15" : "10:42"}` : ""
+  }));
+}
+
+function createInitialCustomsDocumentRows(tradeType: CustomsTradeType): CustomsDocumentRow[] {
+  const names = [{ name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: [] }];
+
+  return names.map((item, index) => ({
+    id: `${tradeType}-document-${index + 1}`,
+    documentName: item.name,
+    displayMode: item.mode,
+    fileNames: item.files,
+    updatedBy: item.files.length > 0 ? "An Phạm" : "",
+    updatedAt: item.files.length > 0 ? "12/03/2026 11:08" : ""
+  }));
+}
+
+function createInitialCustomsAuditRows(tradeType: CustomsTradeType): CustomsAuditRow[] {
+  return [
+    {
+      id: `${tradeType}-audit-1`,
+      action: "Sửa chi phí",
+      field: "Phí mở tờ khai hải quan",
+      beforeValue: "Trống",
+      afterValue: "250.000 VND",
+      actor: "An Phạm",
+      time: "12/03/2026 09:15"
+    },
+    {
+      id: `${tradeType}-audit-2`,
+      action: "Upload file",
+      field: "Commercial Invoice",
+      beforeValue: "0 file",
+      afterValue: "1 file",
+      actor: "An Phạm",
+      time: "12/03/2026 11:08"
+    },
+    {
+      id: `${tradeType}-audit-3`,
+      action: "Sửa chi phí",
+      field: "Phụ phí kiểm hóa",
+      beforeValue: "Trống",
+      afterValue: "500.000 VND",
+      actor: "An Phạm",
+      time: "12/03/2026 10:42"
+    }
+  ];
+}
+
+function createInitialInlandCostRows(tradeType: CustomsTradeType): InlandCostRow[] {
+  const baseRows = ["Cước vận chuyển", "Phụ phí vận chuyển", "Phí lưu ca"];
+
+  return baseRows.map((feeName, index) => ({
+    id: `${tradeType}-inland-cost-${index + 1}`,
+    feeName,
+    amount: index === 0 ? "1800000" : "",
+    currency: "VND",
+    updatedBy: index === 0 ? "An Phạm" : "",
+    updatedAt: index === 0 ? "12/03/2026 13:18" : ""
+  }));
+}
+
+function createInitialInlandDocumentRows(tradeType: CustomsTradeType): InlandDocumentRow[] {
+  const rows =
+    tradeType === "import"
+      ? [
+          { name: "Biên bản giao hàng", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          { name: "Debit note", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          {
+            name: "BL",
+            required: true,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          },
+          {
+            name: "AN",
+            required: true,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: [{ id: "inland-import-an-1", name: "arrival-notice.pdf", sizeLabel: "428 KB" }]
+          },
+          {
+            name: "PoB - các phiếu thu/hóa đơn chi hộ",
+            required: true,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          }
+        ]
+      : [
+          { name: "Debit note", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          {
+            name: "Booking",
+            required: true,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: [{ id: "inland-export-booking-1", name: "booking-export.pdf", sizeLabel: "512 KB" }]
+          },
+          {
+            name: "PoB - các phiếu thu/hóa đơn chi hộ",
+            required: true,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          }
+        ];
+
+  return rows.map((row, index) => ({
+    id: `${tradeType}-inland-document-${index + 1}`,
+    documentName: row.name,
+    required: row.required,
+    displayMode: row.mode,
+    files: row.files,
+    uploadedBy: row.files.length > 0 ? "An Phạm" : "",
+    uploadedAt: row.files.length > 0 ? "12/03/2026 14:02" : ""
+  }));
+}
+
+function createInitialInlandAuditRows(tradeType: CustomsTradeType): InlandAuditRow[] {
+  return [
+    {
+      id: `${tradeType}-inland-audit-1`,
+      action: "Edit cost",
+      target: "COST",
+      beforeValue: "Trống",
+      afterValue: "1.800.000 VND",
+      actor: "An Phạm",
+      time: "12/03/2026 13:18"
+    },
+    {
+      id: `${tradeType}-inland-audit-2`,
+      action: "Upload file",
+      target: "DOCUMENT",
+      beforeValue: "0 file",
+      afterValue: "1 file (arrival-notice.pdf)",
+      actor: "An Phạm",
+      time: "12/03/2026 14:02"
+    }
+  ];
+}
+
+function createInitialOverseaCostRows(tradeType: CustomsTradeType): OverseaCostRow[] {
+  const importRows = [
+    { feeName: "EXW fee", amount: "950", emphasized: false },
+    { feeName: "THC", amount: "120", emphasized: false },
+    { feeName: "CIC", amount: "85", emphasized: false },
+    { feeName: "Cleaning fee", amount: "", emphasized: false },
+    { feeName: "Management fee", amount: "45", emphasized: false },
+    { feeName: "DO fee", amount: "", emphasized: false },
+    { feeName: "CFS", amount: "60", emphasized: false },
+    { feeName: "Handling fee", amount: "", emphasized: false }
+  ];
+  const exportRows = [
+    { feeName: "Ocean freight", amount: "1200", emphasized: true },
+    { feeName: "DDP fee", amount: "", emphasized: false },
+    { feeName: "THC", amount: "150", emphasized: false },
+    { feeName: "Seal fee", amount: "15", emphasized: false },
+    { feeName: "BL fee", amount: "", emphasized: false },
+    { feeName: "CFS", amount: "35", emphasized: false },
+    { feeName: "Handling fee", amount: "", emphasized: false }
+  ];
+  const rows = tradeType === "import" ? importRows : exportRows;
+
+  return rows.map((row, index) => ({
+    id: `${tradeType}-oversea-cost-${index + 1}`,
+    feeName: row.feeName,
+    amount: row.amount,
+    currency: "VND",
+    updatedBy: row.amount ? "An Phạm" : "",
+    updatedAt: row.amount ? `12/03/2026 ${String(9 + index).padStart(2, "0")}:20` : "",
+    emphasized: row.emphasized
+  }));
+}
+
+function createInitialOverseaDocumentRows(tradeType: CustomsTradeType): OverseaDocumentRow[] {
+  const rows =
+    tradeType === "import"
+      ? [
+          { name: "Arrival notice", note: "Thông báo hàng đến từ hãng tàu", displayMode: "DISPLAY_ONLY" as const },
+          { name: "Delivery order", note: "Lệnh giao hàng", displayMode: "DISPLAY_ONLY" as const },
+          { name: "Debit note", note: "Chi tiết phí local charge", displayMode: "DISPLAY_ONLY" as const }
+        ]
+      : [
+          { name: "HBL", note: "House Bill of Lading", displayMode: "DISPLAY_ONLY" as const },
+          { name: "Debit note", note: "Chi tiết phí xuất khẩu", displayMode: "DISPLAY_ONLY" as const }
+        ];
+
+  return rows.map((row, index) => ({
+    id: `${tradeType}-oversea-document-${index + 1}`,
+    documentName: row.name,
+    displayMode: row.displayMode,
+    files: [],
+    note: row.note,
+    updatedBy: "An Phạm",
+    updatedAt: "12/03/2026 12:15"
+  }));
+}
+
+function createInitialOverseaAuditRows(tradeType: CustomsTradeType): OverseaAuditRow[] {
+  return [
+    {
+      id: `${tradeType}-oversea-audit-1`,
+      action: "Sửa chi phí",
+      field: tradeType === "import" ? "EXW fee" : "Ocean freight",
+      beforeValue: "Trống",
+      afterValue: tradeType === "import" ? "950 VND" : "1200 VND",
+      actor: "An Phạm",
+      time: "12/03/2026 09:20"
+    },
+    {
+      id: `${tradeType}-oversea-audit-2`,
+      action: "Sửa chi phí",
+      field: "THC",
+      beforeValue: "Trống",
+      afterValue: tradeType === "import" ? "120 VND" : "150 VND",
+      actor: "An Phạm",
+      time: "12/03/2026 10:05"
+    }
+  ];
+}
+
 type SelectOption = {
   label: string;
   value: string;
@@ -116,7 +426,7 @@ type CustomerListFilterConfig = {
 };
 type CustomerListFilterState = Record<CustomerListFilterKey, string[]>;
 type CustomerAccountStatus = "draft" | "active" | "locked";
-type CustomerSubPage = "list" | "contracts" | "services" | "create" | "create-contract";
+type CustomerSubPage = "list" | "contracts" | "services" | "customs" | "inland" | "oversea" | "create" | "create-contract";
 type CustomerService =
   | "Ocean FCL"
   | "Ocean LCL"
@@ -168,6 +478,99 @@ type ToastState = {
   kind: "success" | "error";
   message: string;
 } | null;
+type CustomsTradeType = "import" | "export";
+type CustomsCostRow = {
+  id: string;
+  feeName: string;
+  amount: string;
+  currency: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+type CustomsDocumentDisplayMode = "DISPLAY_ONLY" | "ATTACHMENT_REQUIRED" | "ATTACHMENT_OPTIONAL";
+type CustomsDocumentRow = {
+  id: string;
+  documentName: string;
+  displayMode: CustomsDocumentDisplayMode;
+  fileNames: string[];
+  updatedBy: string;
+  updatedAt: string;
+};
+type CustomsAuditRow = {
+  id: string;
+  action: string;
+  field: string;
+  beforeValue: string;
+  afterValue: string;
+  actor: string;
+  time: string;
+};
+type InlandDocumentFile = {
+  id: string;
+  name: string;
+  sizeLabel: string;
+};
+type InlandDocumentDisplayMode = "DISPLAY_ONLY" | "ATTACHMENT_REQUIRED" | "ATTACHMENT_OPTIONAL";
+type InlandCostRow = {
+  id: string;
+  feeName: string;
+  amount: string;
+  currency: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+type InlandDocumentRow = {
+  id: string;
+  documentName: string;
+  required: boolean;
+  displayMode: InlandDocumentDisplayMode;
+  files: InlandDocumentFile[];
+  uploadedBy: string;
+  uploadedAt: string;
+};
+type InlandAuditRow = {
+  id: string;
+  action: string;
+  target: "COST" | "DOCUMENT";
+  beforeValue: string;
+  afterValue: string;
+  actor: string;
+  time: string;
+};
+type OverseaCostRow = {
+  id: string;
+  feeName: string;
+  amount: string;
+  currency: string;
+  updatedBy: string;
+  updatedAt: string;
+  emphasized?: boolean;
+};
+type OverseaDocumentFile = {
+  id: string;
+  name: string;
+  sizeLabel: string;
+  uploadedBy: string;
+  uploadedAt: string;
+};
+type OverseaDocumentRow = {
+  id: string;
+  documentName: string;
+  displayMode: "DISPLAY_ONLY" | "ATTACHMENT";
+  files: OverseaDocumentFile[];
+  note: string;
+  updatedBy: string;
+  updatedAt: string;
+};
+type OverseaAuditRow = {
+  id: string;
+  action: string;
+  field: string;
+  beforeValue: string;
+  afterValue: string;
+  actor: string;
+  time: string;
+};
 
 type ContractRow = {
   code: string;
@@ -382,6 +785,15 @@ const sidebarGroups: SidebarGroup[] = [
       { label: "Khách hàng", icon: "folder" },
       { label: "Hợp đồng", icon: "description" },
       { label: "Dịch vụ", icon: "settings" }
+    ]
+  },
+  {
+    title: "Quản lý hóa đơn/chứng từ",
+    icon: "documents",
+    items: [
+      { label: "Customs (Hải quan)", icon: "description" },
+      { label: "Inland (Nội địa)", icon: "folder" },
+      { label: "Oversea (Quốc tế)", icon: "history" }
     ]
   },
   { title: "Cài đặt", icon: "settings" }
@@ -1552,6 +1964,10 @@ function SidebarGroupIcon({
     return <Wrench className={common} strokeWidth={1.8} />;
   }
 
+  if (icon === "documents") {
+    return <FileText className={common} strokeWidth={1.8} />;
+  }
+
   return <Settings2 className={common} strokeWidth={1.8} />;
 }
 
@@ -2702,6 +3118,9 @@ export default function Page() {
   const contractImportInputRef = useRef<HTMLInputElement | null>(null);
   const customerImportInputRef = useRef<HTMLInputElement | null>(null);
   const serviceDetailFeeInlineFormRef = useRef<HTMLDivElement | null>(null);
+  const customsUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const inlandUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const overseaUploadInputRef = useRef<HTMLInputElement | null>(null);
   const customerAddressInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerContactInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerRouteInlineFormRef = useRef<HTMLDivElement | null>(null);
@@ -2782,6 +3201,67 @@ export default function Page() {
   const [selectedServiceScope, setSelectedServiceScope] =
     useState<(typeof contractDisplayServiceOptions)[number]>(servicePageScopeOptions[0]);
   const [selectedServiceDetailKey, setSelectedServiceDetailKey] = useState<string | null>(null);
+  const [customsTradeType, setCustomsTradeType] = useState<CustomsTradeType>("import");
+  const [inlandTradeType, setInlandTradeType] = useState<CustomsTradeType>("import");
+  const [customsCostRowsByType, setCustomsCostRowsByType] = useState<Record<CustomsTradeType, CustomsCostRow[]>>({
+    import: createInitialCustomsCostRows("import"),
+    export: createInitialCustomsCostRows("export")
+  });
+  const [customsCostDrafts, setCustomsCostDrafts] = useState<Record<string, string>>({});
+  const [customsEditingCostRowId, setCustomsEditingCostRowId] = useState<string | null>(null);
+  const [customsDocumentRowsByType, setCustomsDocumentRowsByType] = useState<
+    Record<CustomsTradeType, CustomsDocumentRow[]>
+  >({
+    import: createInitialCustomsDocumentRows("import"),
+    export: createInitialCustomsDocumentRows("export")
+  });
+  const [customsAuditRowsByType, setCustomsAuditRowsByType] = useState<Record<CustomsTradeType, CustomsAuditRow[]>>({
+    import: createInitialCustomsAuditRows("import"),
+    export: createInitialCustomsAuditRows("export")
+  });
+  const [isCustomsAuditLogOpen, setIsCustomsAuditLogOpen] = useState(false);
+  const customsAuditSectionRef = useRef<HTMLDivElement | null>(null);
+  const [activeCustomsUploadRowId, setActiveCustomsUploadRowId] = useState<string | null>(null);
+  const [inlandCostRowsByType, setInlandCostRowsByType] = useState<Record<CustomsTradeType, InlandCostRow[]>>({
+    import: createInitialInlandCostRows("import"),
+    export: createInitialInlandCostRows("export")
+  });
+  const [inlandCostDrafts, setInlandCostDrafts] = useState<Record<string, string>>({});
+  const [inlandEditingCostRowId, setInlandEditingCostRowId] = useState<string | null>(null);
+  const [inlandDocumentRowsByType, setInlandDocumentRowsByType] = useState<
+    Record<CustomsTradeType, InlandDocumentRow[]>
+  >({
+    import: createInitialInlandDocumentRows("import"),
+    export: createInitialInlandDocumentRows("export")
+  });
+  const [inlandAuditRowsByType, setInlandAuditRowsByType] = useState<Record<CustomsTradeType, InlandAuditRow[]>>({
+    import: createInitialInlandAuditRows("import"),
+    export: createInitialInlandAuditRows("export")
+  });
+  const [isInlandAuditLogOpen, setIsInlandAuditLogOpen] = useState(false);
+  const inlandAuditSectionRef = useRef<HTMLDivElement | null>(null);
+  const [activeInlandUploadRowId, setActiveInlandUploadRowId] = useState<string | null>(null);
+  const [overseaTradeType, setOverseaTradeType] = useState<CustomsTradeType>("import");
+  const [overseaCostRowsByType, setOverseaCostRowsByType] = useState<Record<CustomsTradeType, OverseaCostRow[]>>({
+    import: createInitialOverseaCostRows("import"),
+    export: createInitialOverseaCostRows("export")
+  });
+  const [overseaCostDrafts, setOverseaCostDrafts] = useState<Record<string, string>>({});
+  const [overseaEditingCostRowId, setOverseaEditingCostRowId] = useState<string | null>(null);
+  const [overseaDocumentRowsByType, setOverseaDocumentRowsByType] = useState<
+    Record<CustomsTradeType, OverseaDocumentRow[]>
+  >({
+    import: createInitialOverseaDocumentRows("import"),
+    export: createInitialOverseaDocumentRows("export")
+  });
+  const [overseaAuditRowsByType, setOverseaAuditRowsByType] = useState<Record<CustomsTradeType, OverseaAuditRow[]>>({
+    import: createInitialOverseaAuditRows("import"),
+    export: createInitialOverseaAuditRows("export")
+  });
+  const [isOverseaAuditLogOpen, setIsOverseaAuditLogOpen] = useState(false);
+  const overseaAuditSectionRef = useRef<HTMLDivElement | null>(null);
+  const [activeOverseaUploadRowId, setActiveOverseaUploadRowId] = useState<string | null>(null);
+  const [isOverseaUploadingRowId, setIsOverseaUploadingRowId] = useState<string | null>(null);
   const initialServiceDetailFeeForm: ServiceDetailFeeRowState = {
     feeType: "",
     unit: "",
@@ -2973,6 +3453,9 @@ export default function Page() {
     currentPage === "customers" && customerSubPage === "contracts" && !selectedContractCode;
   const isCustomerServicesPage =
     currentPage === "customers" && customerSubPage === "services" && !selectedServiceDetailKey;
+  const isCustomerCustomsPage = currentPage === "customers" && customerSubPage === "customs";
+  const isCustomerInlandPage = currentPage === "customers" && customerSubPage === "inland";
+  const isCustomerOverseaPage = currentPage === "customers" && customerSubPage === "oversea";
   const isServiceDetailsPage =
     currentPage === "customers" && customerSubPage === "services" && !!selectedServiceDetailKey;
   const isCustomerDetailsPage = currentPage === "customers" && customerSubPage === "list" && !!selectedCustomerKey;
@@ -3742,6 +4225,12 @@ export default function Page() {
         ? `${selectedBookingCode} | PI Digital`
         : isBookingListPage
           ? "Danh sách yêu cầu Booking | PI Digital"
+          : isCustomerCustomsPage
+            ? "Customs (Hải quan) | PI Digital"
+            : isCustomerInlandPage
+              ? "Inland (Vận tải nội địa) | PI Digital"
+              : isCustomerOverseaPage
+                ? "Oversea (Vận tải quốc tế) | PI Digital"
           : isContractDetailsPage && selectedContractRow
             ? `${selectedContractRow.code} | PI Digital`
           : isCustomerDetailsPage && selectedCustomerRow
@@ -3766,6 +4255,12 @@ export default function Page() {
         ? `Chi tiết yêu cầu booking ${selectedBookingCode} trong hệ thống PI Digital.`
         : isBookingListPage
           ? "Danh sách yêu cầu booking trong hệ thống PI Digital."
+          : isCustomerCustomsPage
+            ? "Màn hình vận hành hải quan cho shipment trong hệ thống PI Digital."
+            : isCustomerInlandPage
+              ? "Màn hình vận hành vận tải nội địa cho shipment trong hệ thống PI Digital."
+              : isCustomerOverseaPage
+                ? "Màn hình vận hành vận tải quốc tế cho shipment trong hệ thống PI Digital."
           : isContractDetailsPage && selectedContractRow
             ? `Chi tiết hợp đồng ${selectedContractRow.code} trong hệ thống PI Digital.`
           : isCustomerDetailsPage && selectedCustomerRow
@@ -3794,6 +4289,9 @@ export default function Page() {
     isBookingDetailsPage,
     isBookingListPage,
     isCreatePage,
+    isCustomerCustomsPage,
+    isCustomerInlandPage,
+    isCustomerOverseaPage,
     isCustomerCreatePage,
     isCustomerContractCreatePage,
     isContractDetailsPage,
@@ -3909,6 +4407,61 @@ export default function Page() {
       items: servicePageScopeOptions.map((service) => service.replace(/^[^\p{L}\p{N}]+\s*/u, "")),
     },
   ] as const;
+  const customsBreadcrumb = `Home / Shipments / Shipment Detail / Customs / ${customsTradeType === "import" ? "Import" : "Export"}`;
+  const customsShipmentMeta = [
+    { label: "Mã shipment", value: "SHP-2026-0001" },
+    { label: "Module", value: "Hải quan" },
+    { label: "Loại", value: customsTradeType === "import" ? "Import" : "Export" },
+    { label: "Cập nhật gần nhất", value: "12/03/2026 - An Phạm" }
+  ] as const;
+  const visibleCustomsCostRows = customsCostRowsByType[customsTradeType];
+  const visibleCustomsDocumentRows = customsDocumentRowsByType[customsTradeType];
+  const visibleCustomsAuditRows = customsAuditRowsByType[customsTradeType];
+  const customsValidationErrors = visibleCustomsDocumentRows
+    .filter((row) => row.displayMode === "ATTACHMENT_REQUIRED" && row.fileNames.length === 0)
+    .map((row) => ({
+      rowId: row.id,
+      relatedRow: row.documentName,
+      message: "Chứng từ bắt buộc chưa được tải lên"
+    }));
+  const isCustomsSubmitDisabled = customsValidationErrors.length > 0;
+  const inlandBreadcrumb = `Home / Shipments / Shipment Detail / Inland / ${inlandTradeType === "import" ? "Import" : "Export"}`;
+  const inlandShipmentMeta = [
+    { label: "Mã shipment", value: "SHP-2026-0001" },
+    { label: "Module", value: "Vận tải nội địa" },
+    { label: "Loại", value: inlandTradeType === "import" ? "Import" : "Export" },
+    { label: "Cập nhật gần nhất", value: "12/03/2026 - An Phạm" }
+  ] as const;
+  const visibleInlandCostRows = inlandCostRowsByType[inlandTradeType];
+  const visibleInlandDocumentRows = inlandDocumentRowsByType[inlandTradeType];
+  const visibleInlandAuditRows = inlandAuditRowsByType[inlandTradeType];
+  const inlandValidationErrors = visibleInlandDocumentRows
+    .filter((row) => row.required && row.files.length === 0)
+    .map((row) => ({
+      rowId: row.id,
+      relatedRow: row.documentName,
+      message:
+        row.documentName === "BL"
+          ? "Chứng từ BL chưa được tải lên"
+          : `${row.documentName} thiếu file đính kèm`
+    }));
+  const isInlandSubmitDisabled = inlandValidationErrors.length > 0;
+  const overseaBreadcrumb = `Home / Shipments / Shipment Detail / Oversea / ${overseaTradeType === "import" ? "Import" : "Export"}`;
+  const overseaShipmentMeta = [
+    { label: "Mã shipment", value: "SHP-2026-0001" },
+    { label: "Module", value: "Vận tải quốc tế" },
+    { label: "Loại", value: overseaTradeType === "import" ? "Import" : "Export" },
+    { label: "Tuyến", value: "Shanghai → Haiphong" },
+    { label: "Cập nhật gần nhất", value: "12/03/2026 - An Phạm" }
+  ] as const;
+  const visibleOverseaCostRows = overseaCostRowsByType[overseaTradeType];
+  const visibleOverseaDocumentRows = overseaDocumentRowsByType[overseaTradeType];
+  const visibleOverseaAuditRows = overseaAuditRowsByType[overseaTradeType];
+  const overseaEnteredCostCount = visibleOverseaCostRows.filter((row) => row.amount.trim() !== "").length;
+  const overseaRequiredDocumentCount = 0;
+  const overseaCompletedDocumentCount = 0;
+  const overseaCompletionPercent =
+    visibleOverseaCostRows.length === 0 ? 0 : Math.round((overseaEnteredCostCount / visibleOverseaCostRows.length) * 100);
   const activeSearchFilterSections = isCustomerContractsPage
     ? contractSearchFilterSections
     : isCustomerServicesPage
@@ -3926,6 +4479,12 @@ export default function Page() {
       ? "Thêm mới"
       : isCustomerContractCreatePage
         ? "Hợp đồng"
+        : isCustomerCustomsPage
+          ? "Customs (Hải quan)"
+          : isCustomerInlandPage
+            ? "Inland (Nội địa)"
+            : isCustomerOverseaPage
+              ? "Oversea (Quốc tế)"
           : isCustomerContractsPage
             ? "Hợp đồng"
           : isServiceDetailsPage
@@ -4428,6 +4987,12 @@ export default function Page() {
             ? "contracts"
             : nextParams.get("view") === "services"
               ? "services"
+              : nextParams.get("view") === "customs"
+                ? "customs"
+              : nextParams.get("view") === "inland"
+                ? "inland"
+              : nextParams.get("view") === "oversea"
+                ? "oversea"
               : nextParams.get("view") === "create-contract"
                 ? "create-contract"
               : nextParams.get("view") === "create-customer"
@@ -4439,6 +5004,9 @@ export default function Page() {
         nextPage === "customers" &&
           nextParams.get("view") !== "contracts" &&
           nextParams.get("view") !== "services" &&
+          nextParams.get("view") !== "customs" &&
+          nextParams.get("view") !== "inland" &&
+          nextParams.get("view") !== "oversea" &&
           nextParams.get("view") !== "create-contract" &&
           nextParams.get("view") !== "create-customer"
           ? nextParams.get("customer")
@@ -4479,15 +5047,23 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (isCustomerPage) {
-      setOpenSidebarGroups((current) =>
-        current.includes("Quản lý khách hàng") ? current : [...current, "Quản lý khách hàng"]
-      );
+    if (isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage) {
+      setOpenSidebarGroups(["Quản lý hóa đơn/chứng từ"]);
       return;
     }
 
-    setOpenSidebarGroups((current) => current.filter((title) => title !== "Quản lý khách hàng"));
-  }, [isCustomerPage]);
+    if (isCustomerPage) {
+      setOpenSidebarGroups((current) => {
+        const next = current.filter((title) => title !== "Quản lý hóa đơn/chứng từ");
+        return next.includes("Quản lý khách hàng") ? next : [...next, "Quản lý khách hàng"];
+      });
+      return;
+    }
+
+    setOpenSidebarGroups((current) =>
+      current.filter((title) => title !== "Quản lý khách hàng" && title !== "Quản lý hóa đơn/chứng từ")
+    );
+  }, [isCustomerCustomsPage, isCustomerInlandPage, isCustomerOverseaPage, isCustomerPage]);
 
   useEffect(() => {
     setCustomerShipmentPage(1);
@@ -5443,6 +6019,804 @@ export default function Page() {
     });
   };
 
+  const prependCustomsAudit = (tradeType: CustomsTradeType, row: CustomsAuditRow) => {
+    setCustomsAuditRowsByType((current) => ({
+      ...current,
+      [tradeType]: [row, ...current[tradeType]]
+    }));
+  };
+
+  const updateCustomsCostDraft = (rowId: string, nextAmount: string) => {
+    setCustomsCostDrafts((current) => ({
+      ...current,
+      [rowId]: sanitizeCostAmountInput(nextAmount)
+    }));
+  };
+
+  const focusCustomsCostAmount = (rowId: string, currentAmount: string) => {
+    setCustomsEditingCostRowId(rowId);
+    setCustomsCostDrafts((current) => ({
+      ...current,
+      [rowId]: normalizeCostAmountForEdit(currentAmount)
+    }));
+  };
+
+  const blurCustomsCostAmount = (rowId: string) => {
+    const draftAmount = customsCostDrafts[rowId] ?? "";
+    const previousRow = visibleCustomsCostRows.find((row) => row.id === rowId);
+    const finalized = finalizeCostAmount(draftAmount);
+
+    if (finalized.error) {
+      setToast({ kind: "error", message: finalized.error });
+      setCustomsEditingCostRowId(null);
+      setCustomsCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    if (!previousRow || previousRow.amount === finalized.value) {
+      setCustomsEditingCostRowId(null);
+      setCustomsCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              amount: finalized.value,
+              updatedBy: finalized.value ? currentUserName : "",
+              updatedAt: finalized.value ? timestamp : ""
+            }
+          : row
+      )
+    }));
+    prependCustomsAudit(customsTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Sửa chi phí",
+      field: previousRow.feeName,
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(finalized.value, previousRow.currency),
+      actor: currentUserName,
+      time: timestamp
+    });
+    setCustomsEditingCostRowId(null);
+    setCustomsCostDrafts((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  const updateCustomsCostCurrency = (rowId: string, nextCurrency: (typeof COST_CURRENCY_OPTIONS)[number]) => {
+    const previousRow = visibleCustomsCostRows.find((row) => row.id === rowId);
+    if (!previousRow || previousRow.currency === nextCurrency) {
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) =>
+        row.id === rowId
+          ? { ...row, currency: nextCurrency, updatedBy: currentUserName, updatedAt: timestamp }
+          : row
+      )
+    }));
+    prependCustomsAudit(customsTradeType, {
+      id: `${rowId}-currency-${Date.now()}`,
+      action: "Sửa chi phí",
+      field: previousRow.feeName,
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(previousRow.amount, nextCurrency),
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
+  const openCustomsUpload = (rowId: string) => {
+    setActiveCustomsUploadRowId(rowId);
+    customsUploadInputRef.current?.click();
+  };
+
+  const handleCustomsDocumentUpload = (files?: FileList | null) => {
+    if (!activeCustomsUploadRowId || !files?.length) {
+      return;
+    }
+
+    const uploadedFileNames = Array.from(files).map((file) => file.name);
+    const timestamp = formatAuditTimestamp();
+    const targetRow = visibleCustomsDocumentRows.find((row) => row.id === activeCustomsUploadRowId);
+
+    setCustomsDocumentRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) =>
+        row.id === activeCustomsUploadRowId
+          ? {
+              ...row,
+              fileNames: [...row.fileNames, ...uploadedFileNames],
+              updatedBy: currentUserName,
+              updatedAt: timestamp
+            }
+          : row
+      )
+    }));
+
+    if (targetRow) {
+      prependCustomsAudit(customsTradeType, {
+        id: `${targetRow.id}-${Date.now()}`,
+        action: "Upload file",
+        field: targetRow.documentName,
+        beforeValue: `${targetRow.fileNames.length} file`,
+        afterValue: `${targetRow.fileNames.length + uploadedFileNames.length} file`,
+        actor: currentUserName,
+        time: timestamp
+      });
+    }
+
+    setActiveCustomsUploadRowId(null);
+  };
+
+  const deleteCustomsDocumentFiles = (rowId: string) => {
+    const timestamp = formatAuditTimestamp();
+    const targetRow = visibleCustomsDocumentRows.find((row) => row.id === rowId);
+    if (!targetRow || targetRow.fileNames.length === 0) {
+      return;
+    }
+
+    setCustomsDocumentRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              fileNames: [],
+              updatedBy: currentUserName,
+              updatedAt: timestamp
+            }
+          : row
+      )
+    }));
+
+    prependCustomsAudit(customsTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Xóa file",
+      field: targetRow.documentName,
+      beforeValue: `${targetRow.fileNames.length} file`,
+      afterValue: "0 file",
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
+  const viewCustomsDocumentFiles = (rowId: string) => {
+    const targetRow = visibleCustomsDocumentRows.find((row) => row.id === rowId);
+    if (!targetRow || targetRow.fileNames.length === 0) {
+      return;
+    }
+
+    setToast({
+      kind: "success",
+      message: `Đang mở ${targetRow.fileNames.length} file của ${targetRow.documentName}.`
+    });
+  };
+
+  const refreshCustomsTradeType = () => {
+    setCustomsEditingCostRowId(null);
+    setCustomsCostDrafts({});
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: createInitialCustomsCostRows(customsTradeType)
+    }));
+    setCustomsDocumentRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: createInitialCustomsDocumentRows(customsTradeType)
+    }));
+    setCustomsAuditRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: createInitialCustomsAuditRows(customsTradeType)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã tải lại dữ liệu Hải quan."
+    });
+  };
+
+  const saveCustomsDraft = () => {
+    prependCustomsAudit(customsTradeType, {
+      id: `customs-save-${Date.now()}`,
+      action: "Lưu nháp",
+      field: customsTradeType === "import" ? "Import" : "Export",
+      beforeValue: "-",
+      afterValue: "Đã lưu nháp",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã lưu nháp dữ liệu Hải quan."
+    });
+  };
+
+  const submitCustomsModule = () => {
+    if (isCustomsSubmitDisabled) {
+      return;
+    }
+
+    prependCustomsAudit(customsTradeType, {
+      id: `customs-submit-${Date.now()}`,
+      action: "Gửi",
+      field: customsTradeType === "import" ? "Import" : "Export",
+      beforeValue: "Nháp",
+      afterValue: "Đã gửi",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã gửi dữ liệu Hải quan."
+    });
+  };
+
+  const prependInlandAudit = (tradeType: CustomsTradeType, row: InlandAuditRow) => {
+    setInlandAuditRowsByType((current) => ({
+      ...current,
+      [tradeType]: [row, ...current[tradeType]]
+    }));
+  };
+
+  const updateInlandCostDraft = (rowId: string, nextAmount: string) => {
+    setInlandCostDrafts((current) => ({
+      ...current,
+      [rowId]: sanitizeCostAmountInput(nextAmount)
+    }));
+  };
+
+  const focusInlandCostAmount = (rowId: string, currentAmount: string) => {
+    setInlandEditingCostRowId(rowId);
+    setInlandCostDrafts((current) => ({
+      ...current,
+      [rowId]: normalizeCostAmountForEdit(currentAmount)
+    }));
+  };
+
+  const blurInlandCostAmount = (rowId: string) => {
+    const draftAmount = inlandCostDrafts[rowId] ?? "";
+    const previousRow = visibleInlandCostRows.find((row) => row.id === rowId);
+    const finalized = finalizeCostAmount(draftAmount);
+
+    if (finalized.error) {
+      setToast({ kind: "error", message: finalized.error });
+      setInlandEditingCostRowId(null);
+      setInlandCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    if (!previousRow || previousRow.amount === finalized.value) {
+      setInlandEditingCostRowId(null);
+      setInlandCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              amount: finalized.value,
+              updatedBy: finalized.value ? currentUserName : "",
+              updatedAt: finalized.value ? timestamp : ""
+            }
+          : row
+      )
+    }));
+
+    prependInlandAudit(inlandTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Edit cost",
+      target: "COST",
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(finalized.value, previousRow.currency),
+      actor: currentUserName,
+      time: timestamp
+    });
+    setInlandEditingCostRowId(null);
+    setInlandCostDrafts((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  const updateInlandCostCurrency = (rowId: string, nextCurrency: (typeof COST_CURRENCY_OPTIONS)[number]) => {
+    const previousRow = visibleInlandCostRows.find((row) => row.id === rowId);
+    if (!previousRow || previousRow.currency === nextCurrency) {
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].map((row) =>
+        row.id === rowId
+          ? { ...row, currency: nextCurrency, updatedBy: currentUserName, updatedAt: timestamp }
+          : row
+      )
+    }));
+
+    prependInlandAudit(inlandTradeType, {
+      id: `${rowId}-currency-${Date.now()}`,
+      action: "Edit cost",
+      target: "COST",
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(previousRow.amount, nextCurrency),
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
+  const openInlandUpload = (rowId: string) => {
+    setActiveInlandUploadRowId(rowId);
+    inlandUploadInputRef.current?.click();
+  };
+
+  const handleInlandDocumentUpload = (files?: FileList | null) => {
+    if (!activeInlandUploadRowId || !files?.length) {
+      return;
+    }
+
+    const uploadedFiles = Array.from(files).map((file, index) => ({
+      id: `${activeInlandUploadRowId}-${Date.now()}-${index}`,
+      name: file.name,
+      sizeLabel: `${Math.max(1, Math.round(file.size / 1024))} KB`
+    }));
+    const timestamp = formatAuditTimestamp();
+    const targetRow = visibleInlandDocumentRows.find((row) => row.id === activeInlandUploadRowId);
+
+    setInlandDocumentRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].map((row) =>
+        row.id === activeInlandUploadRowId
+          ? {
+              ...row,
+              files: [...row.files, ...uploadedFiles],
+              uploadedBy: currentUserName,
+              uploadedAt: timestamp
+            }
+          : row
+      )
+    }));
+
+    if (targetRow) {
+      prependInlandAudit(inlandTradeType, {
+        id: `${targetRow.id}-${Date.now()}`,
+        action: "Upload",
+        target: "DOCUMENT",
+        beforeValue: `${targetRow.files.length} file`,
+        afterValue: `${targetRow.files.length + uploadedFiles.length} file`,
+        actor: currentUserName,
+        time: timestamp
+      });
+    }
+
+    setActiveInlandUploadRowId(null);
+  };
+
+  const downloadInlandDocument = (rowId: string) => {
+    const row = visibleInlandDocumentRows.find((item) => item.id === rowId);
+    if (!row || row.files.length === 0) {
+      return;
+    }
+
+    setToast({
+      kind: "success",
+      message: `Đang tải ${row.files.length} file của ${row.documentName}.`
+    });
+  };
+
+  const deleteInlandDocumentFiles = (rowId: string) => {
+    const timestamp = formatAuditTimestamp();
+    const row = visibleInlandDocumentRows.find((item) => item.id === rowId);
+    if (!row || row.files.length === 0) {
+      return;
+    }
+
+    setInlandDocumentRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].map((item) =>
+        item.id === rowId
+          ? {
+              ...item,
+              files: [],
+              uploadedBy: currentUserName,
+              uploadedAt: timestamp
+            }
+          : item
+      )
+    }));
+
+    prependInlandAudit(inlandTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Delete file",
+      target: "DOCUMENT",
+      beforeValue: `${row.files.length} file`,
+      afterValue: "0 file",
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
+  const refreshInlandTradeType = () => {
+    setInlandEditingCostRowId(null);
+    setInlandCostDrafts({});
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: createInitialInlandCostRows(inlandTradeType)
+    }));
+    setInlandDocumentRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: createInitialInlandDocumentRows(inlandTradeType)
+    }));
+    setInlandAuditRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: createInitialInlandAuditRows(inlandTradeType)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã tải lại dữ liệu Vận tải nội địa."
+    });
+  };
+
+  const saveInlandDraft = () => {
+    prependInlandAudit(inlandTradeType, {
+      id: `inland-save-${Date.now()}`,
+      action: "Save draft",
+      target: "DOCUMENT",
+      beforeValue: "-",
+      afterValue: "Đã lưu nháp",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã lưu nháp dữ liệu Vận tải nội địa."
+    });
+  };
+
+  const submitInlandModule = () => {
+    if (isInlandSubmitDisabled) {
+      return;
+    }
+
+    prependInlandAudit(inlandTradeType, {
+      id: `inland-submit-${Date.now()}`,
+      action: "Submit",
+      target: "DOCUMENT",
+      beforeValue: "Nháp",
+      afterValue: "Đã gửi",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã gửi dữ liệu Vận tải nội địa."
+    });
+  };
+
+  const prependOverseaAudit = (tradeType: CustomsTradeType, row: OverseaAuditRow) => {
+    setOverseaAuditRowsByType((current) => ({
+      ...current,
+      [tradeType]: [row, ...current[tradeType]]
+    }));
+  };
+
+  const updateOverseaCostDraft = (rowId: string, nextAmount: string) => {
+    setOverseaCostDrafts((current) => ({
+      ...current,
+      [rowId]: sanitizeCostAmountInput(nextAmount)
+    }));
+  };
+
+  const focusOverseaCostAmount = (rowId: string, currentAmount: string) => {
+    setOverseaEditingCostRowId(rowId);
+    setOverseaCostDrafts((current) => ({
+      ...current,
+      [rowId]: normalizeCostAmountForEdit(currentAmount)
+    }));
+  };
+
+  const blurOverseaCostAmount = (rowId: string) => {
+    const draftAmount = overseaCostDrafts[rowId] ?? "";
+    const previousRow = visibleOverseaCostRows.find((row) => row.id === rowId);
+    const finalized = finalizeCostAmount(draftAmount);
+
+    if (finalized.error) {
+      setToast({ kind: "error", message: finalized.error });
+      setOverseaEditingCostRowId(null);
+      setOverseaCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    if (!previousRow || previousRow.amount === finalized.value) {
+      setOverseaEditingCostRowId(null);
+      setOverseaCostDrafts((current) => {
+        const next = { ...current };
+        delete next[rowId];
+        return next;
+      });
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setOverseaCostRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: current[overseaTradeType].map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              amount: finalized.value,
+              updatedBy: finalized.value ? currentUserName : "",
+              updatedAt: finalized.value ? timestamp : ""
+            }
+          : row
+      )
+    }));
+
+    prependOverseaAudit(overseaTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Sửa chi phí",
+      field: previousRow.feeName,
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(finalized.value, previousRow.currency),
+      actor: currentUserName,
+      time: timestamp
+    });
+    setOverseaEditingCostRowId(null);
+    setOverseaCostDrafts((current) => {
+      const next = { ...current };
+      delete next[rowId];
+      return next;
+    });
+  };
+
+  const updateOverseaCostCurrency = (rowId: string, nextCurrency: (typeof COST_CURRENCY_OPTIONS)[number]) => {
+    const previousRow = visibleOverseaCostRows.find((row) => row.id === rowId);
+    if (!previousRow || previousRow.currency === nextCurrency) {
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    setOverseaCostRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: current[overseaTradeType].map((row) =>
+        row.id === rowId
+          ? { ...row, currency: nextCurrency, updatedBy: currentUserName, updatedAt: timestamp }
+          : row
+      )
+    }));
+
+    prependOverseaAudit(overseaTradeType, {
+      id: `${rowId}-currency-${Date.now()}`,
+      action: "Sửa chi phí",
+      field: previousRow.feeName,
+      beforeValue: buildCostAuditValue(previousRow.amount, previousRow.currency),
+      afterValue: buildCostAuditValue(previousRow.amount, nextCurrency),
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
+  const refreshOverseaTradeType = () => {
+    setOverseaEditingCostRowId(null);
+    setOverseaCostDrafts({});
+    setOverseaCostRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: createInitialOverseaCostRows(overseaTradeType)
+    }));
+    setOverseaDocumentRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: createInitialOverseaDocumentRows(overseaTradeType)
+    }));
+    setOverseaAuditRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: createInitialOverseaAuditRows(overseaTradeType)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã tải lại dữ liệu Vận tải quốc tế."
+    });
+  };
+
+  const saveOverseaDraft = () => {
+    prependOverseaAudit(overseaTradeType, {
+      id: `oversea-save-${Date.now()}`,
+      action: "Lưu nháp",
+      field: overseaTradeType === "import" ? "Import" : "Export",
+      beforeValue: "-",
+      afterValue: "Đã lưu nháp",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã lưu nháp dữ liệu Vận tải quốc tế."
+    });
+  };
+
+  const submitOverseaModule = () => {
+    prependOverseaAudit(overseaTradeType, {
+      id: `oversea-submit-${Date.now()}`,
+      action: "Gửi",
+      field: overseaTradeType === "import" ? "Import" : "Export",
+      beforeValue: "Nháp",
+      afterValue: "Đã gửi",
+      actor: currentUserName,
+      time: formatAuditTimestamp()
+    });
+    setToast({
+      kind: "success",
+      message: "Đã gửi dữ liệu Vận tải quốc tế."
+    });
+  };
+
+  const scrollToAuditSection = (section: HTMLDivElement | null) => {
+    if (!section) {
+      return;
+    }
+
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const openCustomsAuditSection = () => {
+    setIsCustomsAuditLogOpen(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToAuditSection(customsAuditSectionRef.current));
+    });
+  };
+
+  const openInlandAuditSection = () => {
+    setIsInlandAuditLogOpen(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToAuditSection(inlandAuditSectionRef.current));
+    });
+  };
+
+  const openOverseaAuditSection = () => {
+    setIsOverseaAuditLogOpen(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToAuditSection(overseaAuditSectionRef.current));
+    });
+  };
+
+  const openOverseaUpload = (rowId: string) => {
+    setActiveOverseaUploadRowId(rowId);
+    setIsOverseaUploadingRowId(rowId);
+    overseaUploadInputRef.current?.click();
+  };
+
+  const handleOverseaDocumentUpload = (files?: FileList | null) => {
+    if (!activeOverseaUploadRowId) {
+      setIsOverseaUploadingRowId(null);
+      return;
+    }
+
+    if (!files?.length) {
+      setActiveOverseaUploadRowId(null);
+      setIsOverseaUploadingRowId(null);
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    const uploadedFiles: OverseaDocumentFile[] = Array.from(files).map((file, index) => ({
+      id: `${activeOverseaUploadRowId}-${Date.now()}-${index}`,
+      name: file.name,
+      sizeLabel: `${Math.max(1, Math.round(file.size / 1024))} KB`,
+      uploadedBy: currentUserName,
+      uploadedAt: timestamp
+    }));
+    const targetRow = visibleOverseaDocumentRows.find((row) => row.id === activeOverseaUploadRowId);
+
+    setOverseaDocumentRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: current[overseaTradeType].map((row) =>
+        row.id === activeOverseaUploadRowId
+          ? {
+              ...row,
+              files: [...row.files, ...uploadedFiles],
+              updatedBy: currentUserName,
+              updatedAt: timestamp
+            }
+          : row
+      )
+    }));
+
+    if (targetRow) {
+      prependOverseaAudit(overseaTradeType, {
+        id: `${targetRow.id}-${Date.now()}`,
+        action: "Upload file",
+        field: targetRow.documentName,
+        beforeValue: `${targetRow.files.length} file`,
+        afterValue: `${targetRow.files.length + uploadedFiles.length} file`,
+        actor: currentUserName,
+        time: timestamp
+      });
+    }
+
+    setActiveOverseaUploadRowId(null);
+    setIsOverseaUploadingRowId(null);
+  };
+
+  const downloadOverseaDocument = (rowId: string, fileId?: string) => {
+    const row = visibleOverseaDocumentRows.find((item) => item.id === rowId);
+    if (!row || row.files.length === 0) {
+      return;
+    }
+
+    const file = fileId ? row.files.find((item) => item.id === fileId) : null;
+    setToast({
+      kind: "success",
+      message: file ? `Đang tải file ${file.name}.` : `Đang tải ${row.files.length} file của ${row.documentName}.`
+    });
+  };
+
+  const deleteOverseaDocumentFile = (rowId: string, fileId?: string) => {
+    const row = visibleOverseaDocumentRows.find((item) => item.id === rowId);
+    if (!row || row.files.length === 0) {
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    const remainingFiles = fileId ? row.files.filter((file) => file.id !== fileId) : [];
+
+    setOverseaDocumentRowsByType((current) => ({
+      ...current,
+      [overseaTradeType]: current[overseaTradeType].map((item) =>
+        item.id === rowId
+          ? {
+              ...item,
+              files: remainingFiles,
+              updatedBy: currentUserName,
+              updatedAt: timestamp
+            }
+          : item
+      )
+    }));
+
+    prependOverseaAudit(overseaTradeType, {
+      id: `${rowId}-${Date.now()}`,
+      action: "Delete file",
+      field: row.documentName,
+      beforeValue: `${row.files.length} file`,
+      afterValue: `${remainingFiles.length} file`,
+      actor: currentUserName,
+      time: timestamp
+    });
+  };
+
   const sampleCustomerImportTemplate = [
     ["ten_khach_hang", "ma_so_thue", "cong_ty_ky_hop_dong", "nguoi_lien_he", "email", "so_dien_thoai"],
     ["Cong ty TNHH ABC Logistics", "0312345678", "PI Log", "Nguyen Van A", "contact@abclogistics.vn", "0901234567"],
@@ -5888,6 +7262,75 @@ export default function Page() {
 
   const showCustomerServices = () => {
     runWithLeaveGuard(performShowCustomerServices);
+  };
+
+  const performShowCustomerCustoms = () => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.delete("service");
+    nextParams.delete("service_item");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "customs");
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("customs");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setSelectedServiceDetailKey(null);
+  };
+
+  const showCustomerCustoms = () => {
+    runWithLeaveGuard(performShowCustomerCustoms);
+  };
+
+  const performShowCustomerInland = () => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.delete("service");
+    nextParams.delete("service_item");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "inland");
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("inland");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setSelectedServiceDetailKey(null);
+  };
+
+  const showCustomerInland = () => {
+    runWithLeaveGuard(performShowCustomerInland);
+  };
+
+  const performShowCustomerOversea = () => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.delete("service");
+    nextParams.delete("service_item");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "oversea");
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("oversea");
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setSelectedServiceDetailKey(null);
+  };
+
+  const showCustomerOversea = () => {
+    runWithLeaveGuard(performShowCustomerOversea);
   };
 
   const performOpenServiceDetails = (service: ServicePageScope, item: string) => {
@@ -6522,6 +7965,7 @@ export default function Page() {
                     {(() => {
                       const isGroupOpen = group.items ? openSidebarGroups.includes(group.title) : false;
                       const isCustomersGroup = group.title === "Quản lý khách hàng";
+                      const isDocumentsGroup = group.title === "Quản lý hóa đơn/chứng từ";
                       const isGroupActive = group.title === "Xuất khẩu" ? !isCustomerPage : false;
                       return (
                         <>
@@ -6567,10 +8011,14 @@ export default function Page() {
                           <div
                             key={item.label}
                             className={`flex cursor-pointer items-center gap-[24px] rounded-xl px-4 py-2 text-[14px] transition-colors ${
-                              isCustomersGroup &&
+                              ((isCustomersGroup &&
                               ((item.label === "Khách hàng" && (isCustomerListPage || isCustomerDetailsPage || isCustomerCreatePage)) ||
                                 (item.label === "Hợp đồng" && (isCustomerContractsPage || isContractDetailsPage || isCustomerContractCreatePage)) ||
-                                (item.label === "Dịch vụ" && isCustomerServicesPage))
+                                (item.label === "Dịch vụ" && isCustomerServicesPage))) ||
+                              (isDocumentsGroup &&
+                                ((item.label === "Customs (Hải quan)" && isCustomerCustomsPage) ||
+                                  (item.label === "Inland (Nội địa)" && isCustomerInlandPage) ||
+                                  (item.label === "Oversea (Quốc tế)" && isCustomerOverseaPage))))
                                 ? "bg-card text-[#18181b]"
                                 : "ui-hover-bg text-foreground"
                             }`}
@@ -6581,15 +8029,25 @@ export default function Page() {
                                   ? showCustomerContracts
                                   : isCustomersGroup && item.label === "Dịch vụ"
                                     ? showCustomerServices
+                                    : isDocumentsGroup && item.label === "Customs (Hải quan)"
+                                      ? showCustomerCustoms
+                                      : isDocumentsGroup && item.label === "Inland (Nội địa)"
+                                        ? showCustomerInland
+                                        : isDocumentsGroup && item.label === "Oversea (Quốc tế)"
+                                          ? showCustomerOversea
                                 : undefined
                             }
                           >
                             <span
                               className={`h-[2px] w-[2px] rounded-full ${
-                                isCustomersGroup &&
+                                ((isCustomersGroup &&
                                 ((item.label === "Khách hàng" && (isCustomerListPage || isCustomerDetailsPage || isCustomerCreatePage)) ||
                                   (item.label === "Hợp đồng" && (isCustomerContractsPage || isContractDetailsPage)) ||
-                                  (item.label === "Dịch vụ" && isCustomerServicesPage))
+                                  (item.label === "Dịch vụ" && isCustomerServicesPage))) ||
+                                  (isDocumentsGroup &&
+                                    ((item.label === "Customs (Hải quan)" && isCustomerCustomsPage) ||
+                                      (item.label === "Inland (Nội địa)" && isCustomerInlandPage) ||
+                                      (item.label === "Oversea (Quốc tế)" && isCustomerOverseaPage))))
                                   ? "bg-[#18181b]"
                                   : "bg-muted-foreground"
                               }`}
@@ -6628,7 +8086,7 @@ export default function Page() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
-                      <span>{isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
+                      <span>{isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "Quản lý hóa đơn/chứng từ" : isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -7022,7 +8480,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage ? "hidden" : ""
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -11898,6 +13356,753 @@ export default function Page() {
                   </div>
                 </div>
               </>
+            ) : null}
+
+            {isCustomerCustomsPage ? (
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+                <div className="space-y-3">
+                  <div className="text-[12px] text-muted-foreground">{customsBreadcrumb}</div>
+
+                  <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
+                      {customsShipmentMeta.map((item) => (
+                        <div key={item.label} className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{item.label}:</span>
+                          <span className="font-medium text-foreground">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-b border-[#E7E6E9] pb-2">
+                    <div className="inline-flex items-center rounded-[10px] border border-[#E7E6E9] bg-white p-1">
+                      {[
+                        { key: "import" as const, label: "Import" },
+                        { key: "export" as const, label: "Export" }
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setCustomsTradeType(tab.key)}
+                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
+                            customsTradeType === tab.key
+                              ? "bg-[#2054a3] text-white"
+                              : "text-foreground hover:bg-[#F5F7FA]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={saveCustomsDraft}
+                        className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        Lưu nháp
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isCustomsSubmitDisabled}
+                        onClick={submitCustomsModule}
+                        className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                          isCustomsSubmitDisabled
+                            ? "cursor-not-allowed bg-[#AABBDD] text-white"
+                            : "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                        }`}
+                      >
+                        Gửi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={refreshCustomsTradeType}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Tải lại</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openCustomsAuditSection}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <History className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Xem lịch sử</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[15px] font-semibold text-foreground">Danh sách chi phí</div>
+                      <div className="text-[12px] text-muted-foreground">
+                        Shipment ID: <span className="font-medium text-foreground">SHP-2026-0001</span>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[980px]">
+                          <div className="grid grid-cols-[2.2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chi phí", "Số tiền", "Tiền tệ", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">
+                                {label}
+                              </div>
+                            ))}
+                          </div>
+                          {visibleCustomsCostRows.map((row) => {
+                            const isFilled = row.amount.trim() !== "";
+                            const isEditing = customsEditingCostRowId === row.id;
+                            const displayAmount = isEditing
+                              ? customsCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
+                              : formatCostAmountDisplay(row.amount);
+
+                            return (
+                              <div
+                                key={row.id}
+                                className="grid grid-cols-[2.2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
+                              >
+                                <div className="flex min-h-[38px] items-center px-4">{row.feeName}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <input
+                                    inputMode="decimal"
+                                    value={displayAmount}
+                                    onFocus={() => focusCustomsCostAmount(row.id, row.amount)}
+                                    onChange={(event) => updateCustomsCostDraft(row.id, event.target.value)}
+                                    onBlur={() => blurCustomsCostAmount(row.id)}
+                                    placeholder="-"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <select
+                                    value={row.currency}
+                                    onChange={(event) =>
+                                      updateCustomsCostCurrency(
+                                        row.id,
+                                        event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
+                                      )
+                                    }
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
+                                  >
+                                    {COST_CURRENCY_OPTIONS.map((currency) => (
+                                      <option key={currency} value={currency}>
+                                        {currency}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span
+                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                      isFilled ? "bg-[#EAF7EE] text-[#1F7A35]" : "bg-[#F1F3F5] text-[#68707B]"
+                                    }`}
+                                  >
+                                    {isFilled ? "Đã nhập" : "Chưa nhập"}
+                                  </span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
+                                  {row.updatedBy || "-"}
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
+                                  {row.updatedAt || "-"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[15px] font-semibold text-foreground">Danh sách chứng từ</div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1080px]">
+                          <div className="grid grid-cols-[1.7fr_1fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chứng từ", "Loại hiển thị", "Số file", "Hành động", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">
+                                {label}
+                              </div>
+                            ))}
+                          </div>
+                          {visibleCustomsDocumentRows.map((row) => (
+                              <div
+                                key={row.id}
+                                className="grid grid-cols-[1.7fr_1fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
+                              >
+                                <div className="flex min-h-[38px] items-center px-4">{row.documentName}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  DISPLAY_ONLY
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  {row.fileNames.length}
+                                </div>
+                                <div className="flex min-h-[38px] items-center gap-3 px-4">
+                                  <span className="text-[13px] text-muted-foreground">Chỉ hiển thị</span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
+                                  {row.updatedBy || "-"}
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
+                                  {row.updatedAt || "-"}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {customsValidationErrors.length > 0 ? (
+                    <div className="rounded-[10px] border border-[#F3D0B0] bg-[#FFF8F2] px-4 py-3">
+                      <div className="mb-2 text-[14px] font-semibold text-foreground">Danh sách lỗi</div>
+                      <div className="space-y-2">
+                        {customsValidationErrors.map((error) => (
+                          <div key={error.rowId} className="flex items-start gap-2 text-[13px] text-foreground">
+                            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#C75B12]" strokeWidth={1.9} />
+                            <div>
+                              <div>{error.message}</div>
+                              <div className="text-[12px] text-muted-foreground">Dòng liên quan: {error.relatedRow}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div ref={customsAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomsAuditLogOpen((current) => !current)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
+                      <ChevronDown
+                        className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomsAuditLogOpen ? "rotate-180" : ""}`}
+                        strokeWidth={1.8}
+                      />
+                    </button>
+                    {isCustomsAuditLogOpen ? (
+                      <div className="border-t border-[#E7E6E9]">
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[980px]">
+                            <div className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                              {["Hành động", "Trường thay đổi", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                                <div key={label} className="px-4 py-2.5">
+                                  {label}
+                                </div>
+                              ))}
+                            </div>
+                            {visibleCustomsAuditRows.map((row) => (
+                              <div
+                                key={row.id}
+                                className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
+                              >
+                                <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.field}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span className="truncate">{row.beforeValue}</span>
+                                  <span className="mx-2 text-muted-foreground">→</span>
+                                  <span className="truncate">{row.afterValue}</span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isCustomerInlandPage ? (
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+                <input
+                  ref={inlandUploadInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    handleInlandDocumentUpload(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <div className="space-y-3">
+                  <div className="text-[12px] text-muted-foreground">{inlandBreadcrumb}</div>
+
+                  <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
+                      {inlandShipmentMeta.map((item) => (
+                        <div key={item.label} className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{item.label}:</span>
+                          <span className="font-medium text-foreground">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-b border-[#E7E6E9] pb-2">
+                    <div className="inline-flex items-center rounded-[10px] border border-[#E7E6E9] bg-white p-1">
+                      {[
+                        { key: "import" as const, label: "Import" },
+                        { key: "export" as const, label: "Export" }
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setInlandTradeType(tab.key)}
+                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
+                            inlandTradeType === tab.key
+                              ? "bg-[#2054a3] text-white"
+                              : "text-foreground hover:bg-[#F5F7FA]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={saveInlandDraft}
+                        className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        Lưu nháp
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isInlandSubmitDisabled}
+                        onClick={submitInlandModule}
+                        className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                          isInlandSubmitDisabled
+                            ? "cursor-not-allowed bg-[#AABBDD] text-white"
+                            : "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                        }`}
+                      >
+                        Gửi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={refreshInlandTradeType}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Tải lại</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openInlandAuditSection}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <History className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Xem lịch sử</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-[15px] font-semibold text-foreground">Danh sách chi phí</div>
+                    </div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[980px]">
+                          <div className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chi phí", "Số tiền", "Tiền tệ", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">
+                                {label}
+                              </div>
+                            ))}
+                          </div>
+                          {visibleInlandCostRows.map((row) => {
+                            const isFilled = row.amount.trim() !== "";
+                            const isEditing = inlandEditingCostRowId === row.id;
+                            const displayAmount = isEditing
+                              ? inlandCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
+                              : formatCostAmountDisplay(row.amount);
+                            return (
+                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                <div className="flex min-h-[38px] items-center px-4">{row.feeName}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <input
+                                    inputMode="decimal"
+                                    value={displayAmount}
+                                    onFocus={() => focusInlandCostAmount(row.id, row.amount)}
+                                    onChange={(event) => updateInlandCostDraft(row.id, event.target.value)}
+                                    onBlur={() => blurInlandCostAmount(row.id)}
+                                    placeholder="-"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <select
+                                    value={row.currency}
+                                    onChange={(event) =>
+                                      updateInlandCostCurrency(
+                                        row.id,
+                                        event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
+                                      )
+                                    }
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
+                                  >
+                                    {COST_CURRENCY_OPTIONS.map((currency) => (
+                                      <option key={currency} value={currency}>
+                                        {currency}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${isFilled ? "bg-[#EAF7EE] text-[#1F7A35]" : "bg-[#F1F3F5] text-[#68707B]"}`}>
+                                    {isFilled ? "Đã nhập" : "Chưa nhập"}
+                                  </span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedBy || "-"}</div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedAt || "-"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[15px] font-semibold text-foreground">Danh sách chứng từ</div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1220px]">
+                          <div className="grid grid-cols-[1.4fr_0.7fr_0.6fr_1.6fr_1.1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chứng từ", "Bắt buộc", "Số file", "File", "Hành động", "Người upload", "Thời gian upload"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">{label}</div>
+                            ))}
+                          </div>
+                          {visibleInlandDocumentRows.map((row) => {
+                            const isMissing = row.required && row.files.length === 0;
+                            return (
+                              <div key={row.id} className={`grid grid-cols-[1.4fr_0.7fr_0.6fr_1.6fr_1.1fr_0.9fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground ${isMissing ? "bg-[#FFF5F5]" : ""}`}>
+                                <div className="flex min-h-[38px] items-start px-4 py-2">{row.documentName}</div>
+                                <div className={`flex min-h-[38px] items-start px-4 py-2 ${isMissing ? "font-medium text-[#D14343]" : ""}`}>{row.required ? "Yes" : "No"}</div>
+                                <div className={`flex min-h-[38px] items-start px-4 py-2 ${isMissing ? "font-medium text-[#D14343]" : ""}`}>{row.files.length}</div>
+                                <div className="px-4 py-2">
+                                  {row.files.length > 0 ? (
+                                    <div className="space-y-1">
+                                      {row.files.map((file) => (
+                                        <div key={file.id} className="flex items-center justify-between gap-2 text-[12px]">
+                                          <span className="truncate text-foreground">{file.name}</span>
+                                          <span className="shrink-0 text-muted-foreground">{file.sizeLabel}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className={isMissing ? "text-[12px] font-medium text-[#D14343]" : "text-[12px] text-muted-foreground"}>{row.displayMode === "DISPLAY_ONLY" ? "Chỉ hiển thị" : "Chưa có file"}</span>
+                                  )}
+                                </div>
+                                <div className="flex min-h-[38px] items-start gap-3 px-4 py-2">
+                                  {row.displayMode !== "DISPLAY_ONLY" ? (
+                                    <button type="button" onClick={() => openInlandUpload(row.id)} className="text-[13px] font-medium text-[#245698] transition hover:text-[#1b467d]">Tải lên</button>
+                                  ) : (
+                                    <span className="text-[13px] text-muted-foreground">-</span>
+                                  )}
+                                  {row.files.length > 0 ? (
+                                    <>
+                                      <button type="button" onClick={() => downloadInlandDocument(row.id)} className="text-[13px] font-medium text-[#245698] transition hover:text-[#1b467d]">Download</button>
+                                      <button type="button" onClick={() => deleteInlandDocumentFiles(row.id)} className="text-[13px] font-medium text-[#C75B12] transition hover:text-[#A6480C]">Delete</button>
+                                    </>
+                                  ) : null}
+                                </div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.uploadedBy || "-"}</div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.uploadedAt || "-"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {inlandValidationErrors.length > 0 ? (
+                    <div className="rounded-[10px] border border-[#F3D0B0] bg-[#FFF8F2] px-4 py-3">
+                      <div className="mb-2 text-[14px] font-semibold text-foreground">Danh sách lỗi cần xử lý</div>
+                      <div className="space-y-2">
+                        {inlandValidationErrors.map((error) => (
+                          <div key={error.rowId} className="flex items-start gap-2 text-[13px] text-foreground">
+                            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#C75B12]" strokeWidth={1.9} />
+                            <div>
+                              <div>{error.message}</div>
+                              <div className="text-[12px] text-muted-foreground">Dòng liên quan: {error.relatedRow}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div ref={inlandAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setIsInlandAuditLogOpen((current) => !current)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isInlandAuditLogOpen ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                    </button>
+                    {isInlandAuditLogOpen ? (
+                      <div className="border-t border-[#E7E6E9]">
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[980px]">
+                            <div className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                              {["Hành động", "Đối tượng", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                                <div key={label} className="px-4 py-2.5">{label}</div>
+                              ))}
+                            </div>
+                            {visibleInlandAuditRows.map((row) => (
+                              <div key={row.id} className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.target}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span className="truncate">{row.beforeValue}</span>
+                                  <span className="mx-2 text-muted-foreground">→</span>
+                                  <span className="truncate">{row.afterValue}</span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {isCustomerOverseaPage ? (
+              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+                <div className="space-y-3">
+                  <div className="text-[12px] text-muted-foreground">{overseaBreadcrumb}</div>
+
+                  <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
+                      {overseaShipmentMeta.map((item) => (
+                        <div key={item.label} className="flex items-center gap-2">
+                          <span className="text-muted-foreground">{item.label}:</span>
+                          <span className="font-medium text-foreground">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 border-b border-[#E7E6E9] pb-2">
+                    <div className="inline-flex items-center rounded-[10px] border border-[#E7E6E9] bg-white p-1">
+                      {[
+                        { key: "import" as const, label: "Import" },
+                        { key: "export" as const, label: "Export" }
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setOverseaTradeType(tab.key)}
+                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
+                            overseaTradeType === tab.key
+                              ? "bg-[#2054a3] text-white"
+                              : "text-foreground hover:bg-[#F5F7FA]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={saveOverseaDraft}
+                        className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        Lưu nháp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={submitOverseaModule}
+                        className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                      >
+                        Gửi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={refreshOverseaTradeType}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Tải lại</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openOverseaAuditSection}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <History className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Xem lịch sử</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-3">
+                    <div className="mb-2 text-[15px] font-semibold text-foreground">Trạng thái hoàn tất</div>
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
+                      <div>Tổng chi phí: <span className="font-semibold">{visibleOverseaCostRows.length} dòng</span></div>
+                      <div>Đã nhập: <span className="font-semibold">{overseaEnteredCostCount}</span></div>
+                      <div>Chứng từ bắt buộc: <span className="font-semibold">{overseaRequiredDocumentCount}</span></div>
+                      <div>Đã hoàn thành: <span className="font-semibold">{overseaCompletedDocumentCount}</span></div>
+                      <div>% hoàn tất: <span className="font-semibold">{overseaCompletionPercent}%</span></div>
+                    </div>
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#E7EAF0]">
+                      <div className="h-full rounded-full bg-[#2054a3]" style={{ width: `${overseaCompletionPercent}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[15px] font-semibold text-foreground">Danh sách chi phí</div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[980px]">
+                          <div className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chi phí", "Số tiền", "Tiền tệ", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">{label}</div>
+                            ))}
+                          </div>
+                          {visibleOverseaCostRows.map((row) => {
+                            const isFilled = row.amount.trim() !== "";
+                            const isEditing = overseaEditingCostRowId === row.id;
+                            const displayAmount = isEditing
+                              ? overseaCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
+                              : formatCostAmountDisplay(row.amount);
+                            return (
+                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                <div className={`flex min-h-[38px] items-center px-4 ${row.emphasized ? "font-semibold" : ""}`}>{row.feeName}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <input
+                                    inputMode="decimal"
+                                    value={displayAmount}
+                                    onFocus={() => focusOverseaCostAmount(row.id, row.amount)}
+                                    onChange={(event) => updateOverseaCostDraft(row.id, event.target.value)}
+                                    onBlur={() => blurOverseaCostAmount(row.id)}
+                                    placeholder="-"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <select
+                                    value={row.currency}
+                                    onChange={(event) =>
+                                      updateOverseaCostCurrency(
+                                        row.id,
+                                        event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
+                                      )
+                                    }
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
+                                  >
+                                    {COST_CURRENCY_OPTIONS.map((currency) => (
+                                      <option key={currency} value={currency}>
+                                        {currency}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${isFilled ? "bg-[#EAF7EE] text-[#1F7A35]" : "bg-[#F1F3F5] text-[#68707B]"}`}>
+                                    {isFilled ? "Đã nhập" : "Chưa nhập"}
+                                  </span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedBy || "-"}</div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedAt || "-"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="text-[15px] font-semibold text-foreground">Danh sách chứng từ</div>
+                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[1080px]">
+                          <div className="grid grid-cols-[1.4fr_0.9fr_0.6fr_1fr_1.2fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                            {["Tên chứng từ", "Loại hiển thị", "Số file", "Hành động", "Ghi chú", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                              <div key={label} className="px-4 py-2.5">{label}</div>
+                            ))}
+                          </div>
+                          {visibleOverseaDocumentRows.map((row) => {
+                            return (
+                              <div key={row.id} className="grid grid-cols-[1.4fr_0.9fr_0.6fr_1fr_1.2fr_0.9fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                <div className="flex min-h-[38px] items-start px-4 py-2">{row.documentName}</div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2">DISPLAY_ONLY</div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2">0</div>
+                                <div className="flex min-h-[38px] items-start gap-3 px-4 py-2">
+                                  <span className="text-muted-foreground">Chỉ hiển thị</span>
+                                </div>
+                                <div className="px-4 py-2">
+                                  <div className="text-[#4B5563]">{row.note || "-"}</div>
+                                </div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.updatedBy || "-"}</div>
+                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.updatedAt || "-"}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div ref={overseaAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setIsOverseaAuditLogOpen((current) => !current)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                    >
+                      <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
+                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOverseaAuditLogOpen ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                    </button>
+                    {isOverseaAuditLogOpen ? (
+                      <div className="border-t border-[#E7E6E9]">
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[980px]">
+                            <div className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                              {["Hành động", "Trường thay đổi", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                                <div key={label} className="px-4 py-2.5">{label}</div>
+                              ))}
+                            </div>
+                            {visibleOverseaAuditRows.map((row) => (
+                              <div key={row.id} className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.field}</div>
+                                <div className="flex min-h-[38px] items-center px-4">
+                                  <span className="truncate">{row.beforeValue}</span>
+                                  <span className="mx-2 text-muted-foreground">→</span>
+                                  <span className="truncate">{row.afterValue}</span>
+                                </div>
+                                <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
+                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             {isServiceDetailsPage && selectedServiceDetailScope ? (
