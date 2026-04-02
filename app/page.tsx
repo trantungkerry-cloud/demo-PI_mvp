@@ -4,6 +4,9 @@ import Image from "next/image";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowUp,
   ArrowDownWideNarrow,
   BadgeDollarSign,
   Calculator,
@@ -37,6 +40,7 @@ import {
   Settings2,
   ShieldAlert,
   UsersRound,
+  ShipWheel,
   ShieldPlus,
   Copy,
   Star,
@@ -53,7 +57,7 @@ type SidebarGroup = {
   title: string;
   open?: boolean;
   active?: boolean;
-  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "settings" | "documents";
+  icon: "export" | "import" | "pricing" | "operations" | "customers" | "services" | "settings" | "documents" | "shipment";
   items?: { label: string; icon: SidebarIconName; active?: boolean }[];
 };
 
@@ -167,35 +171,226 @@ function buildCostAuditValue(amount: string, currency: string) {
   return amount ? `${formatCostAmountDisplay(amount)} ${currency}` : "Trống";
 }
 
-function createInitialCustomsCostRows(tradeType: CustomsTradeType): CustomsCostRow[] {
-  const baseRows = [
-    "Phí mở tờ khai hải quan",
-    "Phụ phí tờ khai nhánh",
-    "Phụ phí kiểm hóa",
-    "Phụ phí thông quan ngoài giờ",
-    "Phụ phí sửa tờ khai sau thông quan",
-    "Phụ phí hủy tờ khai hải quan"
-  ];
+function parseVietnameseNumber(value: string) {
+  if (!value.trim()) {
+    return 0;
+  }
 
-  return baseRows.map((feeName, index) => ({
+  const normalized = value.replace(/\./g, "").replace(/,/g, ".").replace(/[^\d.-]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatVietnameseInteger(value: number) {
+  if (!Number.isFinite(value) || value === 0) {
+    return "";
+  }
+
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 0
+  }).format(Math.round(value));
+}
+
+function normalizeVatRateValue(value: string) {
+  const normalized = value.replace(/[^\d.]/g, "");
+  return normalized ? `${normalized}%` : "";
+}
+
+function recalculateCustomsDebitRow(row: CustomsCostRow): CustomsCostRow {
+  const quantity = parseVietnameseNumber(row.quantity);
+  const price = parseVietnameseNumber(row.price);
+  const vatRate = parseVietnameseNumber(row.vatRate);
+  const amountValue = quantity * price;
+  const vatValue = amountValue * (vatRate / 100);
+  const totalValue = amountValue + vatValue;
+
+  return {
+    ...row,
+    amount: amountValue > 0 ? formatVietnameseInteger(amountValue) : "",
+    vatAmount: vatValue > 0 ? formatVietnameseInteger(vatValue) : "",
+    total: totalValue > 0 ? formatVietnameseInteger(totalValue) : ""
+  };
+}
+
+function createInitialCustomsCostRows(tradeType: CustomsTradeType): CustomsCostRow[] {
+  const importRows = [
+    {
+      feeName: "Phí mở tờ khai hải quan",
+      quantity: "1",
+      unit: "Tờ khai",
+      price: "550.000",
+      amount: "550.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "44.000",
+      total: "594.000"
+    },
+    {
+      feeName: "Phụ phí tờ khai nhánh",
+      quantity: "2",
+      unit: "Tờ khai",
+      price: "350.000",
+      amount: "700.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "56.000",
+      total: "756.000"
+    },
+    {
+      feeName: "Phụ phí kiểm hóa",
+      quantity: "1",
+      unit: "Lô hàng",
+      price: "480.000",
+      amount: "480.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "38.400",
+      total: "518.400"
+    },
+    {
+      feeName: "Phụ phí thông quan ngoài giờ",
+      quantity: "1",
+      unit: "Lần",
+      price: "620.000",
+      amount: "620.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "49.600",
+      total: "669.600"
+    },
+    {
+      feeName: "Phụ phí sửa tờ khai sau thông quan",
+      quantity: "1",
+      unit: "Tờ khai",
+      price: "420.000",
+      amount: "420.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "33.600",
+      total: "453.600"
+    },
+    {
+      feeName: "Phụ phí hủy tờ khai hải quan",
+      quantity: "",
+      unit: "",
+      price: "",
+      amount: "",
+      currency: "VND",
+      vatRate: "",
+      vatAmount: "",
+      total: ""
+    }
+  ] as const;
+
+  const exportRows = [
+    {
+      feeName: "Phí mở tờ khai hải quan",
+      quantity: "1",
+      unit: "Tờ khai",
+      price: "500.000",
+      amount: "500.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "40.000",
+      total: "540.000"
+    },
+    {
+      feeName: "Phụ phí tờ khai nhánh",
+      quantity: "1",
+      unit: "Tờ khai",
+      price: "320.000",
+      amount: "320.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "25.600",
+      total: "345.600"
+    },
+    {
+      feeName: "Phụ phí kiểm hóa",
+      quantity: "1",
+      unit: "Lô hàng",
+      price: "450.000",
+      amount: "450.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "36.000",
+      total: "486.000"
+    },
+    {
+      feeName: "Phụ phí thông quan ngoài giờ",
+      quantity: "",
+      unit: "",
+      price: "",
+      amount: "",
+      currency: "VND",
+      vatRate: "",
+      vatAmount: "",
+      total: ""
+    },
+    {
+      feeName: "Phụ phí sửa tờ khai sau thông quan",
+      quantity: "1",
+      unit: "Tờ khai",
+      price: "390.000",
+      amount: "390.000",
+      currency: "VND",
+      vatRate: "8%",
+      vatAmount: "31.200",
+      total: "421.200"
+    },
+    {
+      feeName: "Phụ phí hủy tờ khai hải quan",
+      quantity: "",
+      unit: "",
+      price: "",
+      amount: "",
+      currency: "VND",
+      vatRate: "",
+      vatAmount: "",
+      total: ""
+    }
+  ] as const;
+
+  const rows = tradeType === "import" ? importRows : exportRows;
+
+  return rows.map((row, index) => ({
     id: `${tradeType}-cost-${index + 1}`,
-    feeName,
-    amount: index < 2 ? String((index + 1) * 250000) : "",
-    currency: "VND",
-    updatedBy: index < 2 ? "An Phạm" : "",
-    updatedAt: index < 2 ? `12/03/2026 ${index === 0 ? "09:15" : "10:42"}` : ""
+    ...row,
+    updatedBy: row.amount ? "An Phạm" : "",
+    updatedAt: row.amount ? `12/03/2026 ${String(9 + index).padStart(2, "0")}:15` : ""
   }));
 }
 
 function createInitialCustomsDocumentRows(tradeType: CustomsTradeType): CustomsDocumentRow[] {
-  const names = [{ name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: [] }];
+  const importNames = [
+    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] },
+    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
+    {
+      name: "Các chứng từ khách hàng cung cấp (INV, PKL, BL, AN, DEBIT, giấy phép...)",
+      mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode,
+      files: []
+    },
+    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] }
+  ];
+  const exportNames = [
+    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] },
+    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] },
+    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
+    {
+      name: "Các chứng từ khách hàng cung cấp (INV, PKL, BOOKING...)",
+      mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode,
+      files: []
+    }
+  ];
+
+  const names = tradeType === "import" ? importNames : exportNames;
 
   return names.map((item, index) => ({
     id: `${tradeType}-document-${index + 1}`,
     documentName: item.name,
     displayMode: item.mode,
     fileNames: item.files,
-    updatedBy: item.files.length > 0 ? "An Phạm" : "",
+    updatedBy: item.files.length > 0 ? "Hệ thống" : "",
     updatedAt: item.files.length > 0 ? "12/03/2026 11:08" : ""
   }));
 }
@@ -426,7 +621,7 @@ type CustomerListFilterConfig = {
 };
 type CustomerListFilterState = Record<CustomerListFilterKey, string[]>;
 type CustomerAccountStatus = "draft" | "active" | "locked";
-type CustomerSubPage = "list" | "contracts" | "services" | "customs" | "inland" | "oversea" | "create" | "create-contract";
+type CustomerSubPage = "list" | "contracts" | "services" | "shipments" | "create" | "create-contract";
 type CustomerService =
   | "Ocean FCL"
   | "Ocean LCL"
@@ -479,11 +674,19 @@ type ToastState = {
   message: string;
 } | null;
 type CustomsTradeType = "import" | "export";
+type CustomsDebitNoteStatus = "draft" | "pending_confirmation" | "confirmed";
 type CustomsCostRow = {
   id: string;
   feeName: string;
+  quantity: string;
+  unit: string;
+  price: string;
   amount: string;
   currency: string;
+  vatRate: string;
+  vatAmount: string;
+  total: string;
+  isPlaceholder?: boolean;
   updatedBy: string;
   updatedAt: string;
 };
@@ -772,13 +975,6 @@ function buildEnglishCustomerName(customerName: string) {
 
 const sidebarGroups: SidebarGroup[] = [
   {
-    title: "Xuất khẩu",
-    icon: "export",
-    active: true
-  },
-  { title: "Nhập khẩu", icon: "import" },
-  { title: "Module tính phí", icon: "pricing" },
-  {
     title: "Quản lý khách hàng",
     icon: "customers",
     items: [
@@ -788,15 +984,9 @@ const sidebarGroups: SidebarGroup[] = [
     ]
   },
   {
-    title: "Hóa đơn/Chứng từ",
-    icon: "documents",
-    items: [
-      { label: "Customs (Hải quan)", icon: "description" },
-      { label: "Inland (Nội địa)", icon: "folder" },
-      { label: "Oversea (Quốc tế)", icon: "history" }
-    ]
-  },
-  { title: "Cài đặt", icon: "settings" }
+    title: "Quản lý Shipment",
+    icon: "shipment"
+  }
 ];
 
 const tabs = ["Nháp", "Đang chờ xác nhận", "Đã xác nhận"];
@@ -1424,6 +1614,22 @@ const initialAdvancedFilterState: AdvancedFilterState = {
   cargoTypes: [],
   packaging: []
 };
+
+const shipmentDetailPolOptions = [
+  { value: "HPH — Hai Phong", label: "HPH — Hai Phong", flag: "🇻🇳", meta: "Hai Phong · Vietnam" },
+  { value: "SGN — Ho Chi Minh", label: "SGN — Ho Chi Minh", flag: "🇻🇳", meta: "Ho Chi Minh · Vietnam" },
+  { value: "DAD — Da Nang", label: "DAD — Da Nang", flag: "🇻🇳", meta: "Da Nang · Vietnam" },
+  { value: "CNSHA — Shanghai", label: "CNSHA — Shanghai", flag: "🇨🇳", meta: "Shanghai · China" },
+  { value: "SGSIN — Singapore", label: "SGSIN — Singapore", flag: "🇸🇬", meta: "Singapore · Singapore" }
+] satisfies Array<SelectOption & { flag: string; meta: string }>;
+
+const shipmentDetailPodOptions = [
+  { value: "LCB — Laem Chabang", label: "LCB — Laem Chabang", flag: "🇹🇭", meta: "Laem Chabang · Thailand" },
+  { value: "BKK — Bangkok", label: "BKK — Bangkok", flag: "🇹🇭", meta: "Bangkok · Thailand" },
+  { value: "PHMNL — Manila", label: "PHMNL — Manila", flag: "🇵🇭", meta: "Manila · Philippines" },
+  { value: "HKHKG — Hong Kong", label: "HKHKG — Hong Kong", flag: "🇭🇰", meta: "Hong Kong · Hong Kong" },
+  { value: "JPTYO — Tokyo", label: "JPTYO — Tokyo", flag: "🇯🇵", meta: "Tokyo · Japan" }
+] satisfies Array<SelectOption & { flag: string; meta: string }>;
 const initialCustomerListFilterState: CustomerListFilterState = {
   contacts: [],
   companies: [],
@@ -1968,6 +2174,10 @@ function SidebarGroupIcon({
     return <FileText className={common} strokeWidth={1.8} />;
   }
 
+  if (icon === "shipment") {
+    return <ShipWheel className={common} strokeWidth={1.8} />;
+  }
+
   return <Settings2 className={common} strokeWidth={1.8} />;
 }
 
@@ -2272,7 +2482,8 @@ function FormField({
   variant = "default",
   allowWrapWhenReadOnly = false,
   autoSelectFirstOption = true,
-  matchDropdownWidth = false
+  matchDropdownWidth = false,
+  labelWidthClass = "grid-cols-[144px_minmax(0,1fr)]"
 }: {
   label: string;
   value: string;
@@ -2287,6 +2498,7 @@ function FormField({
   allowWrapWhenReadOnly?: boolean;
   autoSelectFirstOption?: boolean;
   matchDropdownWidth?: boolean;
+  labelWidthClass?: string;
 }) {
   const isInlineUnderline = variant === "inlineUnderline";
   const [isCustomSelectOpen, setIsCustomSelectOpen] = useState(false);
@@ -2478,8 +2690,8 @@ function FormField({
   if (isInlineUnderline) {
     return (
       <div className="space-y-2">
-        <div className="grid grid-cols-[144px_minmax(0,1fr)] items-center gap-4 px-0 py-0">
-          <div className="py-2 pr-4 text-[15px] font-semibold text-foreground">
+        <div className={`grid items-center gap-4 px-0 py-0 ${labelWidthClass}`}>
+          <div className="whitespace-nowrap py-2 pr-4 text-[15px] font-semibold text-foreground">
             {label}
           </div>
           <div className={`min-w-0 border-b border-transparent transition-colors ${readOnly ? "" : "focus-within:border-black"}`}>
@@ -2504,17 +2716,19 @@ function InlineFieldShell({
   label,
   error,
   children,
-  readOnly = false
+  readOnly = false,
+  labelWidthClass = "grid-cols-[144px_minmax(0,1fr)]"
 }: {
   label: string;
   error?: string;
   children: React.ReactNode;
   readOnly?: boolean;
+  labelWidthClass?: string;
 }) {
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-[144px_minmax(0,1fr)] items-center gap-4 px-0 py-0">
-        <div className="py-2 pr-4 text-[15px] font-semibold text-foreground">{label}</div>
+      <div className={`grid items-center gap-4 px-0 py-0 ${labelWidthClass}`}>
+        <div className="whitespace-nowrap py-2 pr-4 text-[15px] font-semibold text-foreground">{label}</div>
         <div className={`min-w-0 border-b border-transparent transition-colors ${readOnly ? "" : "focus-within:border-black"}`}>
           {children}
         </div>
@@ -3186,6 +3400,19 @@ export default function Page() {
   const [selectedSearchGroupOptions, setSelectedSearchGroupOptions] = useState<string[]>([]);
   const [isCustomerImportModalOpen, setIsCustomerImportModalOpen] = useState(false);
   const [isContractImportModalOpen, setIsContractImportModalOpen] = useState(false);
+  const [isCustomsDebitNoteOpen, setIsCustomsDebitNoteOpen] = useState(false);
+  const [isCustomsDebitNotePreviewOpen, setIsCustomsDebitNotePreviewOpen] = useState(false);
+  const [isCustomsPaymentRequestOpen, setIsCustomsPaymentRequestOpen] = useState(false);
+  const [customsDebitNoteStatusByType, setCustomsDebitNoteStatusByType] = useState<
+    Record<CustomsTradeType, CustomsDebitNoteStatus>
+  >({
+    import: "draft",
+    export: "draft"
+  });
+  const [customsDebitNoteForcedRowIds, setCustomsDebitNoteForcedRowIds] = useState<Record<CustomsTradeType, string[]>>({
+    import: [],
+    export: []
+  });
   const [selectedRowCodes, setSelectedRowCodes] = useState<string[]>([]);
   const [selectedCustomerRowKeys, setSelectedCustomerRowKeys] = useState<string[]>([]);
   const [destinationOpenSignal, setDestinationOpenSignal] = useState(0);
@@ -3201,6 +3428,31 @@ export default function Page() {
   const [selectedServiceScope, setSelectedServiceScope] =
     useState<(typeof contractDisplayServiceOptions)[number]>(servicePageScopeOptions[0]);
   const [selectedServiceDetailKey, setSelectedServiceDetailKey] = useState<string | null>(null);
+  const [shipmentWorkspaceTab, setShipmentWorkspaceTab] =
+    useState<"details" | "customs" | "inland" | "oversea">("details");
+  const [shipmentDetailDirection, setShipmentDetailDirection] = useState<"export" | "import">("export");
+  const [shipmentDetailCargoType, setShipmentDetailCargoType] = useState<"FCL" | "LCL">("FCL");
+  const [shipmentDetailEta, setShipmentDetailEta] = useState("");
+  const [shipmentDetailEtd, setShipmentDetailEtd] = useState("");
+  const [shipmentDetailAssignedStaff, setShipmentDetailAssignedStaff] = useState("");
+  const [shipmentDetailCustomerName, setShipmentDetailCustomerName] = useState("YAMAHA MOTOR VIETNAM CO., LTD");
+  const [shipmentDetailCustomerContact, setShipmentDetailCustomerContact] = useState("Ms. Tra");
+  const [shipmentDetailCustomerAddress, setShipmentDetailCustomerAddress] = useState(
+    "Lot 48-54 & Lot 59-68 Noibai Industrial Zone, Quang Tien Ward, Soc Son Dist, Hanoi, Vietnam"
+  );
+  const [shipmentDetailPol, setShipmentDetailPol] = useState("HPH — Hai Phong");
+  const [shipmentDetailPolSub, setShipmentDetailPolSub] = useState("Hai Phong · Vietnam");
+  const [shipmentDetailPod, setShipmentDetailPod] = useState("LCB — Laem Chabang");
+  const [shipmentDetailPodSub, setShipmentDetailPodSub] = useState("Laem Chabang · Thailand");
+  const [shipmentDetailCommodity, setShipmentDetailCommodity] = useState("YAMAHA MOTORCYCLE");
+  const [shipmentDetailBookingNo, setShipmentDetailBookingNo] = useState("080600055654");
+  const [shipmentDetailShipmentDate, setShipmentDetailShipmentDate] = useState("2026-04-01");
+  const [shipmentDetailNumber, setShipmentDetailNumber] = useState("SHP-2025-0047");
+  const [shipmentDetailCreatedAt, setShipmentDetailCreatedAt] = useState("2024-12-27");
+  const [shipmentDetailCreatedBy, setShipmentDetailCreatedBy] = useState("Nguyen Van A — CS");
+  const [shipmentDetailInternalNote, setShipmentDetailInternalNote] = useState("");
+  const [shipmentDetailExternalNote, setShipmentDetailExternalNote] = useState("");
+  const [shipmentDetailAttachments, setShipmentDetailAttachments] = useState<{ id: string; name: string; sizeLabel: string }[]>([]);
   const [customsTradeType, setCustomsTradeType] = useState<CustomsTradeType>("import");
   const [inlandTradeType, setInlandTradeType] = useState<CustomsTradeType>("import");
   const [customsCostRowsByType, setCustomsCostRowsByType] = useState<Record<CustomsTradeType, CustomsCostRow[]>>({
@@ -3262,6 +3514,7 @@ export default function Page() {
   const overseaAuditSectionRef = useRef<HTMLDivElement | null>(null);
   const [activeOverseaUploadRowId, setActiveOverseaUploadRowId] = useState<string | null>(null);
   const [isOverseaUploadingRowId, setIsOverseaUploadingRowId] = useState<string | null>(null);
+  const shipmentDetailUploadInputRef = useRef<HTMLInputElement | null>(null);
   const initialServiceDetailFeeForm: ServiceDetailFeeRowState = {
     feeType: "",
     unit: "",
@@ -3453,9 +3706,11 @@ export default function Page() {
     currentPage === "customers" && customerSubPage === "contracts" && !selectedContractCode;
   const isCustomerServicesPage =
     currentPage === "customers" && customerSubPage === "services" && !selectedServiceDetailKey;
-  const isCustomerCustomsPage = currentPage === "customers" && customerSubPage === "customs";
-  const isCustomerInlandPage = currentPage === "customers" && customerSubPage === "inland";
-  const isCustomerOverseaPage = currentPage === "customers" && customerSubPage === "oversea";
+  const isCustomerShipmentPage = currentPage === "customers" && customerSubPage === "shipments";
+  const isCustomerCustomsPage = isCustomerShipmentPage && shipmentWorkspaceTab === "customs";
+  const isCustomerInlandPage = isCustomerShipmentPage && shipmentWorkspaceTab === "inland";
+  const isCustomerOverseaPage = isCustomerShipmentPage && shipmentWorkspaceTab === "oversea";
+  const isCustomerShipmentDetailsPage = isCustomerShipmentPage && shipmentWorkspaceTab === "details";
   const isServiceDetailsPage =
     currentPage === "customers" && customerSubPage === "services" && !!selectedServiceDetailKey;
   const isCustomerDetailsPage = currentPage === "customers" && customerSubPage === "list" && !!selectedCustomerKey;
@@ -4225,6 +4480,8 @@ export default function Page() {
         ? `${selectedBookingCode} | PI Digital`
         : isBookingListPage
           ? "Danh sách yêu cầu Booking | PI Digital"
+          : isCustomerShipmentDetailsPage
+            ? "Shipment Detail | PI Digital"
           : isCustomerCustomsPage
             ? "Customs (Hải quan) | PI Digital"
             : isCustomerInlandPage
@@ -4255,6 +4512,8 @@ export default function Page() {
         ? `Chi tiết yêu cầu booking ${selectedBookingCode} trong hệ thống PI Digital.`
         : isBookingListPage
           ? "Danh sách yêu cầu booking trong hệ thống PI Digital."
+          : isCustomerShipmentDetailsPage
+            ? "Màn hình tổng quan shipment trong hệ thống PI Digital."
           : isCustomerCustomsPage
             ? "Màn hình vận hành hải quan cho shipment trong hệ thống PI Digital."
             : isCustomerInlandPage
@@ -4289,6 +4548,7 @@ export default function Page() {
     isBookingDetailsPage,
     isBookingListPage,
     isCreatePage,
+    isCustomerShipmentDetailsPage,
     isCustomerCustomsPage,
     isCustomerInlandPage,
     isCustomerOverseaPage,
@@ -4417,6 +4677,33 @@ export default function Page() {
   const visibleCustomsCostRows = customsCostRowsByType[customsTradeType];
   const visibleCustomsDocumentRows = customsDocumentRowsByType[customsTradeType];
   const visibleCustomsAuditRows = customsAuditRowsByType[customsTradeType];
+  const activeCustomsDebitNoteStatus = customsDebitNoteStatusByType[customsTradeType];
+  const customsDebitNoteSteps = [
+    { key: "draft" as const, label: "Nháp" },
+    { key: "pending_confirmation" as const, label: "Chờ xác nhận" },
+    { key: "confirmed" as const, label: "Đã xác nhận" }
+  ];
+  const activeCustomsDebitNoteStepIndex = customsDebitNoteSteps.findIndex(
+    (step) => step.key === activeCustomsDebitNoteStatus
+  );
+  const visibleCustomsDebitNoteRows = visibleCustomsCostRows.filter(
+    (row) =>
+      customsDebitNoteForcedRowIds[customsTradeType].includes(row.id) ||
+      [
+        row.feeName,
+        row.quantity,
+        row.unit,
+        row.price,
+        row.amount,
+        row.vatRate,
+        row.vatAmount,
+        row.total
+      ].some((value) => value.trim() !== "")
+  );
+  const customsDebitNoteGrandTotal = formatVietnameseInteger(
+    visibleCustomsDebitNoteRows.reduce((sum, row) => sum + parseVietnameseNumber(row.total), 0)
+  );
+  const customsPaymentRequestRows = visibleCustomsDebitNoteRows.slice(0, 8);
   const customsValidationErrors = visibleCustomsDocumentRows
     .filter((row) => row.displayMode === "ATTACHMENT_REQUIRED" && row.fileNames.length === 0)
     .map((row) => ({
@@ -4479,6 +4766,8 @@ export default function Page() {
       ? "Thêm mới"
       : isCustomerContractCreatePage
         ? "Hợp đồng"
+        : isCustomerShipmentDetailsPage
+          ? "Shipment Details"
         : isCustomerCustomsPage
           ? "Customs (Hải quan)"
           : isCustomerInlandPage
@@ -4501,6 +4790,340 @@ export default function Page() {
       : selectedBookingCode
         ? selectedBookingCode
         : "Danh sách yêu cầu Booking";
+  const shipmentWorkspaceTabs = [
+    { key: "details" as const, label: "Shipment Details" },
+    { key: "customs" as const, label: "Customs" },
+    { key: "inland" as const, label: "Inland" },
+    { key: "oversea" as const, label: "Oversea" }
+  ];
+  const shipmentDetailsBreadcrumb = "Home / Shipments / Shipment Detail";
+  const currentShipmentBreadcrumb = isCustomerCustomsPage
+    ? customsBreadcrumb
+    : isCustomerInlandPage
+      ? inlandBreadcrumb
+      : isCustomerOverseaPage
+        ? overseaBreadcrumb
+        : shipmentDetailsBreadcrumb;
+  const shipmentDetailWorkflowSteps = ["Nháp", "Xác nhận", "Đang thực hiện", "Hoàn thành", "Hủy"] as const;
+  const shipmentDetailStaffOptions: SelectOption[] = [
+    { label: "Nguyen Van A — CS", value: "Nguyen Van A — CS" },
+    { label: "An Phạm — CS", value: "An Phạm — CS" },
+    { label: "Tran Minh Duc — CS", value: "Tran Minh Duc — CS" }
+  ];
+  const shipmentDetailCharges: Array<{
+    group: string;
+    rows: Array<{
+      code: string;
+      name: string;
+      location: string;
+      unit: string;
+      currency: string;
+      price: string;
+      containerType: string;
+      quantity: string;
+      total: string;
+    }>;
+    addLabel: string;
+  }> = [
+    {
+      group: "Ocean freight (OF)",
+      rows: [
+        {
+          code: "OF",
+          name: "Ocean Freight",
+          location: "OF",
+          unit: "Per container",
+          currency: "USD",
+          price: "260",
+          containerType: "20' DC",
+          quantity: "1",
+          total: "$260"
+        }
+      ],
+      addLabel: "Thêm phí OF"
+    },
+    {
+      group: "Local charges — POL & POD",
+      rows: [
+        {
+          code: "THC",
+          name: "Terminal Handling Charge",
+          location: "POL",
+          unit: "Per container",
+          currency: "USD",
+          price: "140",
+          containerType: "20' DC",
+          quantity: "1",
+          total: "$140"
+        },
+        {
+          code: "CLN",
+          name: "Container Cleaning Fee",
+          location: "POL",
+          unit: "Per container",
+          currency: "USD",
+          price: "10",
+          containerType: "20' DC",
+          quantity: "1",
+          total: "$10"
+        },
+        {
+          code: "BL",
+          name: "Bill of Lading Fee",
+          location: "POL",
+          unit: "Per bill",
+          currency: "USD",
+          price: "40",
+          containerType: "20' DC",
+          quantity: "1",
+          total: "$40"
+        },
+        {
+          code: "TR",
+          name: "Telex Release Fee",
+          location: "POL",
+          unit: "Per bill",
+          currency: "USD",
+          price: "30",
+          containerType: "20' DC",
+          quantity: "1",
+          total: "$30"
+        },
+        {
+          code: "THC",
+          name: "Terminal Handling Charge",
+          location: "POD",
+          unit: "Per container",
+          currency: "USD",
+          price: "150",
+          containerType: "40' DC",
+          quantity: "1",
+          total: "$150"
+        },
+        {
+          code: "CIC",
+          name: "Container Imbalance Charge",
+          location: "POD",
+          unit: "Per container",
+          currency: "USD",
+          price: "20",
+          containerType: "40' DC",
+          quantity: "1",
+          total: "$20"
+        },
+        {
+          code: "DO",
+          name: "Delivery Order Fee",
+          location: "POD",
+          unit: "Per bill",
+          currency: "USD",
+          price: "45",
+          containerType: "40' DC",
+          quantity: "1",
+          total: "$45"
+        },
+        {
+          code: "TRK",
+          name: "Trucking Fee (POD → Warehouse)",
+          location: "POD",
+          unit: "Per trip",
+          currency: "USD",
+          price: "400",
+          containerType: "40' DC",
+          quantity: "1",
+          total: "$400"
+        }
+      ],
+      addLabel: "Thêm phí Local"
+    }
+  ];
+  const shipmentDetailLclCharges: Array<{
+    group: string;
+    rows: Array<{
+      code: string;
+      name: string;
+      location: string;
+      unit: string;
+      currency: string;
+      price: string;
+      minCharge: string;
+      cbm: string;
+      ton: string;
+      wm: string;
+    }>;
+    addLabel: string;
+  }> = [
+    {
+      group: "Ocean freight (OF)",
+      rows: [
+        {
+          code: "OF",
+          name: "Ocean Freight",
+          location: "OF",
+          unit: "Per W/M",
+          currency: "USD",
+          price: "",
+          minCharge: "50",
+          cbm: "0.00",
+          ton: "0.000",
+          wm: "auto"
+        }
+      ],
+      addLabel: "Thêm phí OF"
+    },
+    {
+      group: "Local charges — POL & POD",
+      rows: [
+        {
+          code: "THC",
+          name: "Terminal Handling Charge",
+          location: "POL",
+          unit: "Per W/M",
+          currency: "USD",
+          price: "",
+          minCharge: "30",
+          cbm: "0.00",
+          ton: "0.000",
+          wm: "auto"
+        },
+        {
+          code: "CFS",
+          name: "CFS Handling Fee",
+          location: "POL",
+          unit: "Per W/M",
+          currency: "USD",
+          price: "",
+          minCharge: "20",
+          cbm: "0.00",
+          ton: "0.000",
+          wm: "auto"
+        },
+        {
+          code: "BL",
+          name: "Bill of Lading Fee",
+          location: "POL",
+          unit: "Per bill",
+          currency: "USD",
+          price: "",
+          minCharge: "N/A",
+          cbm: "",
+          ton: "",
+          wm: "không áp dụng W/M"
+        },
+        {
+          code: "TR",
+          name: "Telex Release Fee",
+          location: "POL",
+          unit: "Per bill",
+          currency: "USD",
+          price: "",
+          minCharge: "N/A",
+          cbm: "",
+          ton: "",
+          wm: "không áp dụng W/M"
+        },
+        {
+          code: "THC",
+          name: "Terminal Handling Charge",
+          location: "POD",
+          unit: "Per W/M",
+          currency: "USD",
+          price: "",
+          minCharge: "30",
+          cbm: "0.00",
+          ton: "0.000",
+          wm: "auto"
+        },
+        {
+          code: "CFS",
+          name: "CFS Destuffing Fee",
+          location: "POD",
+          unit: "Per W/M",
+          currency: "USD",
+          price: "",
+          minCharge: "25",
+          cbm: "0.00",
+          ton: "0.000",
+          wm: "auto"
+        },
+        {
+          code: "DO",
+          name: "Delivery Order Fee",
+          location: "POD",
+          unit: "Per bill",
+          currency: "USD",
+          price: "",
+          minCharge: "N/A",
+          cbm: "",
+          ton: "",
+          wm: "không áp dụng W/M"
+        },
+        {
+          code: "TRK",
+          name: "Trucking Fee (CFS → Warehouse)",
+          location: "POD",
+          unit: "Per trip",
+          currency: "USD",
+          price: "",
+          minCharge: "N/A",
+          cbm: "",
+          ton: "",
+          wm: "không áp dụng W/M"
+        }
+      ],
+      addLabel: "Thêm phí Local"
+    }
+  ];
+  const [shipmentDetailChargeGroups, setShipmentDetailChargeGroups] = useState(() =>
+    shipmentDetailCharges.map((group) => ({
+      ...group,
+      rows: group.rows.map((row) => ({ ...row }))
+    }))
+  );
+  const [shipmentDetailLclChargeGroups, setShipmentDetailLclChargeGroups] = useState(() =>
+    shipmentDetailLclCharges.map((group) => ({
+      ...group,
+      rows: group.rows.map((row) => ({ ...row }))
+    }))
+  );
+  const shipmentDetailSubtotalValue = (
+    shipmentDetailCargoType === "LCL" ? shipmentDetailLclChargeGroups : shipmentDetailChargeGroups
+  ).reduce((groupTotal, group) => {
+    return (
+      groupTotal +
+      group.rows.reduce((rowTotal, row) => {
+        const price = Number(String(row.price).replace(/,/g, "")) || 0;
+        if ("quantity" in row) {
+          const quantity = Number(String(row.quantity).replace(/,/g, "")) || 0;
+          return rowTotal + price * quantity;
+        }
+
+        const cbm = Number(String(row.cbm).replace(/,/g, "")) || 0;
+        const ton = Number(String(row.ton).replace(/,/g, "")) || 0;
+        const minCharge = Number(String(row.minCharge).replace(/[^\d.]/g, "")) || 0;
+        const wmBase = Math.max(cbm, ton);
+        if (wmBase <= 0) {
+          return rowTotal;
+        }
+        return rowTotal + Math.max(price * wmBase, minCharge);
+      }, 0)
+    );
+  }, 0);
+  const shipmentDetailVatValue = shipmentDetailSubtotalValue * 0.08;
+  const shipmentDetailTotalValue = shipmentDetailSubtotalValue + shipmentDetailVatValue;
+  const shipmentDetailCurrencyFormatter = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  const selectedShipmentDetailPol =
+    shipmentDetailPolOptions.find((option) => option.value === shipmentDetailPol) ?? shipmentDetailPolOptions[0];
+  const selectedShipmentDetailPod =
+    shipmentDetailPodOptions.find((option) => option.value === shipmentDetailPod) ?? shipmentDetailPodOptions[0];
+  const shipmentDetailChargeSummary = {
+    subtotal: `$${shipmentDetailCurrencyFormatter.format(shipmentDetailSubtotalValue)}`,
+    vat: `$${shipmentDetailCurrencyFormatter.format(shipmentDetailVatValue)}`,
+    total: `$${shipmentDetailCurrencyFormatter.format(shipmentDetailTotalValue)}`
+  };
   const isCustomerSelectionMode = isCustomerListPage && selectedCustomerRowKeys.length > 0;
   const customerCreateWorkflowSteps =
     isCustomerDetailsPage && selectedCustomerRow?.status === "locked"
@@ -4980,19 +5603,30 @@ export default function Page() {
     const syncBookingFromUrl = () => {
       const nextParams = new URLSearchParams(window.location.search);
       const nextPage = nextParams.get("page") === "customers" ? "customers" : "bookings";
+      const nextShipmentTab =
+        nextParams.get("shipment_tab") === "customs"
+          ? "customs"
+          : nextParams.get("shipment_tab") === "inland"
+            ? "inland"
+            : nextParams.get("shipment_tab") === "oversea"
+              ? "oversea"
+              : nextParams.get("view") === "customs"
+                ? "customs"
+                : nextParams.get("view") === "inland"
+                  ? "inland"
+                  : nextParams.get("view") === "oversea"
+                    ? "oversea"
+                    : "details";
       setCurrentPage(nextPage);
+      setShipmentWorkspaceTab(nextShipmentTab);
       setCustomerSubPage(
         nextPage === "customers"
           ? nextParams.get("view") === "contracts"
             ? "contracts"
             : nextParams.get("view") === "services"
               ? "services"
-              : nextParams.get("view") === "customs"
-                ? "customs"
-              : nextParams.get("view") === "inland"
-                ? "inland"
-              : nextParams.get("view") === "oversea"
-                ? "oversea"
+              : nextParams.get("view") === "shipments" || nextParams.get("view") === "customs" || nextParams.get("view") === "inland" || nextParams.get("view") === "oversea"
+                ? "shipments"
               : nextParams.get("view") === "create-contract"
                 ? "create-contract"
               : nextParams.get("view") === "create-customer"
@@ -5004,6 +5638,7 @@ export default function Page() {
         nextPage === "customers" &&
           nextParams.get("view") !== "contracts" &&
           nextParams.get("view") !== "services" &&
+          nextParams.get("view") !== "shipments" &&
           nextParams.get("view") !== "customs" &&
           nextParams.get("view") !== "inland" &&
           nextParams.get("view") !== "oversea" &&
@@ -5047,23 +5682,23 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage) {
-      setOpenSidebarGroups(["Hóa đơn/Chứng từ"]);
+    if (isCustomerShipmentPage) {
+      setOpenSidebarGroups(["Quản lý Shipment"]);
       return;
     }
 
     if (isCustomerPage) {
       setOpenSidebarGroups((current) => {
-        const next = current.filter((title) => title !== "Hóa đơn/Chứng từ");
+        const next = current.filter((title) => title !== "Quản lý Shipment");
         return next.includes("Quản lý khách hàng") ? next : [...next, "Quản lý khách hàng"];
       });
       return;
     }
 
     setOpenSidebarGroups((current) =>
-      current.filter((title) => title !== "Quản lý khách hàng" && title !== "Hóa đơn/Chứng từ")
+      current.filter((title) => title !== "Quản lý khách hàng" && title !== "Quản lý Shipment")
     );
-  }, [isCustomerCustomsPage, isCustomerInlandPage, isCustomerOverseaPage, isCustomerPage]);
+  }, [isCustomerShipmentPage, isCustomerPage]);
 
   useEffect(() => {
     setCustomerShipmentPage(1);
@@ -6205,6 +6840,16 @@ export default function Page() {
       return;
     }
 
+    if (targetRow.documentName === "Debit note") {
+      setIsCustomsDebitNotePreviewOpen(true);
+      return;
+    }
+
+    if (targetRow.documentName === "Đề nghị thanh toán") {
+      setIsCustomsPaymentRequestOpen(true);
+      return;
+    }
+
     setToast({
       kind: "success",
       message: `Đang mở ${targetRow.fileNames.length} file của ${targetRow.documentName}.`
@@ -6246,6 +6891,121 @@ export default function Page() {
       kind: "success",
       message: "Đã lưu nháp dữ liệu Hải quan."
     });
+  };
+
+  const addCustomsCostRow = () => {
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: [
+        ...current[customsTradeType],
+        {
+          id: `${customsTradeType}-cost-${Date.now()}`,
+          feeName: "",
+          quantity: "",
+          unit: "",
+          price: "",
+          amount: "",
+          currency: "VND",
+          vatRate: "",
+          vatAmount: "",
+          total: "",
+          isPlaceholder: true,
+          updatedBy: "",
+          updatedAt: ""
+        }
+      ]
+    }));
+  };
+
+  const updateCustomsDebitNoteRow = (
+    rowId: string,
+    field: "feeName" | "quantity" | "unit" | "price" | "vatRate",
+    value: string
+  ) => {
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+
+        const nextValue =
+          field === "price"
+            ? formatVietnameseInteger(parseVietnameseNumber(value))
+            : field === "vatRate"
+              ? normalizeVatRateValue(value)
+              : value;
+
+        return recalculateCustomsDebitRow({
+          ...row,
+          [field]: nextValue
+        });
+      })
+    }));
+  };
+
+  const openCustomsDebitNote = () => {
+    setIsCustomsDebitNoteOpen(true);
+  };
+
+  const sendCustomsDebitNoteForConfirmation = () => {
+    setCustomsDebitNoteStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "pending_confirmation"
+    }));
+  };
+
+  const confirmCustomsDebitNote = () => {
+    setCustomsDebitNoteStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "confirmed"
+    }));
+  };
+
+  const createPaymentRequestFromDebitNote = () => {
+    setToast({
+      kind: "success",
+      message: "Đã tạo Đề nghị thanh toán."
+    });
+  };
+
+  const addCustomsDebitNoteRow = () => {
+    const nextId = `${customsTradeType}-debit-${Date.now()}`;
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: [
+        ...current[customsTradeType],
+        {
+          id: nextId,
+          feeName: "",
+          quantity: "",
+          unit: "",
+          price: "",
+          amount: "",
+          currency: "VND",
+          vatRate: "",
+          vatAmount: "",
+          total: "",
+          updatedBy: "",
+          updatedAt: ""
+        }
+      ]
+    }));
+    setCustomsDebitNoteForcedRowIds((current) => ({
+      ...current,
+      [customsTradeType]: [...current[customsTradeType], nextId]
+    }));
+  };
+
+  const deleteCustomsDebitNoteRow = (rowId: string) => {
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((row) => row.id !== rowId)
+    }));
+    setCustomsDebitNoteForcedRowIds((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((id) => id !== rowId)
+    }));
   };
 
   const submitCustomsModule = () => {
@@ -6710,6 +7470,132 @@ export default function Page() {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => scrollToAuditSection(overseaAuditSectionRef.current));
     });
+  };
+
+  const handleShipmentDetailAttachmentUpload = (files?: FileList | null) => {
+    if (!files?.length) {
+      return;
+    }
+
+    setShipmentDetailAttachments((current) => [
+      ...current,
+      ...Array.from(files).map((file, index) => ({
+        id: `shipment-detail-attachment-${Date.now()}-${index}`,
+        name: file.name,
+        sizeLabel: `${Math.max(1, Math.round(file.size / 1024))} KB`
+      }))
+    ]);
+  };
+
+  const updateShipmentDetailChargeRow = (
+    groupName: string,
+    rowIndex: number,
+    field:
+      | "code"
+      | "name"
+      | "location"
+      | "unit"
+      | "currency"
+      | "price"
+      | "containerType"
+      | "quantity",
+    value: string
+  ) => {
+    setShipmentDetailChargeGroups((current) =>
+      current.map((group) =>
+        group.group === groupName
+          ? {
+              ...group,
+              rows: group.rows.map((row, currentRowIndex) =>
+                currentRowIndex === rowIndex ? { ...row, [field]: value } : row
+              )
+            }
+          : group
+      )
+    );
+  };
+
+  const addShipmentDetailChargeRow = (groupName: string) => {
+    setShipmentDetailChargeGroups((current) =>
+      current.map((group) =>
+        group.group === groupName
+          ? {
+              ...group,
+              rows: [
+                ...group.rows,
+                {
+                  code: "",
+                  name: "",
+                  location: "",
+                  unit: "",
+                  currency: "USD",
+                  price: "",
+                  containerType: "",
+                  quantity: "",
+                  total: ""
+                }
+              ]
+            }
+          : group
+      )
+    );
+  };
+
+  const updateShipmentDetailLclChargeRow = (
+    groupName: string,
+    rowIndex: number,
+    field:
+      | "code"
+      | "name"
+      | "location"
+      | "unit"
+      | "currency"
+      | "price"
+      | "minCharge"
+      | "cbm"
+      | "ton"
+      | "wm",
+    value: string
+  ) => {
+    setShipmentDetailLclChargeGroups((current) =>
+      current.map((group) =>
+        group.group === groupName
+          ? {
+              ...group,
+              rows: group.rows.map((row, currentRowIndex) =>
+                currentRowIndex === rowIndex ? { ...row, [field]: value } : row
+              )
+            }
+          : group
+      )
+    );
+  };
+
+  const addShipmentDetailLclChargeRow = (groupName: string) => {
+    setShipmentDetailLclChargeGroups((current) =>
+      current.map((group) =>
+        group.group === groupName
+          ? {
+              ...group,
+              rows: [
+                ...group.rows,
+                {
+                  code: "",
+                  name: "",
+                  location: "",
+                  unit: "",
+                  currency: "USD",
+                  price: "",
+                  minCharge: "",
+                  cbm: "0.00",
+                  ton: "0.000",
+                  wm: "auto"
+                }
+              ]
+            }
+          : group
+      )
+    );
   };
 
   const openOverseaUpload = (rowId: string) => {
@@ -7264,7 +8150,7 @@ export default function Page() {
     runWithLeaveGuard(performShowCustomerServices);
   };
 
-  const performShowCustomerCustoms = () => {
+  const performShowCustomerShipments = (tab: "details" | "customs" | "inland" | "oversea" = "details") => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("customer");
@@ -7272,15 +8158,25 @@ export default function Page() {
     nextParams.delete("service");
     nextParams.delete("service_item");
     nextParams.set("page", "customers");
-    nextParams.set("view", "customs");
+    nextParams.set("view", "shipments");
+    nextParams.set("shipment_tab", tab);
     const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
     window.history.pushState({}, "", nextUrl);
     setCurrentPage("customers");
-    setCustomerSubPage("customs");
+    setCustomerSubPage("shipments");
+    setShipmentWorkspaceTab(tab);
     setSelectedBookingCode(null);
     setSelectedCustomerKey(null);
     setSelectedContractCode(null);
     setSelectedServiceDetailKey(null);
+  };
+
+  const showCustomerShipments = (tab: "details" | "customs" | "inland" | "oversea" = "details") => {
+    runWithLeaveGuard(() => performShowCustomerShipments(tab));
+  };
+
+  const performShowCustomerCustoms = () => {
+    performShowCustomerShipments("customs");
   };
 
   const showCustomerCustoms = () => {
@@ -7288,22 +8184,7 @@ export default function Page() {
   };
 
   const performShowCustomerInland = () => {
-    const nextParams = new URLSearchParams(window.location.search);
-    nextParams.delete("booking");
-    nextParams.delete("customer");
-    nextParams.delete("contract");
-    nextParams.delete("service");
-    nextParams.delete("service_item");
-    nextParams.set("page", "customers");
-    nextParams.set("view", "inland");
-    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
-    window.history.pushState({}, "", nextUrl);
-    setCurrentPage("customers");
-    setCustomerSubPage("inland");
-    setSelectedBookingCode(null);
-    setSelectedCustomerKey(null);
-    setSelectedContractCode(null);
-    setSelectedServiceDetailKey(null);
+    performShowCustomerShipments("inland");
   };
 
   const showCustomerInland = () => {
@@ -7311,22 +8192,7 @@ export default function Page() {
   };
 
   const performShowCustomerOversea = () => {
-    const nextParams = new URLSearchParams(window.location.search);
-    nextParams.delete("booking");
-    nextParams.delete("customer");
-    nextParams.delete("contract");
-    nextParams.delete("service");
-    nextParams.delete("service_item");
-    nextParams.set("page", "customers");
-    nextParams.set("view", "oversea");
-    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
-    window.history.pushState({}, "", nextUrl);
-    setCurrentPage("customers");
-    setCustomerSubPage("oversea");
-    setSelectedBookingCode(null);
-    setSelectedCustomerKey(null);
-    setSelectedContractCode(null);
-    setSelectedServiceDetailKey(null);
+    performShowCustomerShipments("oversea");
   };
 
   const showCustomerOversea = () => {
@@ -7952,11 +8818,11 @@ export default function Page() {
         <div className="flex flex-1 items-start overflow-hidden">
           <div className="hidden w-[240px] shrink-0 lg:block" aria-hidden="true" />
 
-          <aside className="fixed left-0 top-0 hidden h-screen w-[240px] bg-sidebar lg:block">
-            <div className="sticky top-0 z-10 flex h-14 items-center bg-sidebar px-6">
+          <aside className="fixed left-0 top-0 hidden h-screen w-[240px] border-r border-[#1F2937] bg-[#0F172A] lg:block">
+            <div className="sticky top-0 z-10 flex h-14 items-center bg-[#0F172A] px-6">
               <SidebarLogo onClick={showBookingList} />
             </div>
-            <div className="border-b-[0.5px] border-border" />
+            <div className="border-b-[0.5px] border-[#1F2937]" />
             <div className="flex h-[calc(100vh-56px)] flex-col">
               <div className="flex-1 overflow-y-auto px-4 py-2">
                 <div className="space-y-0">
@@ -7965,15 +8831,15 @@ export default function Page() {
                     {(() => {
                       const isGroupOpen = group.items ? openSidebarGroups.includes(group.title) : false;
                       const isCustomersGroup = group.title === "Quản lý khách hàng";
-                      const isDocumentsGroup = group.title === "Hóa đơn/Chứng từ";
-                      const isGroupActive = group.title === "Xuất khẩu" ? !isCustomerPage : false;
+                      const isDocumentsGroup = group.title === "Quản lý Shipment";
+                      const isGroupActive = isDocumentsGroup ? isCustomerShipmentPage : false;
                       return (
                         <>
                     <button
                       className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[14px] transition-colors ${
                         isGroupActive
-                          ? "bg-card font-medium text-[#18181b]"
-                          : "ui-hover-bg text-foreground"
+                          ? "bg-[#1E293B] font-medium text-white"
+                          : "text-[#CBD5E1] hover:bg-[#111C31] hover:text-white"
                       }`}
                       onClick={() => {
                         if (group.items) {
@@ -7985,21 +8851,21 @@ export default function Page() {
                           return;
                         }
 
-                        if (group.title === "Xuất khẩu") {
-                          showBookingList();
+                        if (isDocumentsGroup) {
+                          showCustomerShipments("details");
                         }
                       }}
                     >
                       <span className="flex items-center gap-3">
                         <SidebarGroupIcon
                           icon={group.icon}
-                          className={isGroupActive ? "text-[#18181b]" : "text-muted-foreground"}
+                          className={isGroupActive ? "text-white" : "text-[#94A3B8]"}
                         />
                         <span>{group.title}</span>
                       </span>
                       {group.items ? (
                         <ChevronDown
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${isGroupOpen ? "" : "-rotate-90"}`}
+                          className={`h-4 w-4 text-[#94A3B8] transition-transform ${isGroupOpen ? "" : "-rotate-90"}`}
                           strokeWidth={1.8}
                         />
                       ) : null}
@@ -8019,8 +8885,8 @@ export default function Page() {
                                 ((item.label === "Customs (Hải quan)" && isCustomerCustomsPage) ||
                                   (item.label === "Inland (Nội địa)" && isCustomerInlandPage) ||
                                   (item.label === "Oversea (Quốc tế)" && isCustomerOverseaPage))))
-                                ? "bg-card text-[#18181b]"
-                                : "ui-hover-bg text-foreground"
+                                ? "bg-[#1E293B] text-white"
+                                : "text-[#CBD5E1] hover:bg-[#111C31] hover:text-white"
                             }`}
                             onClick={
                               isCustomersGroup && item.label === "Khách hàng"
@@ -8048,8 +8914,8 @@ export default function Page() {
                                     ((item.label === "Customs (Hải quan)" && isCustomerCustomsPage) ||
                                       (item.label === "Inland (Nội địa)" && isCustomerInlandPage) ||
                                       (item.label === "Oversea (Quốc tế)" && isCustomerOverseaPage))))
-                                  ? "bg-[#18181b]"
-                                  : "bg-muted-foreground"
+                                  ? "bg-white"
+                                  : "bg-[#64748B]"
                               }`}
                             />
                             <span>{item.label}</span>
@@ -8067,27 +8933,51 @@ export default function Page() {
               <div className="px-4 py-4">
                 <button
                   type="button"
-                  className="ui-hover-card flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors"
+                  className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left transition-colors hover:bg-[#111C31]"
                 >
-                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[16px] font-semibold text-white ${getAvatarColorClass(currentUserName)}`}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#5B8DEF] text-[16px] font-semibold text-white">
                     {currentUserName.trim().charAt(0).toUpperCase()}
                   </span>
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium text-foreground">{currentUserName}</span>
+                    <span className="block truncate text-sm font-medium text-white">{currentUserName}</span>
                   </span>
                 </button>
               </div>
             </div>
           </aside>
 
-          <section className={`flex h-screen flex-1 flex-col bg-background px-4 py-3 md:px-6 md:py-3 ${isAnyCreatePage ? "overflow-y-auto" : "overflow-hidden"}`}>
+          <section className={`flex h-screen flex-1 flex-col bg-background px-4 py-3 md:px-6 md:py-3 ${isAnyCreatePage || isCustomerShipmentPage ? "overflow-y-auto" : "overflow-hidden"}`}>
             <div className="-mx-4 mb-0 border-b-[0.5px] border-border md:-mx-6">
-              <div className="flex flex-col gap-3 px-4 pb-3 md:px-6">
+              <div className={`flex flex-col px-4 md:px-6 ${isCustomerShipmentPage ? "gap-1 pb-0" : "gap-3 pb-2"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
-                      <span>{isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "Hóa đơn/Chứng từ" : isCustomerPage ? "Quản lý khách hàng" : "Xuất khẩu"}</span>
-                    </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    {isCustomerShipmentPage ? (
+                      <>
+                        <div className="inline-flex w-fit items-center gap-1 border-b border-[#E7E6E9]">
+                          {shipmentWorkspaceTabs.map((tab) => (
+                            <button
+                              key={tab.key}
+                              type="button"
+                              onClick={() => setShipmentWorkspaceTab(tab.key)}
+                              className={`inline-flex h-9 items-center border-b-[1.5px] px-4 text-[13px] font-medium transition ${
+                                shipmentWorkspaceTab === tab.key
+                                  ? "border-[#2054a3] text-[#2054a3]"
+                                  : "border-transparent text-foreground hover:border-[#D7DEEA] hover:text-[#2054a3]"
+                              }`}
+                            >
+                              {tab.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-[12px] text-muted-foreground">{currentShipmentBreadcrumb}</div>
+                      </>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
+                          <span>{isCustomerPage ? "Quản lý khách hàng" : "Quản lý Shipment"}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <HeaderIconButton>
@@ -8360,7 +9250,7 @@ export default function Page() {
                             </div>
                           ) : null}
                         </div>
-                      ) : (
+                      ) : isCustomerShipmentPage ? null : (
                         <div className="leading-[1.25]">
                           <div className="text-[16px] font-medium text-foreground">
                             <span>{isCustomerDetailsPage ? "Khách hàng" : currentPageTitle}</span>
@@ -8480,7 +9370,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || isCustomerCustomsPage || isCustomerInlandPage || isCustomerOverseaPage ? "hidden" : ""
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || isCustomerShipmentPage ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -11942,7 +12832,7 @@ export default function Page() {
                                                           <input
                                                             value={feeDraft.rate}
                                                             readOnly={isContractDetailReadOnly}
-                                                            placeholder="Đơn giá"
+                                            placeholder="-"
                                                             inputMode="decimal"
                                                             onChange={(event) =>
                                                               setContractInternationalFeeDrafts((current) => ({
@@ -13358,44 +14248,627 @@ export default function Page() {
               </>
             ) : null}
 
-            {isCustomerCustomsPage ? (
-              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+            {isCustomerShipmentDetailsPage ? (
+              <div className="mt-3 pr-1 pb-3">
                 <div className="space-y-3">
-                  <div className="text-[12px] text-muted-foreground">{customsBreadcrumb}</div>
-
-                  <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
-                      {customsShipmentMeta.map((item) => (
-                        <div key={item.label} className="flex items-center gap-2">
-                          <span className="text-muted-foreground">{item.label}:</span>
-                          <span className="font-medium text-foreground">{item.value}</span>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                        >
+                          Hủy bỏ
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                        >
+                          Lưu nháp
+                        </button>
+                        <button
+                          type="button"
+                          className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                        >
+                          Tạo Shipment →
+                        </button>
+                      </div>
+                      <div className="text-[12px] text-muted-foreground">
+                        Tự động lưu nháp mỗi 30 giây · Lần cuối: 14:32:05
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                      {shipmentDetailWorkflowSteps.map((step, index) => (
+                        <div
+                          key={step}
+                          className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                            index === 0 ? "bg-[#2054a3] text-white" : "bg-[#EAF1FB] text-[#245698]"
+                          } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                        >
+                          {step}
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 border-b border-[#E7E6E9] pb-2">
-                    <div className="inline-flex items-center rounded-[10px] border border-[#E7E6E9] bg-white p-1">
-                      {[
-                        { key: "import" as const, label: "Import" },
-                        { key: "export" as const, label: "Export" }
-                      ].map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          onClick={() => setCustomsTradeType(tab.key)}
-                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
-                            customsTradeType === tab.key
-                              ? "bg-[#2054a3] text-white"
-                              : "text-foreground hover:bg-[#F5F7FA]"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">THÔNG TIN KHÁCH HÀNG</div>
+                          <div className="space-y-0">
+                            <InlineFieldShell label="Tên Công ty Khách hàng" labelWidthClass="grid-cols-[220px_minmax(0,1fr)]">
+                              <input
+                                value={shipmentDetailCustomerName}
+                                onChange={(event) => setShipmentDetailCustomerName(event.target.value)}
+                                className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2]"
+                              />
+                            </InlineFieldShell>
+                            <InlineFieldShell label="Người liên hệ KH" labelWidthClass="grid-cols-[220px_minmax(0,1fr)]">
+                              <input
+                                value={shipmentDetailCustomerContact}
+                                onChange={(event) => setShipmentDetailCustomerContact(event.target.value)}
+                                className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2]"
+                              />
+                            </InlineFieldShell>
+                            <InlineFieldShell label="Địa chỉ" labelWidthClass="grid-cols-[220px_minmax(0,1fr)]">
+                              <input
+                                value={shipmentDetailCustomerAddress}
+                                onChange={(event) => setShipmentDetailCustomerAddress(event.target.value)}
+                                className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2]"
+                              />
+                            </InlineFieldShell>
+                          </div>
                     </div>
+                  </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">SCOPE OF WORK</div>
+                          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_40px_minmax(0,1fr)] lg:items-start">
+                            <div className="space-y-2">
+                              <div className="text-[15px] font-semibold uppercase tracking-[0.02em] text-foreground">POL — PORT OF LOADING</div>
+                              <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2.5">
+                                <div className="flex items-center gap-3 border-b border-transparent focus-within:border-black">
+                                  <div className="min-w-0 flex-1">
+                                    <TableDropdownField
+                                      value={shipmentDetailPol}
+                                      options={shipmentDetailPolOptions}
+                                      onChange={(value) => {
+                                        const nextOption = shipmentDetailPolOptions.find((option) => option.value === value);
+                                        setShipmentDetailPol(value);
+                                        setShipmentDetailPolSub(nextOption?.meta ?? "");
+                                      }}
+                                      textSizeClass="text-[15px]"
+                                      heightClass="h-8"
+                                      dropdownWidthClass="w-full min-w-full"
+                                      searchable
+                                      searchPlaceholder="Tìm cảng xếp"
+                                      placeholder="Chọn POL"
+                                      placeholderClassName="text-[#C0C5D2]"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                                  <span className="inline-flex items-center rounded-full bg-[#EAF1FB] px-2 py-0.5 font-medium text-[#245698]">POL</span>
+                                  <span className="text-[13px]">{selectedShipmentDetailPol.flag}</span>
+                                  <span>{selectedShipmentDetailPol.meta}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="hidden lg:flex lg:justify-center lg:pt-[32px]">
+                              <button
+                                type="button"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#E7E6E9] bg-white text-muted-foreground transition hover:bg-[#F5F7FA] hover:text-[#245698]"
+                                aria-label="Hoán đổi cảng"
+                              >
+                                <ArrowLeftRight className="h-4 w-4" strokeWidth={1.8} />
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-[15px] font-semibold uppercase tracking-[0.02em] text-foreground">POD — PORT OF DISCHARGE</div>
+                              <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2.5">
+                                <div className="flex items-center gap-3 border-b border-transparent focus-within:border-black">
+                                  <div className="min-w-0 flex-1">
+                                    <TableDropdownField
+                                      value={shipmentDetailPod}
+                                      options={shipmentDetailPodOptions}
+                                      onChange={(value) => {
+                                        const nextOption = shipmentDetailPodOptions.find((option) => option.value === value);
+                                        setShipmentDetailPod(value);
+                                        setShipmentDetailPodSub(nextOption?.meta ?? "");
+                                      }}
+                                      textSizeClass="text-[15px]"
+                                      heightClass="h-8"
+                                      dropdownWidthClass="w-full min-w-full"
+                                      searchable
+                                      searchPlaceholder="Tìm cảng dỡ"
+                                      placeholder="Chọn POD"
+                                      placeholderClassName="text-[#C0C5D2]"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+                                  <span className="inline-flex items-center rounded-full bg-[#EAF1FB] px-2 py-0.5 font-medium text-[#245698]">POD</span>
+                                  <span className="text-[13px]">{selectedShipmentDetailPod.flag}</span>
+                                  <span>{selectedShipmentDetailPod.meta}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="px-4 py-3">
+                            <FormField
+                              label="Commodity"
+                              value={shipmentDetailCommodity}
+                              onChange={setShipmentDetailCommodity}
+                              variant="inlineUnderline"
+                            />
+                          </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">THÔNG TIN CHUNG</div>
+                          <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                            <div className="space-y-0">
+                              <InlineFieldShell label="Shipment ID" labelWidthClass="grid-cols-[180px_minmax(0,1fr)]" readOnly>
+                                <input
+                                  value={shipmentDetailNumber}
+                                  onChange={(event) => setShipmentDetailNumber(event.target.value)}
+                                  readOnly
+                                  className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2]"
+                                />
+                              </InlineFieldShell>
+                              <InlineFieldShell label="Ngày tạo" labelWidthClass="grid-cols-[180px_minmax(0,1fr)]" readOnly>
+                                <input
+                                  type="date"
+                                  value={shipmentDetailCreatedAt}
+                                  onChange={(event) => setShipmentDetailCreatedAt(event.target.value)}
+                                  readOnly
+                                  className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition"
+                                />
+                              </InlineFieldShell>
+                            </div>
+                            <div className="space-y-0">
+                              <InlineFieldShell label="Người tạo" labelWidthClass="grid-cols-[180px_minmax(0,1fr)]" readOnly>
+                                <input
+                                  value={shipmentDetailCreatedBy}
+                                  onChange={(event) => setShipmentDetailCreatedBy(event.target.value)}
+                                  readOnly
+                                  className="min-h-[36px] w-full border-0 border-b-0 bg-transparent px-0 text-[15px] text-foreground outline-none transition placeholder:text-[#C0C5D2]"
+                                />
+                              </InlineFieldShell>
+                              <FormField
+                                label="Nhân viên phụ trách"
+                                value={shipmentDetailAssignedStaff}
+                                onChange={setShipmentDetailAssignedStaff}
+                                options={shipmentDetailStaffOptions}
+                                placeholder="— Chọn nhân viên CS —"
+                                variant="inlineUnderline"
+                                autoSelectFirstOption={false}
+                                labelWidthClass="grid-cols-[180px_minmax(0,1fr)]"
+                              />
+                            </div>
+                          </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">THÔNG TIN VẬN CHUYỂN</div>
+                          <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
+                            <InlineFieldShell label="Chiều vận chuyển">
+                              <div className="flex items-center gap-2 py-1">
+                                {[
+                                  { key: "export" as const, label: "Export" },
+                                  { key: "import" as const, label: "Import" }
+                                ].map((option) => (
+                                  <button
+                                    key={option.key}
+                                    type="button"
+                                    onClick={() => setShipmentDetailDirection(option.key)}
+                                    className={`inline-flex h-8 items-center gap-1.5 rounded-[8px] px-3 text-[15px] font-medium transition ${
+                                      shipmentDetailDirection === option.key
+                                        ? "bg-[#2054a3] text-white"
+                                        : "bg-[#F5F7FA] text-foreground hover:bg-[#EAF1FB]"
+                                    }`}
+                                  >
+                                    {option.key === "export" ? (
+                                      <ArrowUp className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} />
+                                    ) : (
+                                      <ArrowDown className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} />
+                                    )}
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </InlineFieldShell>
+                            <InlineFieldShell label="Loại hàng">
+                              <div className="flex items-center gap-2 py-1">
+                                {(["FCL", "LCL"] as const).map((option) => (
+                                  <button
+                                    key={option}
+                                    type="button"
+                                    onClick={() => setShipmentDetailCargoType(option)}
+                                    className={`inline-flex h-8 items-center rounded-[8px] px-3 text-[15px] font-medium transition ${
+                                      shipmentDetailCargoType === option
+                                        ? "bg-[#2054a3] text-white"
+                                        : "bg-[#F5F7FA] text-foreground hover:bg-[#EAF1FB]"
+                                    }`}
+                                  >
+                                    {option}
+                                  </button>
+                                ))}
+                              </div>
+                            </InlineFieldShell>
+                            <div className="space-y-0 lg:col-span-2 lg:grid lg:grid-cols-2 lg:gap-x-8">
+                              <FormField
+                                label="ETD (ngày tàu chạy)"
+                                value={shipmentDetailEtd}
+                                onChange={setShipmentDetailEtd}
+                                type="date"
+                                placeholder="— Chọn ngày —"
+                                variant="inlineUnderline"
+                              />
+                              <FormField
+                                label="ETA (dự kiến đến)"
+                                value={shipmentDetailEta}
+                                onChange={setShipmentDetailEta}
+                                type="date"
+                                placeholder="— Chọn ngày —"
+                                variant="inlineUnderline"
+                              />
+                            </div>
+                          </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-2">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">PHÍ VẬN CHUYỂN - CHARGES</div>
+                          <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                            <div className="overflow-x-auto">
+                              {shipmentDetailCargoType === "LCL" ? (
+                                <div className="min-w-[1620px]">
+                                  <div className="grid grid-cols-[0.45fr_0.8fr_2.2fr_0.9fr_1fr_0.7fr_1fr_1.1fr_0.9fr_0.9fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                                    {["#", "Mã phí", "Tên phí", "Vị trí", "Đơn vị", "CUR", "Đơn giá", "Min charge", "CBM", "Tấn (T)", "W/M", "Thành tiền"].map((label) => (
+                                      <div key={label} className="px-4 py-2.5">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {shipmentDetailLclChargeGroups.map((group) => (
+                                    <div key={group.group}>
+                                      <div className="border-b border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2 text-[15px] font-semibold text-foreground">
+                                        {group.group}
+                                      </div>
+                                      {group.rows.map((row, rowIndex) => {
+                                        const numericPrice = Number(String(row.price).replace(/,/g, "")) || 0;
+                                        const numericCbm = Number(String(row.cbm).replace(/,/g, "")) || 0;
+                                        const numericTon = Number(String(row.ton).replace(/,/g, "")) || 0;
+                                        const numericMinCharge = Number(String(row.minCharge).replace(/[^\d.]/g, "")) || 0;
+                                        const chargeBase = Math.max(numericCbm, numericTon);
+                                        const total =
+                                          row.wm === "không áp dụng W/M"
+                                            ? 0
+                                            : chargeBase > 0
+                                              ? Math.max(numericPrice * chargeBase, numericMinCharge)
+                                              : 0;
+                                        return (
+                                          <div
+                                            key={`${group.group}-${row.code}-${rowIndex}`}
+                                            className="grid grid-cols-[0.45fr_0.8fr_2.2fr_0.9fr_1fr_0.7fr_1fr_1.1fr_0.9fr_0.9fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
+                                          >
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">{rowIndex + 1}</div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <span className="inline-flex min-h-[32px] items-center rounded-full bg-[#EEF2F7] px-3 text-[15px] font-medium text-foreground">
+                                                {row.code || "-"}
+                                              </span>
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <input
+                                                value={row.name}
+                                                onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "name", event.target.value)}
+                                                placeholder="Tên phí"
+                                                className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                              />
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <span className="inline-flex min-h-[32px] items-center rounded-full bg-[#EEF2F7] px-3 text-[15px] font-medium text-foreground">
+                                                {row.location || "-"}
+                                              </span>
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <input
+                                                value={row.unit}
+                                                onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "unit", event.target.value)}
+                                                placeholder="Đơn vị"
+                                                className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                              />
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <TableDropdownField
+                                                value={row.currency}
+                                                options={COST_CURRENCY_OPTIONS.map((currency) => ({ label: currency, value: currency }))}
+                                                onChange={(value) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "currency", value)}
+                                                textSizeClass="text-[15px]"
+                                                heightClass="h-8"
+                                                dropdownWidthClass="w-[180px]"
+                                              />
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <input
+                                                inputMode="decimal"
+                                                value={row.price}
+                                                onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "price", event.target.value.replace(/[^\d.]/g, ""))}
+                                                placeholder="-"
+                                                className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                              />
+                                            </div>
+                                            <div className="flex min-h-[40px] items-center px-4 py-2">
+                                              <input
+                                                value={row.minCharge}
+                                                onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "minCharge", event.target.value)}
+                                                placeholder="Min charge"
+                                                className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                              />
+                                            </div>
+                                            {row.wm === "không áp dụng W/M" ? (
+                                              <>
+                                                <div className="flex min-h-[40px] items-center px-4 py-2 italic">
+                                                  không áp dụng W/M
+                                                </div>
+                                                <div className="flex min-h-[40px] items-center px-4 py-2" />
+                                                <div className="flex min-h-[40px] items-center px-4 py-2" />
+                                              </>
+                                            ) : (
+                                              <>
+                                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                                  <input
+                                                    inputMode="decimal"
+                                                    value={row.cbm}
+                                                    onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "cbm", event.target.value.replace(/[^\d.]/g, ""))}
+                                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                                  />
+                                                </div>
+                                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                                  <input
+                                                    inputMode="decimal"
+                                                    value={row.ton}
+                                                    onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "ton", event.target.value.replace(/[^\d.]/g, ""))}
+                                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                                  />
+                                                </div>
+                                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                                  <input
+                                                    value={row.wm}
+                                                    onChange={(event) => updateShipmentDetailLclChargeRow(group.group, rowIndex, "wm", event.target.value)}
+                                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                                  />
+                                                </div>
+                                              </>
+                                            )}
+                                            <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                                              {`$${shipmentDetailCurrencyFormatter.format(total)}`}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                      <div className="border-b border-[#E7E6E9] bg-[#FCFCFD]">
+                                        <button
+                                          type="button"
+                                          onClick={() => addShipmentDetailLclChargeRow(group.group)}
+                                          className="flex h-[36px] w-full items-center gap-2 px-4 text-[14px] text-[#4A63B8] transition hover:bg-[#F8FAFF]"
+                                        >
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          {group.addLabel}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <div className="grid grid-cols-[0.45fr_0.8fr_2.2fr_0.9fr_1fr_0.7fr_1fr_1.1fr_0.9fr_0.9fr_1.2fr_1fr] bg-[#FAFBFC] text-[15px] text-foreground">
+                                    <div className="col-span-11 border-t border-[#E7E6E9] px-4 py-2 text-right font-medium">Total (excl. VAT)</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 font-medium">{shipmentDetailChargeSummary.subtotal}</div>
+                                    <div className="col-span-11 border-t border-[#E7E6E9] px-4 py-2 text-right font-medium">VAT 8%</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 font-medium">+ {shipmentDetailChargeSummary.vat}</div>
+                                    <div className="col-span-11 border-t border-[#E7E6E9] px-4 py-2 text-right text-[18px] font-semibold text-[#D14343]">Total</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 text-[18px] font-semibold text-[#D14343]">{shipmentDetailChargeSummary.total}</div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="min-w-[1300px]">
+                                  <div className="grid grid-cols-[0.5fr_0.8fr_2fr_0.9fr_1.1fr_0.7fr_1fr_1fr_0.6fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                                    {["#", "Mã phí", "Tên phí", "Vị trí", "Đơn vị", "Cur", "Đơn giá", "Loại container", "SL", "Thành tiền"].map((label) => (
+                                      <div key={label} className="px-4 py-2.5">
+                                        {label}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {shipmentDetailChargeGroups.map((group) => (
+                                    <div key={group.group}>
+                                      <div className="border-b border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2 text-[15px] font-semibold text-foreground">
+                                        {group.group}
+                                      </div>
+                                      {group.rows.map((row, rowIndex) => (
+                                        <div
+                                          key={`${group.group}-${row.code}-${rowIndex}`}
+                                          className="grid grid-cols-[0.5fr_0.8fr_2fr_0.9fr_1.1fr_0.7fr_1fr_1fr_0.6fr_1fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
+                                        >
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">{rowIndex + 1}</div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <span className="inline-flex min-h-[32px] items-center rounded-full bg-[#EEF2F7] px-3 text-[15px] font-medium text-foreground">
+                                              {row.code || "-"}
+                                            </span>
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <input
+                                              value={row.name}
+                                              onChange={(event) => updateShipmentDetailChargeRow(group.group, rowIndex, "name", event.target.value)}
+                                              placeholder="Tên phí"
+                                              className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <span className="inline-flex min-h-[32px] items-center rounded-full bg-[#EEF2F7] px-3 text-[15px] font-medium text-foreground">
+                                              {row.location || "-"}
+                                            </span>
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <input
+                                              value={row.unit}
+                                              onChange={(event) => updateShipmentDetailChargeRow(group.group, rowIndex, "unit", event.target.value)}
+                                              placeholder="Đơn vị"
+                                              className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <TableDropdownField
+                                              value={row.currency}
+                                              options={COST_CURRENCY_OPTIONS.map((currency) => ({ label: currency, value: currency }))}
+                                              onChange={(value) => updateShipmentDetailChargeRow(group.group, rowIndex, "currency", value)}
+                                              textSizeClass="text-[15px]"
+                                              heightClass="h-8"
+                                              dropdownWidthClass="w-[180px]"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <input
+                                              inputMode="decimal"
+                                              value={row.price}
+                                              onChange={(event) => updateShipmentDetailChargeRow(group.group, rowIndex, "price", event.target.value.replace(/[^\d.]/g, ""))}
+                                              placeholder="Đơn giá"
+                                              className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <input
+                                              value={row.containerType}
+                                              onChange={(event) => updateShipmentDetailChargeRow(group.group, rowIndex, "containerType", event.target.value)}
+                                              placeholder="Loại container"
+                                              className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2">
+                                            <input
+                                              inputMode="decimal"
+                                              value={row.quantity}
+                                              onChange={(event) => updateShipmentDetailChargeRow(group.group, rowIndex, "quantity", event.target.value.replace(/[^\d.]/g, ""))}
+                                              placeholder="SL"
+                                              className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                            />
+                                          </div>
+                                          <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                                            {(() => {
+                                              const total =
+                                                (Number(String(row.price).replace(/,/g, "")) || 0) *
+                                                (Number(String(row.quantity).replace(/,/g, "")) || 0);
+                                              return total > 0 ? `$${shipmentDetailCurrencyFormatter.format(total)}` : "-";
+                                            })()}
+                                          </div>
+                                        </div>
+                                      ))}
+                                      <div className="border-b border-[#E7E6E9] bg-[#FCFCFD]">
+                                        <button
+                                          type="button"
+                                          onClick={() => addShipmentDetailChargeRow(group.group)}
+                                          className="flex h-[36px] w-full items-center gap-2 px-4 text-[14px] text-[#4A63B8] transition hover:bg-[#F8FAFF]"
+                                        >
+                                          <Plus className="h-4 w-4" strokeWidth={2.2} />
+                                          {group.addLabel}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <div className="grid grid-cols-[0.5fr_0.8fr_2fr_0.9fr_1.1fr_0.7fr_1fr_1fr_0.6fr_1fr] bg-[#FAFBFC] text-[15px] text-foreground">
+                                    <div className="col-span-9 border-t border-[#E7E6E9] px-4 py-2 text-right font-medium">Total (excl. VAT)</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 font-medium">{shipmentDetailChargeSummary.subtotal}</div>
+                                    <div className="col-span-9 border-t border-[#E7E6E9] px-4 py-2 text-right font-medium">VAT 8%</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 font-medium">+ {shipmentDetailChargeSummary.vat}</div>
+                                    <div className="col-span-9 border-t border-[#E7E6E9] px-4 py-2 text-right text-[18px] font-semibold text-[#D14343]">Total</div>
+                                    <div className="col-span-1 border-t border-[#E7E6E9] px-4 py-2 text-[18px] font-semibold text-[#D14343]">{shipmentDetailChargeSummary.total}</div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                          <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium text-foreground">GHI CHÚ & ĐÍNH KÈM</div>
+                          <div className="grid gap-4 lg:grid-cols-2">
+                            <div className="space-y-2">
+                              <div className="text-sm font-medium text-foreground">Ghi chú nội bộ</div>
+                              <TiptapRichTextEditor
+                                value={shipmentDetailInternalNote}
+                                onChange={setShipmentDetailInternalNote}
+                                placeholder="Ghi chú cho team nội bộ, không hiển thị với KH..."
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <div className="text-sm font-medium text-foreground">Ghi chú khách hàng</div>
+                              <TiptapRichTextEditor
+                                value={shipmentDetailExternalNote}
+                                onChange={setShipmentDetailExternalNote}
+                                placeholder={`Thông tin cần thông báo cho ${shipmentDetailCustomerName || "khách hàng"}...`}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <input
+                              ref={shipmentDetailUploadInputRef}
+                              type="file"
+                              multiple
+                              className="hidden"
+                              onChange={(event) => {
+                                handleShipmentDetailAttachmentUpload(event.target.files);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => shipmentDetailUploadInputRef.current?.click()}
+                              className="inline-flex h-9 items-center gap-2 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                            >
+                              <Plus className="h-4 w-4" strokeWidth={2.1} />
+                              <span>Đính kèm tài liệu (Packing List, Commercial Invoice, Certificate of Origin, B/L draft...)</span>
+                            </button>
+                            {shipmentDetailAttachments.length > 0 ? (
+                              <div className="space-y-2">
+                                {shipmentDetailAttachments.map((file) => (
+                                  <div
+                                    key={file.id}
+                                    className="flex items-center justify-between gap-3 rounded-[10px] border border-[#E7E6E9] bg-[#FCFCFD] px-3 py-2 text-[13px] text-foreground"
+                                  >
+                                    <span className="truncate">{file.name}</span>
+                                    <span className="shrink-0 text-muted-foreground">{file.sizeLabel}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            ) : null}
+
+            {isCustomerCustomsPage ? (
+              <div className="mt-3 pr-1 pb-3">
+                <input
+                  ref={customsUploadInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    handleCustomsDocumentUpload(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 pb-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
                         onClick={saveCustomsDraft}
@@ -13432,197 +14905,311 @@ export default function Page() {
                         <span>Xem lịch sử</span>
                       </button>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[15px] font-semibold text-foreground">Danh sách chi phí</div>
-                      <div className="text-[12px] text-muted-foreground">
-                        Shipment ID: <span className="font-medium text-foreground">SHP-2026-0001</span>
-                      </div>
-                    </div>
-                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[980px]">
-                          <div className="grid grid-cols-[2.2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                            {["Tên chi phí", "Số tiền", "Tiền tệ", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
-                              <div key={label} className="px-4 py-2.5">
-                                {label}
-                              </div>
-                            ))}
-                          </div>
-                          {visibleCustomsCostRows.map((row) => {
-                            const isFilled = row.amount.trim() !== "";
-                            const isEditing = customsEditingCostRowId === row.id;
-                            const displayAmount = isEditing
-                              ? customsCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
-                              : formatCostAmountDisplay(row.amount);
-
-                            return (
-                              <div
-                                key={row.id}
-                                className="grid grid-cols-[2.2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
-                              >
-                                <div className="flex min-h-[38px] items-center px-4">{row.feeName}</div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <input
-                                    inputMode="decimal"
-                                    value={displayAmount}
-                                    onFocus={() => focusCustomsCostAmount(row.id, row.amount)}
-                                    onChange={(event) => updateCustomsCostDraft(row.id, event.target.value)}
-                                    onBlur={() => blurCustomsCostAmount(row.id)}
-                                    placeholder="-"
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
-                                  />
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <select
-                                    value={row.currency}
-                                    onChange={(event) =>
-                                      updateCustomsCostCurrency(
-                                        row.id,
-                                        event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
-                                      )
-                                    }
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
-                                  >
-                                    {COST_CURRENCY_OPTIONS.map((currency) => (
-                                      <option key={currency} value={currency}>
-                                        {currency}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <span
-                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                                      isFilled ? "bg-[#EAF7EE] text-[#1F7A35]" : "bg-[#F1F3F5] text-[#68707B]"
-                                    }`}
-                                  >
-                                    {isFilled ? "Đã nhập" : "Chưa nhập"}
-                                  </span>
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
-                                  {row.updatedBy || "-"}
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
-                                  {row.updatedAt || "-"}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                    <div className="inline-flex items-center bg-white p-1">
+                      {[
+                        { key: "import" as const, label: "Import" },
+                        { key: "export" as const, label: "Export" }
+                      ].map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setCustomsTradeType(tab.key)}
+                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
+                            customsTradeType === tab.key
+                              ? "bg-[#2054a3] text-white"
+                              : "text-foreground hover:bg-[#F5F7FA]"
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-[15px] font-semibold text-foreground">Danh sách chứng từ</div>
-                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[1080px]">
-                          <div className="grid grid-cols-[1.7fr_1fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                            {["Tên chứng từ", "Loại hiển thị", "Số file", "Hành động", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
-                              <div key={label} className="px-4 py-2.5">
-                                {label}
-                              </div>
-                            ))}
-                          </div>
-                          {visibleCustomsDocumentRows.map((row) => (
-                              <div
-                                key={row.id}
-                                className="grid grid-cols-[1.7fr_1fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
-                              >
-                                <div className="flex min-h-[38px] items-center px-4">{row.documentName}</div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  DISPLAY_ONLY
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  {row.fileNames.length}
-                                </div>
-                                <div className="flex min-h-[38px] items-center gap-3 px-4">
-                                  <span className="text-[13px] text-muted-foreground">Chỉ hiển thị</span>
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
-                                  {row.updatedBy || "-"}
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">
-                                  {row.updatedAt || "-"}
-                                </div>
-                              </div>
-                            ))}
-                        </div>
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#E7E6E9] pb-3">
+                        <div className="text-[20px] font-medium uppercase text-foreground">COST INFORMATION (CHI PHÍ)</div>
+                        <div />
                       </div>
-                    </div>
-                  </div>
-
-                  {customsValidationErrors.length > 0 ? (
-                    <div className="rounded-[10px] border border-[#F3D0B0] bg-[#FFF8F2] px-4 py-3">
-                      <div className="mb-2 text-[14px] font-semibold text-foreground">Danh sách lỗi</div>
-                      <div className="space-y-2">
-                        {customsValidationErrors.map((error) => (
-                          <div key={error.rowId} className="flex items-start gap-2 text-[13px] text-foreground">
-                            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#C75B12]" strokeWidth={1.9} />
-                            <div>
-                              <div>{error.message}</div>
-                              <div className="text-[12px] text-muted-foreground">Dòng liên quan: {error.relatedRow}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div ref={customsAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomsAuditLogOpen((current) => !current)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
-                    >
-                      <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
-                      <ChevronDown
-                        className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomsAuditLogOpen ? "rotate-180" : ""}`}
-                        strokeWidth={1.8}
-                      />
-                    </button>
-                    {isCustomsAuditLogOpen ? (
-                      <div className="border-t border-[#E7E6E9]">
+                      <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
                         <div className="overflow-x-auto">
-                          <div className="min-w-[980px]">
-                            <div className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                              {["Hành động", "Trường thay đổi", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                          <div className="min-w-[1280px]">
+                            <div className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                              {["#", "Description", "Qty", "Unit", "Price (₫)", "Amount (₫)", "VAT%", "VAT (₫)", "Total (₫)"].map((label) => (
                                 <div key={label} className="px-4 py-2.5">
                                   {label}
                                 </div>
                               ))}
                             </div>
-                            {visibleCustomsAuditRows.map((row) => (
+                            {visibleCustomsCostRows.map((row, index) => (
                               <div
                                 key={row.id}
-                                className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
+                                className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
                               >
-                                <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
-                                <div className="flex min-h-[38px] items-center px-4">{row.field}</div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <span className="truncate">{row.beforeValue}</span>
-                                  <span className="mx-2 text-muted-foreground">→</span>
-                                  <span className="truncate">{row.afterValue}</span>
+                                <div className="flex min-h-[40px] items-center px-4 py-2 text-[#A0A7B4]">{index + 1}</div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                  <input
+                                    value={row.feeName}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, feeName: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="Nhập tên phí..."
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
                                 </div>
-                                <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                  <input
+                                    value={row.quantity}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, quantity: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="SL"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                  <input
+                                    value={row.unit}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, unit: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="Đơn vị"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                  <input
+                                    value={row.price}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, price: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="Đơn giá"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                                  <input
+                                    value={row.amount}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, amount: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="Thành tiền"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2">
+                                  <input
+                                    value={row.vatRate}
+                                    onChange={(event) =>
+                                      setCustomsCostRowsByType((current) => ({
+                                        ...current,
+                                        [customsTradeType]: current[customsTradeType].map((item) =>
+                                          item.id === row.id ? { ...item, vatRate: event.target.value } : item
+                                        )
+                                      }))
+                                    }
+                                    placeholder="VAT%"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                  />
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2 text-[#9CA3AF]">
+                                  <span>{row.vatAmount || "-"}</span>
+                                </div>
+                                <div className="flex min-h-[40px] items-center px-4 py-2 font-semibold">
+                                  <span>{row.total || "-"}</span>
+                                </div>
                               </div>
                             ))}
+                            <div className="border-b border-[#E7E6E9] bg-white">
+                              <button
+                                type="button"
+                                onClick={addCustomsCostRow}
+                                className="flex h-[38px] items-center px-4 text-[15px] font-medium text-[#4A90E2] transition hover:bg-[#F8FAFF]"
+                              >
+                                + Thêm dòng phí
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    ) : null}
+                      <div className="flex justify-start">
+                        <button
+                          type="button"
+                          onClick={openCustomsDebitNote}
+                          className="inline-flex h-9 items-center rounded-full bg-[#2054a3] px-4 text-[14px] font-medium text-white transition hover:bg-[#1b467d]"
+                        >
+                          Tạo Debit Note
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                      <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium uppercase text-foreground">DOCUMENT MANAGEMENT (CHỨNG TỪ)</div>
+                      <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[980px]">
+                            <div className="grid grid-cols-[2fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                              {["Tên chứng từ", "Số file", "Hành động", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                                <div key={label} className="px-4 py-2.5">
+                                  {label}
+                                </div>
+                              ))}
+                            </div>
+                            {visibleCustomsDocumentRows.map((row) => (
+                                (() => {
+                                  const isRequired = row.displayMode === "ATTACHMENT_REQUIRED";
+                                  return (
+                                <div
+                                  key={row.id}
+                                  className="grid grid-cols-[2fr_0.7fr_1.3fr_1fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground"
+                                >
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">{row.documentName}</div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    {row.fileNames.length}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center gap-3 px-4 py-2">
+                                    {row.displayMode === "DISPLAY_ONLY" ? (
+                                      row.fileNames.length > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => viewCustomsDocumentFiles(row.id)}
+                                          className="text-[15px] font-medium text-[#245698] transition hover:text-[#1b467d]"
+                                        >
+                                          Xem file
+                                        </button>
+                                      ) : (
+                                        <span className="text-[15px] text-muted-foreground">Chỉ hiển thị</span>
+                                      )
+                                    ) : (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openCustomsUpload(row.id)}
+                                          className="text-[15px] font-medium text-[#245698] transition hover:text-[#1b467d]"
+                                        >
+                                          Tải lên
+                                        </button>
+                                        {row.fileNames.length > 0 ? (
+                                          <>
+                                            <button
+                                              type="button"
+                                              onClick={() => viewCustomsDocumentFiles(row.id)}
+                                              className="text-[15px] font-medium text-[#245698] transition hover:text-[#1b467d]"
+                                            >
+                                              Xem file
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => deleteCustomsDocumentFiles(row.id)}
+                                              className="text-[15px] font-medium text-[#C75B12] transition hover:text-[#A6480C]"
+                                            >
+                                              Xóa
+                                            </button>
+                                          </>
+                                        ) : (
+                                          <span className="text-[15px] text-muted-foreground">
+                                            Chưa có file
+                                          </span>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#4B5563]">
+                                    {row.updatedBy || "-"}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#4B5563]">
+                                    {row.updatedAt || "-"}
+                                  </div>
+                                </div>
+                                  );
+                                })()
+                              ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div ref={customsAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomsAuditLogOpen((current) => !current)}
+                        className="flex w-full items-center justify-between px-4 py-3 text-left"
+                      >
+                        <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${isCustomsAuditLogOpen ? "rotate-180" : ""}`}
+                          strokeWidth={1.8}
+                        />
+                      </button>
+                      {isCustomsAuditLogOpen ? (
+                        <div className="border-t border-[#E7E6E9]">
+                          <div className="overflow-x-auto">
+                            <div className="min-w-[980px]">
+                              <div className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                                {["Hành động", "Trường thay đổi", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                                  <div key={label} className="px-4 py-2.5">
+                                    {label}
+                                  </div>
+                                ))}
+                              </div>
+                              {visibleCustomsAuditRows.map((row) => (
+                                <div
+                                  key={row.id}
+                                  className="grid grid-cols-[1fr_1.2fr_1.6fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground"
+                                >
+                                  <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
+                                  <div className="flex min-h-[38px] items-center px-4">{row.field}</div>
+                                  <div className="flex min-h-[38px] items-center px-4">
+                                    <span className="truncate">{row.beforeValue}</span>
+                                    <span className="mx-2 text-muted-foreground">→</span>
+                                    <span className="truncate">{row.afterValue}</span>
+                                  </div>
+                                  <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
+                                  <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
             ) : null}
 
             {isCustomerInlandPage ? (
-              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="mt-3 pr-1 pb-3">
                 <input
                   ref={inlandUploadInputRef}
                   type="file"
@@ -13634,8 +15221,6 @@ export default function Page() {
                   }}
                 />
                 <div className="space-y-3">
-                  <div className="text-[12px] text-muted-foreground">{inlandBreadcrumb}</div>
-
                   <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
                       {inlandShipmentMeta.map((item) => (
@@ -13728,7 +15313,7 @@ export default function Page() {
                               ? inlandCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
                               : formatCostAmountDisplay(row.amount);
                             return (
-                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground">
                                 <div className="flex min-h-[38px] items-center px-4">{row.feeName}</div>
                                 <div className="flex min-h-[38px] items-center px-4">
                                   <input
@@ -13738,7 +15323,7 @@ export default function Page() {
                                     onChange={(event) => updateInlandCostDraft(row.id, event.target.value)}
                                     onBlur={() => blurInlandCostAmount(row.id)}
                                     placeholder="-"
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                   />
                                 </div>
                                 <div className="flex min-h-[38px] items-center px-4">
@@ -13750,7 +15335,7 @@ export default function Page() {
                                         event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
                                       )
                                     }
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors focus:border-black"
                                   >
                                     {COST_CURRENCY_OPTIONS.map((currency) => (
                                       <option key={currency} value={currency}>
@@ -13886,10 +15471,8 @@ export default function Page() {
             ) : null}
 
             {isCustomerOverseaPage ? (
-              <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="mt-3 pr-1 pb-3">
                 <div className="space-y-3">
-                  <div className="text-[12px] text-muted-foreground">{overseaBreadcrumb}</div>
-
                   <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
                       {overseaShipmentMeta.map((item) => (
@@ -13987,7 +15570,7 @@ export default function Page() {
                               ? overseaCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
                               : formatCostAmountDisplay(row.amount);
                             return (
-                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground">
                                 <div className={`flex min-h-[38px] items-center px-4 ${row.emphasized ? "font-semibold" : ""}`}>{row.feeName}</div>
                                 <div className="flex min-h-[38px] items-center px-4">
                                   <input
@@ -13997,7 +15580,7 @@ export default function Page() {
                                     onChange={(event) => updateOverseaCostDraft(row.id, event.target.value)}
                                     onBlur={() => blurOverseaCostAmount(row.id)}
                                     placeholder="-"
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[13px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
                                   />
                                 </div>
                                 <div className="flex min-h-[38px] items-center px-4">
@@ -14009,7 +15592,7 @@ export default function Page() {
                                         event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
                                       )
                                     }
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[13px] text-foreground outline-none transition-colors focus:border-black"
+                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors focus:border-black"
                                   >
                                     {COST_CURRENCY_OPTIONS.map((currency) => (
                                       <option key={currency} value={currency}>
@@ -14518,6 +16101,501 @@ export default function Page() {
                   <span>Tải xuống file mẫu</span>
                 </a>
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsDebitNoteOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsDebitNoteOpen(false)}
+        >
+          <div
+            className="w-full max-w-[1240px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsDebitNoteOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="px-5 py-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-3">
+                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {customsDebitNoteSteps.map((step, index) => (
+                    <div
+                      key={step.key}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeCustomsDebitNoteStepIndex
+                          ? index === activeCustomsDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeCustomsDebitNoteStatus === "draft" ? (
+                    <button
+                      type="button"
+                      onClick={sendCustomsDebitNoteForConfirmation}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Gửi xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
+                    <button
+                      type="button"
+                      onClick={confirmCustomsDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Đã xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "confirmed" ? (
+                    <button
+                      type="button"
+                      onClick={createPaymentRequestFromDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Tạo Đề nghị thanh toán
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mb-4 grid gap-x-8 gap-y-3 rounded-[10px] border border-[#E7E6E9] bg-[#FCFCFD] px-4 py-3 lg:grid-cols-2">
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Customer</span>
+                  <span>{shipmentDetailCustomerName}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Shipment ID</span>
+                  <span>{shipmentDetailNumber}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Module</span>
+                  <span>{customsTradeType === "export" ? "Export" : "Import"}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Shipment Date</span>
+                  <span>
+                    {shipmentDetailShipmentDate
+                      ? new Date(shipmentDetailShipmentDate).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1160px]">
+                    <div className="grid grid-cols-[3.2fr_0.9fr_1.1fr_1.1fr_1.2fr_0.9fr_1.2fr_1.2fr_auto] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                      {["Description", "Quantity", "Unit", "Price (đ)", "Amount (đ)", "VAT%", "VAT value (đ)", "Total (đ)", ""].map((label) => (
+                        <div key={label} className="px-4 py-2.5">
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                    {visibleCustomsDebitNoteRows.map((row) => (
+                      <div
+                        key={`debit-note-${row.id}`}
+                        className="grid grid-cols-[3.2fr_0.9fr_1.1fr_1.1fr_1.2fr_0.9fr_1.2fr_1.2fr_auto] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
+                      >
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.feeName}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "feeName", event.target.value)}
+                            placeholder="Nhập tên phí..."
+                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.quantity}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "quantity", event.target.value)}
+                            placeholder="SL"
+                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.unit}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "unit", event.target.value)}
+                            placeholder="Đơn vị"
+                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.price}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "price", event.target.value)}
+                            placeholder="Đơn giá"
+                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                          <span>{row.amount || "-"}</span>
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.vatRate}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "vatRate", event.target.value)}
+                            placeholder="VAT%"
+                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 text-[#9CA3AF]">
+                          <span>{row.vatAmount || "-"}</span>
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 font-semibold">
+                          <span>{row.total || "-"}</span>
+                        </div>
+                        <div className="flex min-h-[40px] items-center justify-end px-2 py-2">
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomsDebitNoteRow(row.id)}
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="border-b border-[#E7E6E9] bg-white">
+                      <button
+                        type="button"
+                        onClick={addCustomsDebitNoteRow}
+                        className="flex h-[38px] items-center px-4 text-[15px] font-medium text-[#4A90E2] transition hover:bg-[#F8FAFF]"
+                      >
+                        + Thêm dòng phí
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-[8.5fr_1.2fr_auto] border-t border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground">
+                      <div className="px-4 py-3 text-right font-medium">Total Debit Note</div>
+                      <div className="px-4 py-3 font-semibold text-[#D14343]">
+                        {customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}
+                      </div>
+                      <div />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsDebitNotePreviewOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-[980px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
+                <div className="border-b border-[#1F2937] px-5 py-3">
+                  <div className="grid grid-cols-[150px_1fr] items-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-[40px] font-black leading-none text-[#2054a3]">PI</div>
+                        <div className="text-[13px] font-semibold tracking-[0.16em] text-[#2054a3]">LOGISTICS</div>
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <div className="text-[16px] font-bold uppercase text-foreground">PI Logistics Corporation</div>
+                      <div className="text-[13px] text-foreground">5th Floor, HKC Building, 285 Doi Can Str, Ba Dinh Dist, Hanoi, Vietnam</div>
+                      <div className="flex items-center justify-center gap-6 text-[13px] text-foreground">
+                        <span>Tel: +84-24-62662669</span>
+                        <span>Fax: +84-24-62662660</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-5 py-4 text-center">
+                  <div className="text-[20px] font-bold uppercase text-foreground">Debit Note</div>
+                </div>
+
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Khách hàng:</div>
+                  <div className="px-4 py-1.5 font-semibold">{shipmentDetailCustomerName}</div>
+                </div>
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Số vận đơn/booking:</div>
+                  <div className="px-4 py-1.5 font-semibold">{shipmentDetailNumber}</div>
+                </div>
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Ngày vận chuyển:</div>
+                  <div className="px-4 py-1.5 font-semibold">
+                    {shipmentDetailShipmentDate
+                      ? new Date(shipmentDetailShipmentDate).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })
+                      : "-"}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-[14px] text-foreground">
+                    <thead>
+                      <tr className="border-b border-[#1F2937]">
+                        {["Description", "Quantity", "Unit", "Price", "Amount", "VAT", "Total"].map((label, index) => (
+                          <th
+                            key={label}
+                            className={`px-3 py-2 text-center font-bold ${index < 6 ? "border-r border-[#1F2937]" : ""}`}
+                          >
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleCustomsDebitNoteRows.map((row) => (
+                        <tr key={`debit-preview-${row.id}`} className="border-b border-[#1F2937]">
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 align-top">{row.feeName || "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-center align-top">{row.quantity || "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 align-top">{row.unit || "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">{row.price ? `${row.price} đ` : "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">{row.amount ? `${row.amount} đ` : "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">{row.vatAmount ? `${row.vatAmount} đ` : "-"}</td>
+                          <td className="px-3 py-1.5 text-right align-top font-semibold">{row.total ? `${row.total} đ` : "-"}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={6} className="border-r border-[#1F2937] px-3 py-3 text-center text-[18px] font-bold uppercase">
+                          Total of Debit Note
+                        </td>
+                        <td className="px-3 py-3 text-right text-[18px] font-bold">
+                          {customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-3 text-[15px] text-foreground">
+                  {["Kế toán trưởng", "Trưởng bộ phận", "Người đề nghị"].map((label, index) => (
+                    <div key={label} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 text-right">{index === 2 ? currentUserName : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsPaymentRequestOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsPaymentRequestOpen(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-[980px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Đề nghị thanh toán</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsPaymentRequestOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-2.5">
+                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {customsDebitNoteSteps.map((step, index) => (
+                    <div
+                      key={`payment-request-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeCustomsDebitNoteStepIndex
+                          ? index === activeCustomsDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeCustomsDebitNoteStatus === "draft" ? (
+                    <button
+                      type="button"
+                      onClick={sendCustomsDebitNoteForConfirmation}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Gửi xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
+                    <button
+                      type="button"
+                      onClick={confirmCustomsDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Đã xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "confirmed" ? (
+                    <button
+                      type="button"
+                      onClick={createPaymentRequestFromDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Tạo Đề nghị thanh toán
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
+                <div className="border-b border-[#1F2937] px-5 py-3">
+                  <div className="grid grid-cols-[150px_1fr] items-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-[40px] font-black leading-none text-[#2054a3]">PI</div>
+                        <div className="text-[13px] font-semibold tracking-[0.16em] text-[#2054a3]">LOGISTICS</div>
+                      </div>
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <div className="text-[16px] font-bold uppercase text-foreground">PI Logistics Corporation</div>
+                      <div className="text-[13px] text-foreground">5th Floor, HKC Building, 285 Doi Can Str, Ngoc Ha Ward, Hanoi, Vietnam</div>
+                      <div className="flex items-center justify-center gap-6 text-[13px] text-foreground">
+                        <span>Tel: +84-4-62662669</span>
+                        <span>Email: admin@pacific.com.vn</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-5 py-4 text-center">
+                  <div className="text-[19px] font-bold uppercase text-foreground">Phiếu đề nghị thanh toán</div>
+                  <div className="mt-1 text-[14px] font-semibold italic text-foreground">Ngày 2 tháng 4 năm 2026</div>
+                </div>
+
+                <div className="grid grid-cols-[140px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-2 font-semibold">Họ và tên:</div>
+                  <div className="px-4 py-2">{currentUserName}</div>
+                </div>
+                <div className="grid grid-cols-[140px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-2 font-semibold">Bộ phận:</div>
+                  <div className="px-4 py-2">Customs</div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-[14px] text-foreground">
+                    <thead>
+                      <tr className="border-b border-[#1F2937]">
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">STT</th>
+                        <th colSpan={2} className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">Chứng từ</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">Diễn giải</th>
+                        <th className="px-2 py-2 text-center font-bold">Số tiền (VND)</th>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <th className="border-r border-[#1F2937] px-2 py-2" />
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-semibold">Số</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-semibold">Ngày</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2" />
+                        <th className="px-2 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: Math.max(8, customsPaymentRequestRows.length) }).map((_, index) => {
+                        const row = customsPaymentRequestRows[index];
+                        return (
+                          <tr key={`payment-request-row-${index}`} className="border-b border-[#1F2937]">
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 text-center align-top">{row ? index + 1 : ""}</td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">{row ? shipmentDetailNumber : ""}</td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">
+                              {row ? "02/04/2026" : ""}
+                            </td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">{row?.feeName || ""}</td>
+                            <td className="px-2 py-1.5 text-right align-top">{row?.total ? `${row.total} đ` : ""}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Tổng số</td>
+                        <td className="px-3 py-1.5 text-right font-bold">{customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Trừ tạm ứng</td>
+                        <td className="px-3 py-1.5 text-right font-bold">-</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Số tiền thanh toán</td>
+                        <td className="px-3 py-1.5 text-right font-bold">{customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={2} className="border-r border-[#1F2937] px-3 py-2.5 font-bold italic">Bằng chữ</td>
+                        <td colSpan={3} className="px-3 py-2.5 font-semibold">#ERROR!</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-3 border-b border-[#1F2937] text-[15px] text-foreground">
+                  {["Trưởng bộ phận", "Kế toán trưởng", "Người đề nghị"].map((label, index) => (
+                    <div key={label} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center font-bold">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 italic">Ngày/tháng: ...............</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-3 text-[15px] text-foreground">
+                  {["Giám đốc duyệt", "Thủ quỹ", "Người nhận"].map((label, index) => (
+                    <div key={label} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center font-bold">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 italic">Ngày/tháng: ...............</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
