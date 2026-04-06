@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Image from "next/image";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -396,6 +397,35 @@ function createInitialCustomsDocumentRows(tradeType: CustomsTradeType): CustomsD
   }));
 }
 
+function createInitialCustomsDeclarationGoods(): CustomsDeclarationGoodsItem[] {
+  return [
+    {
+      id: "01",
+      goodsCode: "87141040",
+      description: "Lá côn/ 15C-E6325-00/ dùng cho xe máy Yamaha, mới 100%#&KXD",
+      managementCode: "",
+      quantity1: "12 PCE",
+      quantity2: "12 PCE",
+      invoiceValue: "83,52",
+      invoiceUnitPrice: "6,96 - USD - PCE",
+      taxableValue: "2.177.700,48 VND",
+      taxableUnitPrice: "181.475,04 VND PCE"
+    },
+    {
+      id: "02",
+      goodsCode: "84099134",
+      description: "Xy lanh/ 16S-E1310-20/ dùng cho xe máy Yamaha, mới 100%#&KXD",
+      managementCode: "",
+      quantity1: "600 PCE",
+      quantity2: "600 PCE",
+      invoiceValue: "7.392",
+      invoiceUnitPrice: "12,32 - USD - PCE",
+      taxableValue: "192.739.008 VND",
+      taxableUnitPrice: "321.231,68 VND PCE"
+    }
+  ];
+}
+
 function createInitialCustomsAuditRows(tradeType: CustomsTradeType): CustomsAuditRow[] {
   return [
     {
@@ -711,6 +741,18 @@ type CustomsAuditRow = {
   time: string;
 };
 type CustomsDebitNoteListStatus = "approved" | "cancelled";
+type CustomsDeclarationGoodsItem = {
+  id: string;
+  goodsCode: string;
+  description: string;
+  managementCode: string;
+  quantity1: string;
+  quantity2: string;
+  invoiceValue: string;
+  invoiceUnitPrice: string;
+  taxableValue: string;
+  taxableUnitPrice: string;
+};
 type ShipmentDetailAuditRow = {
   id: string;
   action: string;
@@ -3421,6 +3463,11 @@ export default function Page() {
   const [isCustomsDebitNotePreviewOpen, setIsCustomsDebitNotePreviewOpen] = useState(false);
   const [isCustomsPaymentRequestOpen, setIsCustomsPaymentRequestOpen] = useState(false);
   const [isCustomsDocumentFilesModalOpen, setIsCustomsDocumentFilesModalOpen] = useState(false);
+  const [isCustomsDeclarationOpen, setIsCustomsDeclarationOpen] = useState(false);
+  const [customsDeclarationZoom, setCustomsDeclarationZoom] = useState<100 | 125 | 150>(125);
+  const [customsDeclarationGoodsItems, setCustomsDeclarationGoodsItems] = useState<CustomsDeclarationGoodsItem[]>(
+    createInitialCustomsDeclarationGoods()
+  );
   const [activeCustomsDocumentFilesRowId, setActiveCustomsDocumentFilesRowId] = useState<string | null>(null);
   const [customsPaymentRequestDateText, setCustomsPaymentRequestDateText] = useState("Ngày 2 tháng 4 năm 2026");
   const [customsPaymentRequestFullName, setCustomsPaymentRequestFullName] = useState(currentUserName);
@@ -4765,6 +4812,7 @@ export default function Page() {
   const activeCustomsDebitNoteStepIndex = customsDebitNoteSteps.findIndex(
     (step) => step.key === activeCustomsDebitNoteStatus
   );
+  const customsDeclarationZoomScale = customsDeclarationZoom / 100;
   const visibleCustomsDebitNoteRows = visibleCustomsCostRows.filter(
     (row) =>
       customsDebitNoteForcedRowIds[customsTradeType].includes(row.id) ||
@@ -7032,6 +7080,11 @@ export default function Page() {
       return;
     }
 
+    if (targetRow.documentName === "Tờ khai hải quan") {
+      setIsCustomsDeclarationOpen(true);
+      return;
+    }
+
     if (targetRow.documentName === "Đề nghị thanh toán") {
       setIsCustomsPaymentRequestOpen(true);
       return;
@@ -7148,6 +7201,33 @@ export default function Page() {
 
   const openCustomsDebitNotesList = () => {
     setIsCustomsDebitNotesListOpen(true);
+  };
+
+  const openCustomsDeclaration = () => {
+    setCustomsDeclarationGoodsItems(createInitialCustomsDeclarationGoods());
+    setIsCustomsDeclarationOpen(true);
+  };
+
+  const addCustomsDeclarationGoodsItem = () => {
+    setCustomsDeclarationGoodsItems((current) => {
+      const nextNumber = current.length + 1;
+      const nextId = String(nextNumber).padStart(2, "0");
+      return [
+        ...current,
+        {
+          id: nextId,
+          goodsCode: "",
+          description: "",
+          managementCode: "",
+          quantity1: "",
+          quantity2: "",
+          invoiceValue: "",
+          invoiceUnitPrice: "",
+          taxableValue: "",
+          taxableUnitPrice: ""
+        }
+      ];
+    });
   };
 
   const createCustomsDebitNoteFromList = () => {
@@ -15416,8 +15496,8 @@ export default function Page() {
                                             row.documentName === "Debit note"
                                               ? openCustomsDebitNotesList()
                                               : row.documentName === "Tờ khai hải quan"
-                                              ? openCustomsUpload(row.id)
-                                              : viewCustomsDocumentFiles(row.id)
+                                                ? openCustomsDeclaration()
+                                                : viewCustomsDocumentFiles(row.id)
                                           }
                                           className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
                                         >
@@ -16560,6 +16640,720 @@ export default function Page() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsDeclarationOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsDeclarationOpen(false)}
+        >
+          <div
+            className="flex max-h-[92vh] w-full max-w-[1240px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-2">
+                <div className="text-[18px] font-semibold text-foreground">Tờ khai hải quan</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất Excel tờ khai hải quan."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất XML tờ khai hải quan."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất XML</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-[13px] font-medium text-muted-foreground">Zoom</label>
+                <select
+                  value={customsDeclarationZoom}
+                  onChange={(event) => setCustomsDeclarationZoom(Number(event.target.value) as 100 | 125 | 150)}
+                  className="h-8 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground outline-none transition focus:border-black"
+                >
+                  <option value={100}>100%</option>
+                  <option value={125}>125%</option>
+                  <option value={150}>150%</option>
+                </select>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsDeclarationOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-5 pb-10">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-3">
+                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {customsDebitNoteSteps.map((step, index) => (
+                    <div
+                      key={`customs-declaration-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeCustomsDebitNoteStepIndex
+                          ? index === activeCustomsDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeCustomsDebitNoteStatus === "draft" ? (
+                    <button
+                      type="button"
+                      onClick={sendCustomsDebitNoteForConfirmation}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Gửi xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
+                    <button
+                      type="button"
+                      onClick={confirmCustomsDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Đã xác nhận
+                    </button>
+                  ) : null}
+                  {activeCustomsDebitNoteStatus === "confirmed" ? (
+                    <button
+                      type="button"
+                      onClick={createPaymentRequestFromDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Tạo Đề nghị thanh toán
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex w-full justify-center">
+              <div
+                className="overflow-hidden rounded-[12px] border border-[#1F2937] bg-white text-[9px] leading-[1.05]"
+                style={{
+                  width: `${100 / customsDeclarationZoomScale}%`,
+                  transform: `scale(${customsDeclarationZoomScale})`,
+                  transformOrigin: "top center"
+                }}
+              >
+                <div className="flex items-center justify-between border-b border-[#1F2937] px-4 py-2 text-[10px] text-foreground">
+                  <span>{customsTradeType === "export" ? "<EXP>" : "<IMP>"}</span>
+                  <span>1 / 24</span>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-center">
+                  <div className="text-[13px] font-bold text-foreground">
+                    {customsTradeType === "export"
+                      ? "Tờ khai hàng hóa xuất khẩu (thông quan)"
+                      : "Tờ khai hàng hóa nhập khẩu (thông quan)"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-6 border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai</span><span className="font-semibold font-['Courier_New']">308341177010</span></div>
+                    <div className="flex justify-between gap-4"><span>Số tờ khai tạm nhập tái xuất tương ứng</span><span className="font-['Courier_New']">-</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã phân loại kiểm tra</span><span className="font-['Courier_New']">1</span></div>
+                    <div className="flex justify-between gap-4"><span>Tên cơ quan Hải quan tiếp nhận tờ khai</span><span className="font-['Courier_New']">HQHOALAC</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày đăng ký</span><span className="font-['Courier_New']">19/03/2026 09:14:46</span></div>
+                    <div className="flex justify-between gap-4"><span>Thời hạn tái nhập/ tái xuất</span><span className="font-['Courier_New']">/ / -</span></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai đầu tiên</span><span className="font-['Courier_New']">- /</span></div>
+                    <div className="h-[1.05em]" />
+                    <div className="flex justify-between gap-4"><span>Mã loại hình</span><span className="font-['Courier_New']">B11&nbsp;&nbsp;&nbsp;2</span></div>
+                  </div>
+                  <div className="space-y-1.5 text-right">
+                    <div className="text-[34px] font-light leading-none tracking-tight text-foreground font-['Courier_New']">308341177010</div>
+                    <div className="flex justify-between gap-4"><span>Mã số thuế đại diện</span><span className="font-['Courier_New']">8409</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã bộ phận xử lý tờ khai</span><span className="font-['Courier_New']">01</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày thay đổi đăng ký</span><span className="font-['Courier_New']">/ /</span></div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3">
+                  <div className="mb-3 text-[10px] font-semibold text-foreground">Người xuất khẩu</div>
+                  <div className="grid grid-cols-[190px_1fr] gap-y-1 pl-[30px] text-[10px] text-foreground">
+                    <div>Mã</div><div className="font-['Courier_New']">0100774342</div>
+                    <div>Tên</div><div className="font-['Courier_New']">Công Ty TNHH Yamaha Motor Việt Nam</div>
+                    <div>Mã bưu chính</div><div className="font-['Courier_New']">(+84)43</div>
+                    <div>Địa chỉ</div><div className="font-['Courier_New']">Thôn Bình An, xã Trung Giã, Thành phố Hà Nội, Việt Nam</div>
+                    <div>Số điện thoại</div><div className="font-['Courier_New']">84.24.35824900</div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3">
+                  <div className="mb-3 text-[10px] font-semibold text-foreground">Người ủy thác xuất khẩu</div>
+                  <div className="grid grid-cols-[190px_1fr] gap-y-1 pl-[30px] text-[10px] text-foreground">
+                    <div>Mã</div><div className="font-['Courier_New']">-</div>
+                    <div>Tên</div><div className="font-['Courier_New']">-</div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3">
+                  <div className="mb-3 text-[10px] font-semibold text-foreground">Người nhập khẩu</div>
+                  <div className="grid grid-cols-[190px_1fr_1fr] gap-y-1 pl-[30px] text-[10px] text-foreground">
+                    <div>Mã</div><div className="col-span-2 font-['Courier_New']">-</div>
+                    <div>Tên</div><div className="col-span-2 font-['Courier_New']">PT. YAMAHA INDONESIA MOTOR MFG</div>
+                    <div>Mã bưu chính</div><div className="font-['Courier_New']">+62</div><div />
+                    <div>Địa chỉ</div><div className="font-['Courier_New']">JL. DR KRT RADJIMAN WIDYODININGRAT JAKARTA TIMUR 13920</div><div className="font-['Courier_New']">RT/RW 009-06 RAWA TERATE CAKUNG INDONESIA</div>
+                    <div>Mã nước</div><div className="font-['Courier_New']">ID</div><div />
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-1.5 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[1fr_260px]">
+                    <div className="font-semibold">Đại lý Hải quan</div>
+                    <div className="font-semibold text-right">Mã nhân viên Hải quan</div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Số vận đơn</div>
+                      <div className="font-['Courier_New']">122600038550241</div>
+                      <div />
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Số lượng</div>
+                      <div className="font-['Courier_New'] text-right">13</div>
+                      <div className="font-['Courier_New']">PK</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Tổng trọng lượng hàng (Gross)</div>
+                      <div className="font-['Courier_New'] text-right">10.278</div>
+                      <div className="font-['Courier_New']">KGM</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Địa điểm lưu kho</div>
+                      <div className="font-['Courier_New']">01PLC10</div>
+                      <div className="font-['Courier_New']">YAMAHA MOTOR VN</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Địa điểm nhận hàng cuối cùng</div>
+                      <div className="font-['Courier_New']">IDCGK</div>
+                      <div className="font-['Courier_New']">JAKARTA</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Địa điểm xếp hàng</div>
+                      <div className="font-['Courier_New']">VNCXP</div>
+                      <div className="font-['Courier_New']">CANG XANH VIP</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_160px_1fr] gap-4">
+                      <div>Phương tiện vận chuyển dự kiến</div>
+                      <div className="font-['Courier_New']">9999</div>
+                      <div className="font-['Courier_New']">PHOENIX D / 613S</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_1fr] gap-4">
+                      <div>Ngày hàng đi dự kiến</div>
+                      <div className="font-['Courier_New']">27/03/2026</div>
+                    </div>
+                    <div className="grid grid-cols-[260px_1fr] gap-4">
+                      <div>Ký hiệu và số hiệu</div>
+                      <div className="font-['Courier_New']"> </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[1fr_1fr] gap-x-8">
+                    <div className="space-y-1">
+                      <div className="font-semibold">Giấy phép xuất khẩu</div>
+                      <div className="font-['Courier_New']">1</div>
+                      <div className="font-['Courier_New']">2</div>
+                      <div className="font-['Courier_New']">3</div>
+                      <div className="font-['Courier_New']">4</div>
+                      <div className="font-['Courier_New']">5</div>
+                    </div>
+
+                    <div className="border-l border-[#1F2937] pl-4 space-y-1">
+                      <div className="grid grid-cols-[220px_100px_120px_1fr] gap-4">
+                        <div>Số hóa đơn</div>
+                        <div className="font-['Courier_New']">A</div>
+                        <div className="font-['Courier_New']">-</div>
+                        <div className="font-['Courier_New']">0001814</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_1fr] gap-4">
+                        <div>Số tiếp nhận hóa đơn điện tử</div>
+                        <div className="font-['Courier_New']">-</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_1fr] gap-4">
+                        <div>Ngày phát hành</div>
+                        <div className="font-['Courier_New']">18/03/2026</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_1fr] gap-4">
+                        <div>Phương thức thanh toán</div>
+                        <div className="font-['Courier_New']">KC</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_220px_1fr] gap-4">
+                        <div>Tổng trị giá hóa đơn</div>
+                        <div className="font-['Courier_New']">FOB - USD -</div>
+                        <div className="font-['Courier_New']">191.542,85 - A</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_220px_1fr] gap-4">
+                        <div>Tổng trị giá tính thuế</div>
+                        <div className="font-['Courier_New']">USD -</div>
+                        <div className="font-['Courier_New']">191.542,85</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_220px_1fr] gap-4">
+                        <div>Tỷ giá tính thuế</div>
+                        <div className="font-['Courier_New']">USD -</div>
+                        <div className="font-['Courier_New']">- 26.074</div>
+                      </div>
+                      <div className="grid grid-cols-[220px_1fr] gap-4">
+                        <div className="font-semibold">Tổng hệ số phân bổ trị giá</div>
+                        <div className="font-['Courier_New']">191.542,85 -</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-2 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-4">
+                    <div className="space-y-1">
+                      <div>Phân loại không cần quy đổi VND</div>
+                      <div>Tổng số tiền thuế xuất khẩu</div>
+                      <div>Số tiền bảo lãnh</div>
+                    </div>
+                    <div className="pt-0.5 font-semibold">Người nộp thuế</div>
+                    <div className="space-y-1">
+                      <div className="font-semibold">Mã xác định thời hạn nộp thuế</div>
+                      <div>Tổng số tiền lệ phí</div>
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <div><span className="font-semibold">Phân loại nộp thuế</span> <span className="font-['Courier_New']">A</span></div>
+                      <div className="font-['Courier_New']">VND</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-1.5 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[1fr_1fr]">
+                    <div className="flex justify-end gap-3">
+                      <span className="font-semibold">Tổng số trang của tờ khai</span>
+                      <span className="font-['Courier_New']">24</span>
+                    </div>
+                    <div className="flex justify-end gap-3">
+                      <span className="font-semibold">Tổng số dòng hàng của tờ khai</span>
+                      <span className="font-['Courier_New']">43</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-2 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[260px_repeat(3,1fr)] gap-4">
+                    <div>Số đính kèm khai báo điện tử</div>
+                    <div className="font-['Courier_New']">1 -</div>
+                    <div className="font-['Courier_New']">2 -</div>
+                    <div className="font-['Courier_New']">3 -</div>
+                  </div>
+                  <div className="mt-1 grid grid-cols-[260px_1fr] gap-4">
+                    <div>Phần ghi chú</div>
+                    <div className="font-['Courier_New']">PTTT TT.HANG DI TU KHO CTY YAMAHA(01PLC10) VE HP TRONG 5H. TD V/C HN-HP DAI 140KM.</div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-2 text-[10px] text-foreground">
+                  <div className="grid grid-cols-[1fr_1fr]">
+                    <div className="flex justify-between gap-4">
+                      <span>Số quản lý của nội bộ doanh nghiệp</span>
+                      <span className="font-['Courier_New']"></span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span>Số quản lý người sử dụng</span>
+                      <span className="font-['Courier_New']">00465</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="mb-2 font-semibold">Mục thông báo của Hải quan</div>
+                  <div className="grid grid-cols-[280px_1fr] gap-4 pl-[30px]">
+                    <div className="space-y-1">
+                      <div>Tên trưởng đơn vị Hải quan</div>
+                      <div>Ngày hoàn thành kiểm tra</div>
+                      <div>Ngày cấp phép xuất nhập</div>
+                      <div>Thời hạn cho phép vận chuyển bảo thuế (khởi hành)</div>
+                    </div>
+                    <div className="space-y-1 font-['Courier_New']">
+                      <div>Trưởng Hải quan Hòa Lạc</div>
+                      <div>19/03/2026 09:14:46</div>
+                      <div>19/03/2026 09:14:46</div>
+                      <div>19/03/2026</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-[280px_1fr_220px_220px_120px] gap-4 pl-[30px]">
+                    <div />
+                    <div />
+                    <div className="font-semibold">Địa điểm</div>
+                    <div className="font-semibold">Ngày đến</div>
+                    <div className="font-semibold">Ngày khởi hành</div>
+                  </div>
+                  <div className="mt-1 grid grid-cols-[280px_1fr_220px_220px_120px] gap-4 pl-[30px]">
+                    <div>Thông tin trung chuyển</div>
+                    <div className="space-y-1 font-['Courier_New']">
+                      <div>1</div>
+                      <div>2</div>
+                      <div>3</div>
+                    </div>
+                    <div className="space-y-1 font-['Courier_New']">
+                      <div>03TGC15</div>
+                      <div>/ /</div>
+                      <div>/ /</div>
+                    </div>
+                    <div className="space-y-1 font-['Courier_New']">
+                      <div>19/03/2026</div>
+                      <div>/ /</div>
+                      <div>/ /</div>
+                    </div>
+                    <div className="space-y-1 font-['Courier_New']">
+                      <div>~ 19/03/2026</div>
+                      <div>~ / /</div>
+                      <div>~ / /</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-[280px_220px_220px_1fr] gap-4 pl-[30px]">
+                    <div>Địa điểm đích cho vận chuyển bảo thuế</div>
+                    <div className="font-['Courier_New']">03TGS10</div>
+                    <div className="font-['Courier_New']">27/03/2026</div>
+                    <div />
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3">
+                  <div className="flex items-center justify-between text-[10px] text-foreground">
+                    <span>{customsTradeType === "export" ? "<EXP>" : "<IMP>"}</span>
+                    <span>2 / 24</span>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-center">
+                  <div className="text-[13px] font-bold text-foreground">
+                    {customsTradeType === "export"
+                      ? "Tờ khai hàng hóa xuất khẩu (thông quan)"
+                      : "Tờ khai hàng hóa nhập khẩu (thông quan)"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-6 border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai</span><span className="font-semibold font-['Courier_New']">308341177010</span></div>
+                    <div className="flex justify-between gap-4"><span>Số tờ khai tạm nhập tái xuất tương ứng</span><span className="font-['Courier_New']">-</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã phân loại kiểm tra</span><span className="font-['Courier_New']">1</span></div>
+                    <div className="flex justify-between gap-4"><span>Tên cơ quan Hải quan tiếp nhận tờ khai</span><span className="font-['Courier_New']">HQHOALAC</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày đăng ký</span><span className="font-['Courier_New']">19/03/2026 09:14:46</span></div>
+                    <div className="flex justify-between gap-4"><span>Thời hạn tái nhập/ tái xuất</span><span className="font-['Courier_New']">/ / -</span></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai đầu tiên</span><span className="font-['Courier_New']">- /</span></div>
+                    <div className="h-[1.05em]" />
+                    <div className="flex justify-between gap-4"><span>Mã loại hình</span><span className="font-['Courier_New']">B11&nbsp;&nbsp;&nbsp;2</span></div>
+                  </div>
+                  <div className="space-y-1.5 text-right">
+                    <div className="flex justify-between gap-4"><span>Mã số thuế đại diện</span><span className="font-['Courier_New']">8409</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã bộ phận xử lý tờ khai</span><span className="font-['Courier_New']">01</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày thay đổi đăng ký</span><span className="font-['Courier_New']">/ /</span></div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="mb-2 font-medium">Vanning</div>
+                  <div className="space-y-1">
+                    <div>Địa điểm xếp hàng lên xe chở hàng</div>
+                    <div className="grid grid-cols-[140px_1fr] gap-y-1">
+                      <div>Mã</div>
+                      <div className="flex flex-wrap gap-x-12 font-['Courier_New']">
+                        <span>1&nbsp;&nbsp;01PLC10</span>
+                        <span>2</span>
+                        <span>3</span>
+                        <span>4</span>
+                        <span>5</span>
+                      </div>
+                      <div>Tên</div>
+                      <div className="font-['Courier_New']">CONG TY TNHH YAMAHA MOTOR VIET NAM</div>
+                      <div>Địa chỉ</div>
+                      <div className="font-['Courier_New']">Thôn Bình An, xã Trung Giã, Thành phố Hà Nội, Việt Nam</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="mb-2 font-medium">Số container</div>
+                  <div className="grid grid-cols-5 gap-x-12 gap-y-1">
+                    <div className="space-y-1">
+                      <div className="flex items-baseline gap-3 font-['Courier_New']">
+                        <span>1</span>
+                        <span>MRSU3447200</span>
+                      </div>
+                      <div className="font-['Courier_New']">6</div>
+                      <div className="font-['Courier_New']">11</div>
+                      <div className="font-['Courier_New']">16</div>
+                      <div className="font-['Courier_New']">21</div>
+                      <div className="font-['Courier_New']">26</div>
+                      <div className="font-['Courier_New']">31</div>
+                      <div className="font-['Courier_New']">36</div>
+                      <div className="font-['Courier_New']">41</div>
+                      <div className="font-['Courier_New']">46</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-['Courier_New']">2</div>
+                      <div className="font-['Courier_New']">7</div>
+                      <div className="font-['Courier_New']">12</div>
+                      <div className="font-['Courier_New']">17</div>
+                      <div className="font-['Courier_New']">22</div>
+                      <div className="font-['Courier_New']">27</div>
+                      <div className="font-['Courier_New']">32</div>
+                      <div className="font-['Courier_New']">37</div>
+                      <div className="font-['Courier_New']">42</div>
+                      <div className="font-['Courier_New']">47</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-['Courier_New']">3</div>
+                      <div className="font-['Courier_New']">8</div>
+                      <div className="font-['Courier_New']">13</div>
+                      <div className="font-['Courier_New']">18</div>
+                      <div className="font-['Courier_New']">23</div>
+                      <div className="font-['Courier_New']">28</div>
+                      <div className="font-['Courier_New']">33</div>
+                      <div className="font-['Courier_New']">38</div>
+                      <div className="font-['Courier_New']">43</div>
+                      <div className="font-['Courier_New']">48</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-['Courier_New']">4</div>
+                      <div className="font-['Courier_New']">9</div>
+                      <div className="font-['Courier_New']">14</div>
+                      <div className="font-['Courier_New']">19</div>
+                      <div className="font-['Courier_New']">24</div>
+                      <div className="font-['Courier_New']">29</div>
+                      <div className="font-['Courier_New']">34</div>
+                      <div className="font-['Courier_New']">39</div>
+                      <div className="font-['Courier_New']">44</div>
+                      <div className="font-['Courier_New']">49</div>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="font-['Courier_New']">5</div>
+                      <div className="font-['Courier_New']">10</div>
+                      <div className="font-['Courier_New']">15</div>
+                      <div className="font-['Courier_New']">20</div>
+                      <div className="font-['Courier_New']">25</div>
+                      <div className="font-['Courier_New']">30</div>
+                      <div className="font-['Courier_New']">35</div>
+                      <div className="font-['Courier_New']">40</div>
+                      <div className="font-['Courier_New']">45</div>
+                      <div className="font-['Courier_New']">50</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="px-4 py-3 text-[10px] text-foreground">
+                  <div className="mb-2 font-medium">Chỉ thị của Hải quan</div>
+                  <div className="grid grid-cols-[72px_180px_1fr] gap-y-1">
+                    <div />
+                    <div className="font-medium">Ngày</div>
+                    <div className="grid grid-cols-[1fr_1fr]">
+                      <div className="font-medium">Tên</div>
+                      <div className="font-medium">Nội dung</div>
+                    </div>
+                    {Array.from({ length: 10 }).map((_, index) => (
+                      <Fragment key={`customs-directive-${index + 1}`}>
+                        <div className="font-['Courier_New']">{index + 1}</div>
+                        <div className="font-['Courier_New']">/ /</div>
+                        <div className="grid grid-cols-[1fr_1fr]">
+                          <div />
+                          <div />
+                        </div>
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-[#1F2937] px-4 py-3">
+                  <div className="flex items-center justify-between text-[10px] text-foreground">
+                    <span>{customsTradeType === "export" ? "<EXP>" : "<IMP>"}</span>
+                    <span>3 / 24</span>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-4 py-3 text-center">
+                  <div className="text-[13px] font-bold text-foreground">
+                    {customsTradeType === "export"
+                      ? "Tờ khai hàng hóa xuất khẩu (thông quan)"
+                      : "Tờ khai hàng hóa nhập khẩu (thông quan)"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-6 border-b border-[#1F2937] px-4 py-3 text-[10px] text-foreground">
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai</span><span className="font-semibold font-['Courier_New']">308341177010</span></div>
+                    <div className="flex justify-between gap-4"><span>Số tờ khai tạm nhập tái xuất tương ứng</span><span className="font-['Courier_New']">-</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã phân loại kiểm tra</span><span className="font-['Courier_New']">1</span></div>
+                    <div className="flex justify-between gap-4"><span>Tên cơ quan Hải quan tiếp nhận tờ khai</span><span className="font-['Courier_New']">HQHOALAC</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày đăng ký</span><span className="font-['Courier_New']">19/03/2026 09:14:46</span></div>
+                    <div className="flex justify-between gap-4"><span>Thời hạn tái nhập/ tái xuất</span><span className="font-['Courier_New']">/ / -</span></div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between gap-4"><span>Số tờ khai đầu tiên</span><span className="font-['Courier_New']">- /</span></div>
+                    <div className="h-[1.05em]" />
+                    <div className="flex justify-between gap-4"><span>Mã loại hình</span><span className="font-['Courier_New']">B11&nbsp;&nbsp;&nbsp;2</span></div>
+                  </div>
+                  <div className="space-y-1.5 text-right">
+                    <div className="flex justify-between gap-4"><span>Mã số thuế đại diện</span><span className="font-['Courier_New']">8409</span></div>
+                    <div className="flex justify-between gap-4"><span>Mã bộ phận xử lý tờ khai</span><span className="font-['Courier_New']">01</span></div>
+                    <div className="flex justify-between gap-4"><span>Ngày thay đổi đăng ký</span><span className="font-['Courier_New']">/ /</span></div>
+                  </div>
+                </div>
+
+                <div className="px-4 py-3 text-[10px] text-foreground">
+                  <div className="space-y-5">
+                    {customsDeclarationGoodsItems.map((item) => (
+                      <div key={item.id} className="border-b border-[#1F2937] pb-5 last:border-b-0">
+                        <div className="mb-3 font-semibold">&lt;{item.id}&gt;</div>
+                        <div className="grid grid-cols-[1.05fr_1fr] gap-x-12 gap-y-3">
+                          <div className="space-y-1">
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Mã số hàng hóa</div>
+                              <div className="font-['Courier_New']">{item.goodsCode || "-"}</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Mô tả hàng hóa</div>
+                              <div className="font-['Courier_New']">{item.description || "-"}</div>
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Mã quản lý riêng</div>
+                              <div className="font-['Courier_New']">{item.managementCode || "-"}</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Trị giá hóa đơn</div>
+                              <div className="font-['Courier_New']">{item.invoiceValue || "-"}</div>
+                            </div>
+                            <div className="mt-2 font-medium">Thuế xuất khẩu</div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="pl-6">Trị giá tính thuế (S)</div>
+                              <div className="font-['Courier_New']">{item.taxableValue || "-"}</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="pl-6">Số lượng tính thuế</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="pl-6">Thuế suất</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="pl-6">Số tiền thuế</div>
+                              <div className="font-['Courier_New']">VND</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="pl-6">Số tiền miễn giảm</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="whitespace-nowrap font-medium">Số thứ tự của dòng hàng trên tờ khai tạm nhập tái xuất tương ứng</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Danh mục miễn thuế xuất khẩu</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[120px_1fr] gap-4">
+                              <div className="font-medium">Tiền lệ phí</div>
+                              <div className="space-y-1">
+                                <div className="grid grid-cols-[120px_1fr] gap-4"><div>Đơn giá</div><div className="font-['Courier_New']">-</div></div>
+                                <div className="grid grid-cols-[120px_1fr] gap-4"><div>Số lượng</div><div className="font-['Courier_New']">-</div></div>
+                                <div className="grid grid-cols-[120px_1fr] gap-4"><div>Khoản tiền</div><div className="font-['Courier_New']">VND</div></div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Mã văn bản pháp luật khác</div>
+                              <div className="font-['Courier_New']">1&nbsp;&nbsp;&nbsp;&nbsp;2&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;&nbsp;&nbsp;&nbsp;4&nbsp;&nbsp;&nbsp;&nbsp;5</div>
+                            </div>
+                            <div className="grid grid-cols-[240px_1fr] gap-4">
+                              <div className="font-medium">Miễn / Giảm / Không chịu thuế xuất khẩu</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Số lượng (1)</div>
+                              <div className="font-['Courier_New']">{item.quantity1 || "-"}</div>
+                            </div>
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Số lượng (2)</div>
+                              <div className="font-['Courier_New']">{item.quantity2 || "-"}</div>
+                            </div>
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Đơn giá hóa đơn</div>
+                              <div className="font-['Courier_New']">{item.invoiceUnitPrice || "-"}</div>
+                            </div>
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Trị giá tính thuế (M)</div>
+                              <div className="font-['Courier_New']">-</div>
+                            </div>
+                            <div className="grid grid-cols-[180px_1fr] gap-4">
+                              <div className="font-medium">Đơn giá tính thuế</div>
+                              <div className="font-['Courier_New']">{item.taxableUnitPrice || "-"}</div>
+                            </div>
+                            <div className="pt-6">
+                              <div className="grid grid-cols-[120px_1fr] gap-4">
+                                <div className="font-medium">Tiền bảo hiểm</div>
+                                <div className="space-y-1">
+                                  <div className="grid grid-cols-[120px_1fr] gap-4"><div>Đơn giá</div><div className="font-['Courier_New']">-</div></div>
+                                  <div className="grid grid-cols-[120px_1fr] gap-4"><div>Số lượng</div><div className="font-['Courier_New']">-</div></div>
+                                  <div className="grid grid-cols-[120px_1fr] gap-4"><div>Khoản tiền</div><div className="font-['Courier_New']">VND</div></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={addCustomsDeclarationGoodsItem}
+                      className="inline-flex h-9 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-4 text-[14px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      + Thêm Mã quản lý riêng
+                    </button>
+                  </div>
+                </div>
+              </div>
               </div>
             </div>
           </div>
