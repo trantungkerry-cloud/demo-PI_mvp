@@ -365,24 +365,24 @@ function createInitialCustomsCostRows(tradeType: CustomsTradeType): CustomsCostR
 
 function createInitialCustomsDocumentRows(tradeType: CustomsTradeType): CustomsDocumentRow[] {
   const importNames = [
-    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
     {
       name: "Các chứng từ khách hàng cung cấp (INV, PKL, BL, AN, DEBIT, giấy phép...)",
       mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode,
       files: []
     },
-    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] },
-    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] }
+    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
+    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] },
+    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] }
   ];
   const exportNames = [
-    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
     {
       name: "Các chứng từ khách hàng cung cấp (INV, PKL, BOOKING...)",
       mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode,
       files: []
     },
-    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] },
-    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] }
+    { name: "Tờ khai hải quan", mode: "ATTACHMENT_REQUIRED" as CustomsDocumentDisplayMode, files: [] },
+    { name: "Đề nghị thanh toán", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["De nghi thanh toan.pdf"] },
+    { name: "Debit note", mode: "DISPLAY_ONLY" as CustomsDocumentDisplayMode, files: ["Debit note.pdf"] }
   ];
 
   const names = tradeType === "import" ? importNames : exportNames;
@@ -461,13 +461,43 @@ function createInitialCustomsAuditRows(tradeType: CustomsTradeType): CustomsAudi
 function createInitialInlandCostRows(tradeType: CustomsTradeType): InlandCostRow[] {
   const baseRows = ["Cước vận chuyển", "Phụ phí vận chuyển", "Phí lưu ca"];
 
+  const mainPrice = tradeType === "import" ? 1800000 : 1650000;
+  const surchargePrice = 350000;
+
   return baseRows.map((feeName, index) => ({
     id: `${tradeType}-inland-cost-${index + 1}`,
     feeName,
-    amount: index === 0 ? "1800000" : "",
+    quantity: "1",
+    unit: tradeType === "import" ? "Chuyến" : "Lô",
+    price:
+      index === 0
+        ? formatVietnameseInteger(mainPrice)
+        : index === 1
+          ? formatVietnameseInteger(surchargePrice)
+          : "",
+    amount:
+      index === 0
+        ? formatVietnameseInteger(mainPrice)
+        : index === 1
+          ? formatVietnameseInteger(surchargePrice)
+          : "",
     currency: "VND",
-    updatedBy: index === 0 ? "An Phạm" : "",
-    updatedAt: index === 0 ? "12/03/2026 13:18" : ""
+    vatRate: "8",
+    vatAmount:
+      index === 0
+        ? formatVietnameseInteger(tradeType === "import" ? 144000 : 132000)
+        : index === 1
+          ? formatVietnameseInteger(28000)
+          : "",
+    total:
+      index === 0
+        ? formatVietnameseInteger(tradeType === "import" ? 1944000 : 1782000)
+        : index === 1
+          ? formatVietnameseInteger(378000)
+          : "",
+    attachmentNames: [],
+    updatedBy: index <= 1 ? "An Phạm" : "",
+    updatedAt: index <= 1 ? "12/03/2026 13:18" : ""
   }));
 }
 
@@ -477,6 +507,13 @@ function createInitialInlandDocumentRows(tradeType: CustomsTradeType): InlandDoc
       ? [
           { name: "Biên bản giao hàng", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
           { name: "Debit note", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          { name: "Đề nghị thanh toán", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          {
+            name: "AN tàu nội địa",
+            required: false,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          },
           {
             name: "BL",
             required: true,
@@ -490,6 +527,24 @@ function createInitialInlandDocumentRows(tradeType: CustomsTradeType): InlandDoc
             files: [{ id: "inland-import-an-1", name: "arrival-notice.pdf", sizeLabel: "428 KB" }]
           },
           {
+            name: "DO",
+            required: false,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          },
+          {
+            name: "EIR",
+            required: false,
+            mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
+            files: []
+          },
+          {
+            name: "Các chứng từ khác",
+            required: false,
+            mode: "ATTACHMENT_OPTIONAL" as InlandDocumentDisplayMode,
+            files: []
+          },
+          {
             name: "PoB - các phiếu thu/hóa đơn chi hộ",
             required: true,
             mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
@@ -498,11 +553,18 @@ function createInitialInlandDocumentRows(tradeType: CustomsTradeType): InlandDoc
         ]
       : [
           { name: "Debit note", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
+          { name: "Đề nghị thanh toán", required: false, mode: "DISPLAY_ONLY" as InlandDocumentDisplayMode, files: [] },
           {
             name: "Booking",
             required: true,
             mode: "ATTACHMENT_REQUIRED" as InlandDocumentDisplayMode,
             files: [{ id: "inland-export-booking-1", name: "booking-export.pdf", sizeLabel: "512 KB" }]
+          },
+          {
+            name: "Các chứng từ khác",
+            required: false,
+            mode: "ATTACHMENT_OPTIONAL" as InlandDocumentDisplayMode,
+            files: []
           },
           {
             name: "PoB - các phiếu thu/hóa đơn chi hộ",
@@ -705,7 +767,13 @@ type ToastState = {
   message: string;
 } | null;
 type CustomsTradeType = "import" | "export";
-type CustomsDebitNoteStatus = "draft" | "pending_confirmation" | "confirmed" | "cancelled";
+type CustomsDebitNoteStatus =
+  | "draft"
+  | "pending_confirmation"
+  | "pending_payment"
+  | "paid"
+  | "overdue"
+  | "cancelled";
 type CustomsCostRow = {
   id: string;
   feeName: string;
@@ -741,6 +809,10 @@ type CustomsAuditRow = {
   time: string;
 };
 type CustomsDebitNoteListStatus = "approved" | "cancelled";
+
+function mapDebitListStatusToFlowStatus(status: CustomsDebitNoteListStatus): CustomsDebitNoteStatus {
+  return status === "approved" ? "pending_payment" : "cancelled";
+}
 type CustomsDeclarationGoodsItem = {
   id: string;
   goodsCode: string;
@@ -771,8 +843,15 @@ type InlandDocumentDisplayMode = "DISPLAY_ONLY" | "ATTACHMENT_REQUIRED" | "ATTAC
 type InlandCostRow = {
   id: string;
   feeName: string;
+  quantity: string;
+  unit: string;
+  price: string;
   amount: string;
   currency: string;
+  vatRate: string;
+  vatAmount: string;
+  total: string;
+  attachmentNames: string[];
   updatedBy: string;
   updatedAt: string;
 };
@@ -1729,6 +1808,10 @@ function sortSelectOptions(options: SelectOption[]) {
 
 function formatBookingCode(code: string) {
   return code.replaceAll("-", "\u2011");
+}
+
+function formatShipmentCodeFromBooking(code: string) {
+  return code.replace(/^BR-/, "SHP-").replaceAll("-", "\u2011");
 }
 
 function formatPortFilterLabel(port: string) {
@@ -3048,7 +3131,9 @@ function InlineCompactDateField({
           readOnly ? "cursor-default" : ""
         }`}
       >
-        <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>{value || placeholder}</span>
+        <span className={value ? "text-foreground" : "text-[#9CA3AF]"}>
+          {value ? formatIsoDateToDisplay(value) : placeholder}
+        </span>
       </button>
       <input
         ref={inputRef}
@@ -3462,9 +3547,19 @@ export default function Page() {
   const [isCustomsDebitNotesListOpen, setIsCustomsDebitNotesListOpen] = useState(false);
   const [isCustomsDebitNotePreviewOpen, setIsCustomsDebitNotePreviewOpen] = useState(false);
   const [isCustomsPaymentRequestOpen, setIsCustomsPaymentRequestOpen] = useState(false);
+  const [isInlandDebitNoteOpen, setIsInlandDebitNoteOpen] = useState(false);
+  const [isInlandDebitNotesListOpen, setIsInlandDebitNotesListOpen] = useState(false);
+  const [isInlandPaymentRequestOpen, setIsInlandPaymentRequestOpen] = useState(false);
   const [isCustomsDocumentFilesModalOpen, setIsCustomsDocumentFilesModalOpen] = useState(false);
   const [isCustomsDeclarationOpen, setIsCustomsDeclarationOpen] = useState(false);
-  const [customsDeclarationZoom, setCustomsDeclarationZoom] = useState<100 | 125 | 150>(125);
+  const [activeCustomsReplacingFileId, setActiveCustomsReplacingFileId] = useState<string | null>(null);
+  const [customsDeclarationZoom, setCustomsDeclarationZoom] = useState<100 | 125 | 150>(150);
+  const [customsDeclarationStatusByType, setCustomsDeclarationStatusByType] = useState<
+    Record<CustomsTradeType, "draft" | "pending_confirmation" | "pending_payment">
+  >({
+    import: "draft",
+    export: "draft"
+  });
   const [customsDeclarationGoodsItems, setCustomsDeclarationGoodsItems] = useState<CustomsDeclarationGoodsItem[]>(
     createInitialCustomsDeclarationGoods()
   );
@@ -3472,11 +3567,38 @@ export default function Page() {
   const [customsPaymentRequestDateText, setCustomsPaymentRequestDateText] = useState("Ngày 2 tháng 4 năm 2026");
   const [customsPaymentRequestFullName, setCustomsPaymentRequestFullName] = useState(currentUserName);
   const [customsPaymentRequestDepartment, setCustomsPaymentRequestDepartment] = useState("Customs");
+  const [customsPaymentRequestStatusByType, setCustomsPaymentRequestStatusByType] = useState<
+    Record<CustomsTradeType, CustomsDebitNoteStatus>
+  >({
+    import: "draft",
+    export: "draft"
+  });
+  const [customsPaymentRequestDueDateByType, setCustomsPaymentRequestDueDateByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
+  });
+  const [inlandPaymentRequestDateText, setInlandPaymentRequestDateText] = useState("Ngày 2 tháng 4 năm 2026");
+  const [inlandPaymentRequestFullName, setInlandPaymentRequestFullName] = useState(currentUserName);
+  const [inlandPaymentRequestDepartment, setInlandPaymentRequestDepartment] = useState("Inland");
+  const [inlandPaymentRequestStatusByType, setInlandPaymentRequestStatusByType] = useState<
+    Record<CustomsTradeType, CustomsDebitNoteStatus>
+  >({
+    import: "draft",
+    export: "draft"
+  });
+  const [inlandPaymentRequestDueDateByType, setInlandPaymentRequestDueDateByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
+  });
   const [customsDebitNoteStatusByType, setCustomsDebitNoteStatusByType] = useState<
     Record<CustomsTradeType, CustomsDebitNoteStatus>
   >({
     import: "draft",
     export: "draft"
+  });
+  const [customsDebitNoteDueDateByType, setCustomsDebitNoteDueDateByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
   });
   const [customsDebitNoteForcedRowIds, setCustomsDebitNoteForcedRowIds] = useState<Record<CustomsTradeType, string[]>>({
     import: [],
@@ -3494,11 +3616,12 @@ export default function Page() {
   const [contractListPageNumber, setContractListPageNumber] = useState(1);
   const [serviceConfigListPageNumber, setServiceConfigListPageNumber] = useState(1);
   const [customerShipmentPage, setCustomerShipmentPage] = useState(1);
+  const [selectedShipmentCode, setSelectedShipmentCode] = useState<string | null>(null);
   const [selectedServiceScope, setSelectedServiceScope] =
     useState<(typeof contractDisplayServiceOptions)[number]>(servicePageScopeOptions[0]);
   const [selectedServiceDetailKey, setSelectedServiceDetailKey] = useState<string | null>(null);
   const [shipmentWorkspaceTab, setShipmentWorkspaceTab] =
-    useState<"details" | "customs" | "inland" | "oversea">("details");
+    useState<"list" | "details" | "customs" | "inland" | "oversea">("list");
   const [shipmentDetailDirection, setShipmentDetailDirection] = useState<"export" | "import">("export");
   const [shipmentDetailCargoType, setShipmentDetailCargoType] = useState<"FCL" | "LCL">("FCL");
   const [shipmentDetailEta, setShipmentDetailEta] = useState("");
@@ -3579,6 +3702,18 @@ export default function Page() {
   const [inlandCostRowsByType, setInlandCostRowsByType] = useState<Record<CustomsTradeType, InlandCostRow[]>>({
     import: createInitialInlandCostRows("import"),
     export: createInitialInlandCostRows("export")
+  });
+  const [inlandDebitNoteStatusByType, setInlandDebitNoteStatusByType] = useState<Record<CustomsTradeType, CustomsDebitNoteStatus>>({
+    import: "draft",
+    export: "draft"
+  });
+  const [inlandDebitNoteDueDateByType, setInlandDebitNoteDueDateByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
+  });
+  const [inlandDebitNoteForcedRowIds, setInlandDebitNoteForcedRowIds] = useState<Record<CustomsTradeType, string[]>>({
+    import: [],
+    export: []
   });
   const [inlandCostDrafts, setInlandCostDrafts] = useState<Record<string, string>>({});
   const [inlandEditingCostRowId, setInlandEditingCostRowId] = useState<string | null>(null);
@@ -3809,6 +3944,7 @@ export default function Page() {
   const isCustomerServicesPage =
     currentPage === "customers" && customerSubPage === "services" && !selectedServiceDetailKey;
   const isCustomerShipmentPage = currentPage === "customers" && customerSubPage === "shipments";
+  const isCustomerShipmentListPage = isCustomerShipmentPage && shipmentWorkspaceTab === "list";
   const isCustomerCustomsPage = isCustomerShipmentPage && shipmentWorkspaceTab === "customs";
   const isCustomerInlandPage = isCustomerShipmentPage && shipmentWorkspaceTab === "inland";
   const isCustomerOverseaPage = isCustomerShipmentPage && shipmentWorkspaceTab === "oversea";
@@ -4688,6 +4824,60 @@ export default function Page() {
         .filter((row) => row.customer === selectedCustomerRow.customer)
         .sort((left, right) => parseDisplayDate(right.createdAt) - parseDisplayDate(left.createdAt))
     : [];
+  const normalizedShipmentListSearchQuery = searchQuery.trim().toLowerCase();
+  const selectedShipmentStatusFilters = selectedSearchFilters["Trạng thái"] ?? [];
+  const selectedShipmentCargoTypes = selectedSearchFilters["Loại hàng"] ?? [];
+  const selectedShipmentPackagingFilters = selectedSearchFilters["Đóng gói"] ?? [];
+  const shipmentListRows = allBookingRows
+    .filter((row) => {
+      const shipmentCode = formatShipmentCodeFromBooking(row.code).toLowerCase();
+      const matchesSearch =
+        normalizedShipmentListSearchQuery.length === 0 ||
+        [
+          shipmentCode,
+          row.customer.toLowerCase(),
+          row.route.from.toLowerCase(),
+          row.route.to.toLowerCase(),
+          row.cargoType.toLowerCase(),
+          row.packaging.toLowerCase()
+        ].some((value) => value.includes(normalizedShipmentListSearchQuery));
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      if (
+        selectedShipmentStatusFilters.length > 0 &&
+        !selectedShipmentStatusFilters.includes(bookingStatusMeta[row.status].label)
+      ) {
+        return false;
+      }
+
+      if (selectedShipmentCargoTypes.length > 0 && !selectedShipmentCargoTypes.includes(row.cargoType)) {
+        return false;
+      }
+
+      if (selectedShipmentPackagingFilters.length > 0 && !selectedShipmentPackagingFilters.includes(row.packaging)) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((left, right) => {
+      const dateDiff = parseDisplayDate(right.createdAt) - parseDisplayDate(left.createdAt);
+      if (dateDiff !== 0) {
+        return dateDiff;
+      }
+      return left.code.localeCompare(right.code, "vi");
+    });
+  const shipmentListPageSize = 10;
+  const shipmentListPageCount = Math.max(1, Math.ceil(shipmentListRows.length / shipmentListPageSize));
+  const paginatedShipmentListRows = shipmentListRows.slice(
+    (customerShipmentPage - 1) * shipmentListPageSize,
+    customerShipmentPage * shipmentListPageSize
+  );
+  const shipmentListTableColumns =
+    "minmax(148px,0.95fr) minmax(220px,1.45fr) minmax(200px,1.2fr) minmax(120px,0.7fr) minmax(150px,0.9fr) minmax(120px,0.8fr)";
   const selectedCustomerContracts = selectedCustomerRow
     ? contractRows.filter((row) => row.customer === selectedCustomerRow.customer).slice(0, 2)
     : [];
@@ -4751,6 +4941,8 @@ export default function Page() {
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const moduleSearchPlaceholder = isCustomerContractsPage
     ? "Tìm kiếm theo Số HĐ, Tên KH, MST KH"
+    : isCustomerShipmentListPage
+      ? "Tìm kiếm theo Shipment ID, Khách hàng, Tuyến vận chuyển"
     : isCustomerServicesPage
       ? "Tìm kiếm theo Nhóm dịch vụ, Tên dịch vụ"
     : "Tìm kiếm theo tên KH, MST, Mã KH, Email, SĐT";
@@ -4784,6 +4976,20 @@ export default function Page() {
       items: servicePageScopeOptions.map((service) => service.replace(/^[^\p{L}\p{N}]+\s*/u, "")),
     },
   ] as const;
+  const shipmentSearchFilterSections = [
+    {
+      title: "Trạng thái",
+      items: bookingStatuses.map((status) => bookingStatusMeta[status].label),
+    },
+    {
+      title: "Loại hàng",
+      items: [...new Set(allBookingRows.map((row) => row.cargoType))],
+    },
+    {
+      title: "Đóng gói",
+      items: [...new Set(allBookingRows.map((row) => row.packaging))],
+    },
+  ] as const;
   const customsBreadcrumb = `Home / Shipments / Shipment Detail / Customs / ${customsTradeType === "import" ? "Import" : "Export"}`;
   const customsShipmentMeta = [
     { label: "Mã shipment", value: "SHP-2026-0001" },
@@ -4797,20 +5003,52 @@ export default function Page() {
     visibleCustomsDocumentRows.find((row) => row.id === activeCustomsDocumentFilesRowId) ?? null;
   const visibleCustomsAuditRows = customsAuditRowsByType[customsTradeType];
   const activeCustomsDebitNoteStatus = customsDebitNoteStatusByType[customsTradeType];
+  const activeCustomsDebitNoteDueDate = customsDebitNoteDueDateByType[customsTradeType];
+  const activeCustomsPaymentRequestStatus = customsPaymentRequestStatusByType[customsTradeType];
+  const activeCustomsPaymentRequestDueDate = customsPaymentRequestDueDateByType[customsTradeType];
   const customsDocumentStatusMeta = {
     draft: { label: "Nháp", className: "bg-[#F3F4F6] text-[#4B5563]" },
     pending_confirmation: { label: "Chờ xác nhận", className: "bg-[#FFF4E5] text-[#C75B12]" },
-    confirmed: { label: "Đã xác nhận", className: "bg-[#E7F6EC] text-[#18794E]" },
+    pending_payment: { label: "Chờ thanh toán", className: "bg-[#EEF3FF] text-[#245698]" },
+    paid: { label: "Đã thanh toán", className: "bg-[#E7F6EC] text-[#18794E]" },
+    overdue: { label: "Đã quá hạn", className: "bg-[#FFF1E8] text-[#C75B12]" },
     cancelled: { label: "Hủy", className: "bg-[#FDECEC] text-[#D14343]" }
   } as const;
+  const getDebitNoteDocumentStatusMeta = (status: CustomsDebitNoteStatus) => {
+    if (status === "pending_payment") {
+      return { label: "Đã xác nhận", className: "bg-[#E7F6EC] text-[#18794E]" };
+    }
+    return customsDocumentStatusMeta[status];
+  };
   const customsDebitNoteSteps = [
     { key: "draft" as const, label: "Nháp" },
     { key: "pending_confirmation" as const, label: "Chờ xác nhận" },
-    { key: "confirmed" as const, label: "Đã xác nhận" },
+    { key: "pending_payment" as const, label: "Chờ thanh toán" },
+    { key: "paid" as const, label: "Đã thanh toán" },
+    { key: "overdue" as const, label: "Đã quá hạn" },
     { key: "cancelled" as const, label: "Hủy" }
   ];
+  const visibleDebitNoteFlowSteps = [
+    { key: "draft" as const, label: "Nháp" },
+    { key: "pending_confirmation" as const, label: "Chờ xác nhận" },
+    { key: "pending_payment" as const, label: "Đã xác nhận" }
+  ];
+  const visibleCustomsDebitNoteSteps = customsDebitNoteSteps.filter((step) => step.key !== "cancelled");
   const activeCustomsDebitNoteStepIndex = customsDebitNoteSteps.findIndex(
     (step) => step.key === activeCustomsDebitNoteStatus
+  );
+  const activeVisibleCustomsDebitNoteStepIndex = visibleDebitNoteFlowSteps.findIndex(
+    (step) => step.key === activeCustomsDebitNoteStatus
+  );
+  const activeCustomsPaymentRequestStepIndex = customsDebitNoteSteps.findIndex(
+    (step) => step.key === activeCustomsPaymentRequestStatus
+  );
+  const activeVisibleCustomsPaymentRequestStepIndex = visibleCustomsDebitNoteSteps.findIndex(
+    (step) => step.key === activeCustomsPaymentRequestStatus
+  );
+  const activeCustomsDeclarationStatus = customsDeclarationStatusByType[customsTradeType];
+  const activeVisibleCustomsDeclarationStepIndex = visibleDebitNoteFlowSteps.findIndex(
+    (step) => step.key === activeCustomsDeclarationStatus
   );
   const customsDeclarationZoomScale = customsDeclarationZoom / 100;
   const visibleCustomsDebitNoteRows = visibleCustomsCostRows.filter(
@@ -4876,19 +5114,19 @@ export default function Page() {
   const customsDebitNoteListRows: Array<{ id: string; title: string; timestamp: string; status: CustomsDebitNoteListStatus }> = [
     {
       id: `${customsTradeType}-debit-note-approved`,
-      title: "Debit note",
+      title: "Debit Note 03 04 2025",
       timestamp: "03 Apr 2025, 09:41",
       status: "approved"
     },
     {
       id: `${customsTradeType}-debit-note-cancelled-1`,
-      title: "Debit note",
+      title: "Debit Note 01 04 2025",
       timestamp: "01 Apr 2025, 14:20",
       status: "cancelled"
     },
     {
       id: `${customsTradeType}-debit-note-cancelled-2`,
-      title: "Debit note",
+      title: "Debit Note 28 03 2025",
       timestamp: "28 Mar 2025, 11:05",
       status: "cancelled"
     }
@@ -4910,9 +5148,62 @@ export default function Page() {
     { label: "Loại", value: inlandTradeType === "import" ? "Import" : "Export" },
     { label: "Cập nhật gần nhất", value: "12/03/2026 - An Phạm" }
   ] as const;
+  const inlandDebitNoteListRows: Array<{ id: string; title: string; timestamp: string; status: CustomsDebitNoteListStatus }> = [
+    {
+      id: `${inlandTradeType}-debit-note-approved`,
+      title: "Debit Note 03 04 2025",
+      timestamp: "03 Apr 2025, 09:41",
+      status: "approved"
+    },
+    {
+      id: `${inlandTradeType}-debit-note-cancelled-1`,
+      title: "Debit Note 01 04 2025",
+      timestamp: "01 Apr 2025, 14:20",
+      status: "cancelled"
+    },
+    {
+      id: `${inlandTradeType}-debit-note-cancelled-2`,
+      title: "Debit Note 28 03 2025",
+      timestamp: "28 Mar 2025, 11:05",
+      status: "cancelled"
+    }
+  ];
+  const canCreateInlandDebitNote = inlandDebitNoteListRows.every((row) => row.status === "cancelled");
   const visibleInlandCostRows = inlandCostRowsByType[inlandTradeType];
   const visibleInlandDocumentRows = inlandDocumentRowsByType[inlandTradeType];
   const visibleInlandAuditRows = inlandAuditRowsByType[inlandTradeType];
+  const activeInlandDebitNoteStatus = inlandDebitNoteStatusByType[inlandTradeType];
+  const activeInlandDebitNoteDueDate = inlandDebitNoteDueDateByType[inlandTradeType];
+  const activeInlandPaymentRequestStatus = inlandPaymentRequestStatusByType[inlandTradeType];
+  const activeInlandPaymentRequestDueDate = inlandPaymentRequestDueDateByType[inlandTradeType];
+  const activeInlandDebitNoteStepIndex = customsDebitNoteSteps.findIndex((step) => step.key === activeInlandDebitNoteStatus);
+  const activeVisibleInlandDebitNoteStepIndex = visibleDebitNoteFlowSteps.findIndex(
+    (step) => step.key === activeInlandDebitNoteStatus
+  );
+  const activeInlandPaymentRequestStepIndex = customsDebitNoteSteps.findIndex(
+    (step) => step.key === activeInlandPaymentRequestStatus
+  );
+  const activeVisibleInlandPaymentRequestStepIndex = visibleCustomsDebitNoteSteps.findIndex(
+    (step) => step.key === activeInlandPaymentRequestStatus
+  );
+  const visibleInlandDebitNoteRows = visibleInlandCostRows.filter(
+    (row) =>
+      inlandDebitNoteForcedRowIds[inlandTradeType].includes(row.id) ||
+      [
+        row.feeName,
+        row.quantity,
+        row.unit,
+        row.price,
+        row.amount,
+        row.vatRate,
+        row.vatAmount,
+        row.total
+      ].some((value) => value.trim() !== "")
+  );
+  const inlandDebitNoteGrandTotal = formatVietnameseInteger(
+    visibleInlandDebitNoteRows.reduce((sum, row) => sum + parseVietnameseNumber(row.total), 0)
+  );
+  const inlandPaymentRequestRows = visibleInlandDebitNoteRows.slice(0, 8);
   const inlandValidationErrors = visibleInlandDocumentRows
     .filter((row) => row.required && row.files.length === 0)
     .map((row) => ({
@@ -4942,13 +5233,18 @@ export default function Page() {
     visibleOverseaCostRows.length === 0 ? 0 : Math.round((overseaEnteredCostCount / visibleOverseaCostRows.length) * 100);
   const activeSearchFilterSections = isCustomerContractsPage
     ? contractSearchFilterSections
+    : isCustomerShipmentListPage
+      ? shipmentSearchFilterSections
     : isCustomerServicesPage
       ? serviceSearchFilterSections
       : searchFilterSections;
   const searchGroupOptions = ["Công ty phụ trách", "Tháng tạo", "Trạng thái"] as const;
   const contractSearchGroupOptions = ["Loại HĐ", "Loại dịch vụ", "Tháng tạo"] as const;
+  const shipmentSearchGroupOptions = ["Khách hàng", "Trạng thái", "Tháng tạo"] as const;
   const activeSearchGroupOptions = isCustomerContractsPage
     ? contractSearchGroupOptions
+    : isCustomerShipmentListPage
+      ? shipmentSearchGroupOptions
     : isCustomerServicesPage
       ? []
       : searchGroupOptions;
@@ -4957,6 +5253,8 @@ export default function Page() {
       ? "Thêm mới"
       : isCustomerContractCreatePage
         ? "Hợp đồng"
+        : isCustomerShipmentListPage
+          ? "Shipment Lists"
         : isCustomerShipmentDetailsPage
           ? "Shipment Details"
         : isCustomerCustomsPage
@@ -5794,7 +6092,10 @@ export default function Page() {
     const syncBookingFromUrl = () => {
       const nextParams = new URLSearchParams(window.location.search);
       const nextPage = nextParams.get("page") === "customers" ? "customers" : "bookings";
-      const nextShipmentTab =
+        const nextShipmentTab =
+          nextParams.get("shipment_tab") === "list"
+            ? "list"
+            : 
         nextParams.get("shipment_tab") === "customs"
           ? "customs"
           : nextParams.get("shipment_tab") === "inland"
@@ -5807,7 +6108,9 @@ export default function Page() {
                   ? "inland"
                   : nextParams.get("view") === "oversea"
                     ? "oversea"
-                    : "details";
+                    : nextParams.get("view") === "shipments"
+                      ? "list"
+                      : "details";
       setCurrentPage(nextPage);
       setShipmentWorkspaceTab(nextShipmentTab);
       setCustomerSubPage(
@@ -5840,6 +6143,15 @@ export default function Page() {
       );
       setSelectedContractCode(
         nextPage === "customers" && nextParams.get("view") === "contracts" ? nextParams.get("contract") : null
+      );
+      setSelectedShipmentCode(
+        nextPage === "customers" &&
+          (nextParams.get("view") === "shipments" ||
+            nextParams.get("view") === "customs" ||
+            nextParams.get("view") === "inland" ||
+            nextParams.get("view") === "oversea")
+          ? nextParams.get("shipment")
+          : null
       );
       const nextServiceScope = nextPage === "customers" && nextParams.get("view") === "services"
         ? nextParams.get("service")
@@ -5894,6 +6206,18 @@ export default function Page() {
   useEffect(() => {
     setCustomerShipmentPage(1);
   }, [selectedCustomerKey]);
+
+  useEffect(() => {
+    if (isCustomerShipmentListPage) {
+      setCustomerShipmentPage(1);
+    }
+  }, [isCustomerShipmentListPage, searchQuery, selectedSearchFilters]);
+
+  useEffect(() => {
+    if (isCustomerShipmentListPage) {
+      setCustomerShipmentPage((current) => Math.min(current, shipmentListPageCount));
+    }
+  }, [isCustomerShipmentListPage, shipmentListPageCount]);
 
   useEffect(() => {
     if (!selectedServiceDetailRow) {
@@ -6951,7 +7275,17 @@ export default function Page() {
   };
 
   const openCustomsUpload = (rowId: string) => {
+    setActiveCustomsReplacingFileId(null);
     setActiveCustomsUploadRowId(rowId);
+    customsUploadInputRef.current?.click();
+  };
+
+  const replaceCustomsDocumentFile = (fileId: string) => {
+    if (!activeCustomsDocumentFilesRow) {
+      return;
+    }
+    setActiveCustomsReplacingFileId(fileId);
+    setActiveCustomsUploadRowId(activeCustomsDocumentFilesRow.id);
     customsUploadInputRef.current?.click();
   };
 
@@ -6999,6 +7333,44 @@ export default function Page() {
     }
 
     const targetRow = visibleCustomsDocumentRows.find((row) => row.id === targetRowId);
+    if (activeCustomsReplacingFileId && activeCustomsDocumentFilesRow?.id === targetRowId) {
+      const targetFileIndex = visibleCustomsGeneratedDocumentFiles.findIndex((file) => file.id === activeCustomsReplacingFileId);
+      const currentFileNames = visibleCustomsGeneratedDocumentFiles.map((file) => file.name);
+      if (targetFileIndex >= 0) {
+        const nextFileNames = [...currentFileNames];
+        const replacementFileName = uploadedFileNames[0];
+        const previousFileName = nextFileNames[targetFileIndex];
+        nextFileNames[targetFileIndex] = replacementFileName;
+
+        setCustomsDocumentRowsByType((current) => ({
+          ...current,
+          [customsTradeType]: current[customsTradeType].map((row) =>
+            row.id === targetRowId
+              ? {
+                  ...row,
+                  fileNames: nextFileNames,
+                  updatedBy: currentUserName,
+                  updatedAt: timestamp
+                }
+              : row
+          )
+        }));
+
+        prependCustomsAudit(customsTradeType, {
+          id: `${targetRowId}-replace-${Date.now()}`,
+          action: "Thay đổi file",
+          field: targetRow?.documentName || "Chứng từ",
+          beforeValue: previousFileName,
+          afterValue: replacementFileName,
+          actor: currentUserName,
+          time: timestamp
+        });
+
+        setActiveCustomsReplacingFileId(null);
+        setActiveCustomsUploadRowId(null);
+        return;
+      }
+    }
 
     setCustomsDocumentRowsByType((current) => ({
       ...current,
@@ -7026,7 +7398,48 @@ export default function Page() {
       });
     }
 
+    setActiveCustomsReplacingFileId(null);
     setActiveCustomsUploadRowId(null);
+  };
+
+  const deleteCustomsGeneratedDocumentFile = (fileId: string) => {
+    if (!activeCustomsDocumentFilesRow) {
+      return;
+    }
+
+    const targetFileIndex = visibleCustomsGeneratedDocumentFiles.findIndex((file) => file.id === fileId);
+    if (targetFileIndex < 0) {
+      return;
+    }
+
+    const timestamp = formatAuditTimestamp();
+    const currentFileNames = visibleCustomsGeneratedDocumentFiles.map((file) => file.name);
+    const removedFileName = currentFileNames[targetFileIndex];
+    const nextFileNames = currentFileNames.filter((_, index) => index !== targetFileIndex);
+
+    setCustomsDocumentRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].map((row) =>
+        row.id === activeCustomsDocumentFilesRow.id
+          ? {
+              ...row,
+              fileNames: nextFileNames,
+              updatedBy: currentUserName,
+              updatedAt: timestamp
+            }
+          : row
+      )
+    }));
+
+    prependCustomsAudit(customsTradeType, {
+      id: `${activeCustomsDocumentFilesRow.id}-delete-file-${Date.now()}`,
+      action: "Xóa file",
+      field: activeCustomsDocumentFilesRow.documentName,
+      beforeValue: removedFileName,
+      afterValue: "",
+      actor: currentUserName,
+      time: timestamp
+    });
   };
 
   const deleteCustomsDocumentFiles = (rowId: string) => {
@@ -7072,11 +7485,7 @@ export default function Page() {
     }
 
     if (targetRow.documentName === "Debit note") {
-      setCustomsDebitNoteStatusByType((current) => ({
-        ...current,
-        [customsTradeType]: "draft"
-      }));
-      setIsCustomsDebitNotePreviewOpen(true);
+      setIsCustomsDebitNotesListOpen(true);
       return;
     }
 
@@ -7164,6 +7573,17 @@ export default function Page() {
     }));
   };
 
+  const deleteCustomsCostRow = (rowId: string) => {
+    setCustomsCostRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((row) => row.id !== rowId)
+    }));
+    setCustomsDebitNoteForcedRowIds((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((id) => id !== rowId)
+    }));
+  };
+
   const updateCustomsDebitNoteRow = (
     rowId: string,
     field: "feeName" | "quantity" | "unit" | "price" | "vatRate",
@@ -7199,6 +7619,15 @@ export default function Page() {
     setIsCustomsDebitNotePreviewOpen(true);
   };
 
+  const openCustomsDebitNoteFromList = (status: CustomsDebitNoteListStatus) => {
+    setCustomsDebitNoteStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: mapDebitListStatusToFlowStatus(status)
+    }));
+    setIsCustomsDebitNotesListOpen(false);
+    setIsCustomsDebitNotePreviewOpen(true);
+  };
+
   const openCustomsDebitNotesList = () => {
     setIsCustomsDebitNotesListOpen(true);
   };
@@ -7206,6 +7635,27 @@ export default function Page() {
   const openCustomsDeclaration = () => {
     setCustomsDeclarationGoodsItems(createInitialCustomsDeclarationGoods());
     setIsCustomsDeclarationOpen(true);
+  };
+
+  const sendCustomsDeclarationForConfirmation = () => {
+    setCustomsDeclarationStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "pending_confirmation"
+    }));
+  };
+
+  const moveCustomsDeclarationBackToDraft = () => {
+    setCustomsDeclarationStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "draft"
+    }));
+  };
+
+  const confirmCustomsDeclaration = () => {
+    setCustomsDeclarationStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "pending_payment"
+    }));
   };
 
   const addCustomsDeclarationGoodsItem = () => {
@@ -7239,16 +7689,64 @@ export default function Page() {
   };
 
   const sendCustomsDebitNoteForConfirmation = () => {
+    if (!customsDebitNoteDueDateByType[customsTradeType].trim()) {
+      return;
+    }
     setCustomsDebitNoteStatusByType((current) => ({
       ...current,
       [customsTradeType]: "pending_confirmation"
     }));
   };
 
+  const moveCustomsDebitNoteBackToDraft = () => {
+    setCustomsDebitNoteStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "draft"
+    }));
+  };
+
   const confirmCustomsDebitNote = () => {
     setCustomsDebitNoteStatusByType((current) => ({
       ...current,
-      [customsTradeType]: "confirmed"
+      [customsTradeType]: "pending_payment"
+    }));
+  };
+
+  const sendCustomsPaymentRequestForConfirmation = () => {
+    if (!customsPaymentRequestDueDateByType[customsTradeType].trim()) {
+      return;
+    }
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "pending_confirmation"
+    }));
+  };
+
+  const confirmCustomsPaymentRequest = () => {
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "pending_payment"
+    }));
+  };
+
+  const moveCustomsPaymentRequestBackToDraft = () => {
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "draft"
+    }));
+  };
+
+  const markCustomsPaymentRequestPaid = () => {
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "paid"
+    }));
+  };
+
+  const markCustomsDebitNotePaid = () => {
+    setCustomsDebitNoteStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "paid"
     }));
   };
 
@@ -7432,6 +7930,213 @@ export default function Page() {
     });
   };
 
+  const addInlandCostRow = () => {
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: [
+        ...current[inlandTradeType],
+        {
+          id: `${inlandTradeType}-inland-cost-${Date.now()}`,
+          feeName: "",
+          quantity: "",
+          unit: "",
+          price: "",
+          amount: "",
+          currency: "VND",
+          vatRate: "",
+          vatAmount: "",
+          total: "",
+          attachmentNames: [],
+          updatedBy: "",
+          updatedAt: ""
+        }
+      ]
+    }));
+  };
+
+  const updateInlandDebitNoteRow = (
+    rowId: string,
+    field: "feeName" | "quantity" | "unit" | "price" | "vatRate",
+    value: string
+  ) => {
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].map((row) => {
+        if (row.id !== rowId) {
+          return row;
+        }
+        const nextValue =
+          field === "price"
+            ? formatVietnameseInteger(parseVietnameseNumber(value))
+            : field === "vatRate"
+              ? normalizeVatRateValue(value)
+              : value;
+
+        return recalculateCustomsDebitRow({
+          ...row,
+          [field]: nextValue
+        });
+      })
+    }));
+  };
+
+  const openInlandDebitNote = () => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "draft"
+    }));
+    setIsInlandDebitNoteOpen(true);
+  };
+
+  const openInlandDebitNoteFromList = (status: CustomsDebitNoteListStatus) => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: mapDebitListStatusToFlowStatus(status)
+    }));
+    setIsInlandDebitNotesListOpen(false);
+    setIsInlandDebitNoteOpen(true);
+  };
+
+  const openInlandDebitNotesList = () => {
+    setIsInlandDebitNotesListOpen(true);
+  };
+
+  const createInlandDebitNoteFromList = () => {
+    if (!canCreateInlandDebitNote) {
+      return;
+    }
+    setIsInlandDebitNotesListOpen(false);
+    openInlandDebitNote();
+  };
+
+  const viewInlandDocumentFiles = (rowId: string) => {
+    const targetRow = visibleInlandDocumentRows.find((row) => row.id === rowId);
+    if (!targetRow) {
+      return;
+    }
+
+    if (targetRow.documentName === "Debit note") {
+      setIsInlandDebitNotesListOpen(true);
+      return;
+    }
+
+    if (targetRow.documentName === "Đề nghị thanh toán") {
+      setIsInlandPaymentRequestOpen(true);
+      return;
+    }
+
+    downloadInlandDocument(rowId);
+  };
+
+  const sendInlandDebitNoteForConfirmation = () => {
+    if (!inlandDebitNoteDueDateByType[inlandTradeType].trim()) {
+      return;
+    }
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "pending_confirmation"
+    }));
+  };
+
+  const moveInlandDebitNoteBackToDraft = () => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "draft"
+    }));
+  };
+
+  const confirmInlandDebitNote = () => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "pending_payment"
+    }));
+  };
+
+  const sendInlandPaymentRequestForConfirmation = () => {
+    if (!inlandPaymentRequestDueDateByType[inlandTradeType].trim()) {
+      return;
+    }
+    setInlandPaymentRequestStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "pending_confirmation"
+    }));
+  };
+
+  const confirmInlandPaymentRequest = () => {
+    setInlandPaymentRequestStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "pending_payment"
+    }));
+  };
+
+  const moveInlandPaymentRequestBackToDraft = () => {
+    setInlandPaymentRequestStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "draft"
+    }));
+  };
+
+  const markInlandPaymentRequestPaid = () => {
+    setInlandPaymentRequestStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "paid"
+    }));
+  };
+
+  const markInlandDebitNotePaid = () => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "paid"
+    }));
+  };
+
+  const cancelInlandDebitNote = () => {
+    setInlandDebitNoteStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "cancelled"
+    }));
+  };
+
+  const addInlandDebitNoteRow = () => {
+    const nextId = `${inlandTradeType}-inland-debit-${Date.now()}`;
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: [
+        ...current[inlandTradeType],
+        {
+          id: nextId,
+          feeName: "",
+          quantity: "",
+          unit: "",
+          price: "",
+          amount: "",
+          currency: "VND",
+          vatRate: "",
+          vatAmount: "",
+          total: "",
+          attachmentNames: [],
+          updatedBy: "",
+          updatedAt: ""
+        }
+      ]
+    }));
+    setInlandDebitNoteForcedRowIds((current) => ({
+      ...current,
+      [inlandTradeType]: [...current[inlandTradeType], nextId]
+    }));
+  };
+
+  const deleteInlandDebitNoteRow = (rowId: string) => {
+    setInlandCostRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].filter((row) => row.id !== rowId)
+    }));
+    setInlandDebitNoteForcedRowIds((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].filter((id) => id !== rowId)
+    }));
+  };
+
   const openInlandUpload = (rowId: string) => {
     setActiveInlandUploadRowId(rowId);
     inlandUploadInputRef.current?.click();
@@ -7439,6 +8144,24 @@ export default function Page() {
 
   const handleInlandDocumentUpload = (files?: FileList | null) => {
     if (!activeInlandUploadRowId || !files?.length) {
+      return;
+    }
+
+    if (activeInlandUploadRowId.startsWith("cost:")) {
+      const costRowId = activeInlandUploadRowId.replace("cost:", "");
+      const uploadedFiles = Array.from(files).map((file) => file.name);
+      setInlandCostRowsByType((current) => ({
+        ...current,
+        [inlandTradeType]: current[inlandTradeType].map((row) =>
+          row.id === costRowId
+            ? {
+                ...row,
+                attachmentNames: [...row.attachmentNames, ...uploadedFiles]
+              }
+            : row
+        )
+      }));
+      setActiveInlandUploadRowId(null);
       return;
     }
 
@@ -8454,13 +9177,14 @@ export default function Page() {
     runWithLeaveGuard(performShowCustomerServices);
   };
 
-  const performShowCustomerShipments = (tab: "details" | "customs" | "inland" | "oversea" = "details") => {
+  const performShowCustomerShipments = (tab: "list" | "details" | "customs" | "inland" | "oversea" = "list") => {
     const nextParams = new URLSearchParams(window.location.search);
     nextParams.delete("booking");
     nextParams.delete("customer");
     nextParams.delete("contract");
     nextParams.delete("service");
     nextParams.delete("service_item");
+    nextParams.delete("shipment");
     nextParams.set("page", "customers");
     nextParams.set("view", "shipments");
     nextParams.set("shipment_tab", tab);
@@ -8473,10 +9197,50 @@ export default function Page() {
     setSelectedCustomerKey(null);
     setSelectedContractCode(null);
     setSelectedServiceDetailKey(null);
+    setSelectedShipmentCode(null);
   };
 
-  const showCustomerShipments = (tab: "details" | "customs" | "inland" | "oversea" = "details") => {
+  const showCustomerShipments = (tab: "list" | "details" | "customs" | "inland" | "oversea" = "list") => {
     runWithLeaveGuard(() => performShowCustomerShipments(tab));
+  };
+
+  const performOpenShipmentWorkspace = (
+    shipmentCode: string,
+    tab: "details" | "customs" | "inland" | "oversea" = "details"
+  ) => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.delete("booking");
+    nextParams.delete("customer");
+    nextParams.delete("contract");
+    nextParams.delete("service");
+    nextParams.delete("service_item");
+    nextParams.set("page", "customers");
+    nextParams.set("view", "shipments");
+    nextParams.set("shipment_tab", tab);
+    nextParams.set("shipment", shipmentCode);
+    const nextUrl = `${window.location.pathname}?${nextParams.toString()}`;
+    window.history.pushState({}, "", nextUrl);
+    setCurrentPage("customers");
+    setCustomerSubPage("shipments");
+    setShipmentWorkspaceTab(tab);
+    setSelectedBookingCode(null);
+    setSelectedCustomerKey(null);
+    setSelectedContractCode(null);
+    setSelectedServiceDetailKey(null);
+    setSelectedShipmentCode(shipmentCode);
+    const selectedRow = allBookingRows.find((row) => row.code === shipmentCode);
+    if (selectedRow) {
+      setShipmentDetailNumber(formatShipmentCodeFromBooking(selectedRow.code));
+      setShipmentDetailCustomerName(selectedRow.customer);
+      setShipmentDetailCommodity(selectedRow.packaging.toUpperCase());
+    }
+  };
+
+  const openShipmentWorkspace = (
+    shipmentCode: string,
+    tab: "details" | "customs" | "inland" | "oversea" = "details"
+  ) => {
+    runWithLeaveGuard(() => performOpenShipmentWorkspace(shipmentCode, tab));
   };
 
   const performShowCustomerCustoms = () => {
@@ -9152,11 +9916,14 @@ export default function Page() {
                               ? current.filter((title) => title !== group.title)
                               : [...current, group.title]
                           );
+                          if (isDocumentsGroup) {
+                            showCustomerShipments("list");
+                          }
                           return;
                         }
 
                         if (isDocumentsGroup) {
-                          showCustomerShipments("details");
+                          showCustomerShipments("list");
                         }
                       }}
                     >
@@ -9252,10 +10019,10 @@ export default function Page() {
 
           <section className={`flex h-screen flex-1 flex-col bg-background px-4 py-3 md:px-6 md:py-3 ${isAnyCreatePage || isCustomerShipmentPage ? "overflow-y-auto" : "overflow-hidden"}`}>
             <div className="-mx-4 mb-0 border-b-[0.5px] border-border md:-mx-6">
-              <div className={`flex flex-col px-4 md:px-6 ${isCustomerShipmentPage ? "gap-1 pb-0" : "gap-3 pb-2"}`}>
+              <div className={`flex flex-col px-4 md:px-6 ${isCustomerShipmentPage && !isCustomerShipmentListPage ? "gap-1 pb-0" : "gap-3 pb-2"}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    {isCustomerShipmentPage ? (
+                    {isCustomerShipmentPage && !isCustomerShipmentListPage ? (
                       <>
                         <div className="inline-flex w-fit items-center gap-1 border-b border-[#E7E6E9]">
                           {shipmentWorkspaceTabs.map((tab) => (
@@ -9492,6 +10259,10 @@ export default function Page() {
                             </>
                           ) : null}
                         </div>
+                      ) : isCustomerShipmentListPage ? (
+                        <div className="leading-[1.25]">
+                          <div className="text-[16px] font-medium text-foreground">Shipment Lists</div>
+                        </div>
                       ) : isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
                         <div ref={customerTitleMenuRef} className="relative">
                           <button
@@ -9686,7 +10457,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || isCustomerShipmentPage ? "hidden" : ""
+                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || (isCustomerShipmentPage && !isCustomerShipmentListPage) ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -11856,6 +12627,43 @@ export default function Page() {
                     )}
                   </div>
                 </div>
+
+                {shipmentListRows.length > shipmentListPageSize ? (
+                  <div className="mt-4 flex items-center justify-center px-1 pb-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#cbccc9] bg-card text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => setCustomerShipmentPage((current) => Math.max(1, current - 1))}
+                        disabled={customerShipmentPage === 1}
+                      >
+                        {"<"}
+                      </button>
+                      {Array.from({ length: shipmentListPageCount }, (_, index) => index + 1).map((page) => (
+                        <button
+                          key={`shipment-page-${page}`}
+                          type="button"
+                          className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                            page === customerShipmentPage
+                              ? "bg-[#7A7A7A] text-white"
+                              : "border border-[#cbccc9] bg-card text-foreground hover:bg-background"
+                          }`}
+                          onClick={() => setCustomerShipmentPage(page)}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#cbccc9] bg-card text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={() => setCustomerShipmentPage((current) => Math.min(shipmentListPageCount, current + 1))}
+                        disabled={customerShipmentPage === shipmentListPageCount}
+                      >
+                        {">"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
 
@@ -14564,6 +15372,123 @@ export default function Page() {
               </>
             ) : null}
 
+            {isCustomerShipmentListPage ? (
+              <>
+                <div className="mt-[12px] hidden min-h-0 flex-1 overflow-hidden rounded-[12px] bg-background lg:flex lg:flex-col">
+                  <div
+                    className="grid shrink-0 border-b border-border bg-card"
+                    style={{ gridTemplateColumns: shipmentListTableColumns }}
+                  >
+                    {["Shipment ID", "Khách hàng", "Tuyến vận chuyển", "Loại hàng", "Đóng gói", "Ngày tạo"].map((label, index) => (
+                      <div
+                        key={`${label}-${index}`}
+                        className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
+                          index === 0 ? "pl-6 pr-4" : "px-4"
+                        }`}
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+                    {paginatedShipmentListRows.length > 0 ? (
+                      paginatedShipmentListRows.map((row, index) => {
+                        const isActiveShipmentRow = selectedShipmentCode === row.code;
+                        return (
+                        <div
+                          key={`shipment-list-${row.code}`}
+                          className={`grid cursor-pointer transition-colors hover:bg-[#B6E1FF] ${isActiveShipmentRow ? "bg-[#B6E1FF]" : "bg-card"}`}
+                          style={{ gridTemplateColumns: shipmentListTableColumns }}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openShipmentWorkspace(row.code)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openShipmentWorkspace(row.code);
+                            }
+                          }}
+                        >
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{formatShipmentCodeFromBooking(row.code)}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.customer}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <RouteCell {...row.route} />
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.cargoType}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.packaging}</span>
+                          </div>
+                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.createdAt}</span>
+                          </div>
+                        </div>
+                      )})
+                    ) : (
+                      <div className="flex h-full min-h-[220px] items-center justify-center bg-card px-6 text-center text-sm text-muted-foreground">
+                        Không có shipment phù hợp với từ khóa tìm kiếm.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 min-h-0 flex-1 overflow-y-auto lg:hidden">
+                  <div className="grid gap-3">
+                    {paginatedShipmentListRows.length > 0 ? (
+                      paginatedShipmentListRows.map((row) => (
+                        <article
+                          key={`shipment-mobile-${row.code}`}
+                          className={`rounded-2xl border border-border p-4 transition-colors hover:bg-[#B6E1FF] ${selectedShipmentCode === row.code ? "bg-[#B6E1FF]" : "bg-card"}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => openShipmentWorkspace(row.code)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openShipmentWorkspace(row.code);
+                            }
+                          }}
+                        >
+                          <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                            {formatShipmentCodeFromBooking(row.code)}
+                          </div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{row.customer}</div>
+                          <div className="mt-3 space-y-2 text-sm text-foreground">
+                            <div className="flex items-start gap-2">
+                              <span className="text-muted-foreground">Tuyến vận chuyển:</span>
+                              <span className="min-w-0"><RouteCell {...row.route} className="text-sm" /></span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Loại hàng: </span>
+                              {row.cargoType}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Đóng gói: </span>
+                              {row.packaging}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Ngày tạo: </span>
+                              {row.createdAt}
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
+                        Không có shipment phù hợp với từ khóa tìm kiếm.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
+
             {isCustomerShipmentDetailsPage ? (
               <div className="mt-3 pr-1 pb-3">
                 <div className="space-y-3">
@@ -15270,16 +16195,7 @@ export default function Page() {
                   }}
                 />
                 <div className="space-y-0">
-                  <div className="flex items-center justify-between gap-3 pb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={saveCustomsDraft}
-                        className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                      >
-                        Lưu nháp
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-start gap-3 pb-2">
                     <div className="inline-flex items-center bg-white p-1">
                       {[
                         { key: "import" as const, label: "Import" },
@@ -15310,9 +16226,9 @@ export default function Page() {
                         </div>
                         <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
                           <div className="overflow-x-auto">
-                            <div className="min-w-[1280px]">
-                              <div className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                                {["#", "Loại chi phí", "Qty", "Unit", "Price (₫)", "Amount (₫)", "VAT%", "VAT (₫)", "Total (₫)", "Upload chứng từ"].map((label) => (
+                            <div className="min-w-[1328px]">
+                              <div className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr_56px] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                                {["#", "Loại chi phí", "Qty", "Unit", "Price (₫)", "Amount (₫)", "VAT%", "VAT (₫)", "Total (₫)", "Upload chứng từ", ""].map((label) => (
                                   <div key={label} className="px-4 py-2.5">
                                     {label}
                                   </div>
@@ -15321,7 +16237,7 @@ export default function Page() {
                               {visibleCustomsCostRows.map((row, index) => (
                                 <div
                                   key={row.id}
-                                  className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
+                                  className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr_56px] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
                                 >
                                   <div className="flex min-h-[40px] items-center px-4 py-2 text-[#A0A7B4]">{index + 1}</div>
                                   <div className="flex min-h-[40px] items-center px-4 py-2">
@@ -15430,6 +16346,15 @@ export default function Page() {
                                       <span>{row.attachmentNames.length > 0 ? `${row.attachmentNames.length} file` : "Tải lên"}</span>
                                     </button>
                                   </div>
+                                  <div className="flex min-h-[40px] items-center justify-end px-2 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteCustomsCostRow(row.id)}
+                                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                    >
+                                      <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                    </button>
+                                  </div>
                                 </div>
                               ))}
                               <div className="border-b border-[#E7E6E9] bg-white">
@@ -15443,16 +16368,6 @@ export default function Page() {
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex justify-start">
-                          <button
-                            type="button"
-                            onClick={openCustomsDebitNote}
-                            className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-4 text-[14px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                          >
-                            <FileText className="h-4 w-4" strokeWidth={2} />
-                            <span>Tạo Debit Note</span>
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -15472,10 +16387,15 @@ export default function Page() {
                             </div>
                             {visibleCustomsDocumentRows.map((row, index) => {
                               const statusKey =
-                                row.documentName === "Debit note" || row.documentName === "Đề nghị thanh toán"
+                                row.documentName === "Debit note"
                                   ? activeCustomsDebitNoteStatus
-                                  : "draft";
-                              const statusMeta = customsDocumentStatusMeta[statusKey];
+                                  : row.documentName === "Đề nghị thanh toán"
+                                    ? activeCustomsPaymentRequestStatus
+                                    : "draft";
+                              const statusMeta =
+                                row.documentName === "Debit note"
+                                  ? getDebitNoteDocumentStatusMeta(activeCustomsDebitNoteStatus)
+                                  : customsDocumentStatusMeta[statusKey];
                               return (
                                 <div
                                   key={row.id}
@@ -15486,20 +16406,35 @@ export default function Page() {
                                   </div>
                                   <div className="flex min-h-[40px] items-center px-4 py-2">{row.documentName}</div>
                                   <div className="flex min-h-[40px] items-center gap-2 px-4 py-2">
-                                    {(row.documentName === "Tờ khai hải quan" ||
-                                      row.documentName === "Đề nghị thanh toán" ||
-                                      row.documentName === "Debit note") ? (
+                                    {row.documentName === "Debit note" ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={openCustomsDebitNote}
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                                        >
+                                          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                                          <span>Tạo mới</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={openCustomsDebitNote}
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                                          <span>Xem</span>
+                                        </button>
+                                      </>
+                                    ) : row.documentName === "Tờ khai hải quan" || row.documentName === "Đề nghị thanh toán" ? (
                                       <>
                                         <button
                                           type="button"
                                           onClick={() =>
-                                            row.documentName === "Debit note"
-                                              ? openCustomsDebitNotesList()
-                                              : row.documentName === "Tờ khai hải quan"
+                                            row.documentName === "Tờ khai hải quan"
                                                 ? openCustomsDeclaration()
                                                 : viewCustomsDocumentFiles(row.id)
                                           }
-                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                                         >
                                           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                                           <span>Tạo mới</span>
@@ -15518,7 +16453,7 @@ export default function Page() {
                                         <button
                                           type="button"
                                           onClick={() => openCustomsUpload(row.id)}
-                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                                         >
                                           <Upload className="h-3.5 w-3.5" strokeWidth={2} />
                                           <span>Tải lên</span>
@@ -15618,19 +16553,15 @@ export default function Page() {
                   }}
                 />
                 <div className="space-y-3">
-                  <div className="rounded-[10px] border border-[#E7E6E9] bg-[#FAFBFC] px-4 py-2">
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-foreground">
-                      {inlandShipmentMeta.map((item) => (
-                        <div key={item.label} className="flex items-center gap-2">
-                          <span className="text-muted-foreground">{item.label}:</span>
-                          <span className="font-medium text-foreground">{item.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 border-b border-[#E7E6E9] pb-2">
-                    <div className="inline-flex items-center rounded-[10px] border border-[#E7E6E9] bg-white p-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={saveInlandDraft}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <div className="inline-flex items-center bg-white p-1">
                       {[
                         { key: "import" as const, label: "Import" },
                         { key: "export" as const, label: "Export" }
@@ -15649,219 +16580,333 @@ export default function Page() {
                         </button>
                       ))}
                     </div>
-
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={saveInlandDraft}
-                        className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                      >
-                        Lưu nháp
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isInlandSubmitDisabled}
-                        onClick={submitInlandModule}
-                        className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
-                          isInlandSubmitDisabled
-                            ? "cursor-not-allowed bg-[#AABBDD] text-white"
-                            : "bg-[#2054a3] text-white hover:bg-[#1b467d]"
-                        }`}
-                      >
-                        Gửi
-                      </button>
-                      <button
-                        type="button"
-                        onClick={refreshInlandTradeType}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" strokeWidth={2} />
-                        <span>Tải lại</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openInlandAuditSection}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                      >
-                        <History className="h-3.5 w-3.5" strokeWidth={2} />
-                        <span>Xem lịch sử</span>
-                      </button>
-                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-[15px] font-semibold text-foreground">Danh sách chi phí</div>
-                    </div>
-                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[980px]">
-                          <div className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                            {["Tên chi phí", "Số tiền", "Tiền tệ", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
-                              <div key={label} className="px-4 py-2.5">
-                                {label}
-                              </div>
-                            ))}
-                          </div>
-                          {visibleInlandCostRows.map((row) => {
-                            const isFilled = row.amount.trim() !== "";
-                            const isEditing = inlandEditingCostRowId === row.id;
-                            const displayAmount = isEditing
-                              ? inlandCostDrafts[row.id] ?? normalizeCostAmountForEdit(row.amount)
-                              : formatCostAmountDisplay(row.amount);
-                            return (
-                              <div key={row.id} className="grid grid-cols-[2fr_1fr_0.8fr_0.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground">
-                                <div className="flex min-h-[38px] items-center px-4">{row.feeName}</div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <input
-                                    inputMode="decimal"
-                                    value={displayAmount}
-                                    onFocus={() => focusInlandCostAmount(row.id, row.amount)}
-                                    onChange={(event) => updateInlandCostDraft(row.id, event.target.value)}
-                                    onBlur={() => blurInlandCostAmount(row.id)}
-                                    placeholder="-"
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-right text-[15px] text-foreground outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-black"
-                                  />
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <select
-                                    value={row.currency}
-                                    onChange={(event) =>
-                                      updateInlandCostCurrency(
-                                        row.id,
-                                        event.target.value as (typeof COST_CURRENCY_OPTIONS)[number]
-                                      )
-                                    }
-                                    className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors focus:border-black"
-                                  >
-                                    {COST_CURRENCY_OPTIONS.map((currency) => (
-                                      <option key={currency} value={currency}>
-                                        {currency}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${isFilled ? "bg-[#EAF7EE] text-[#1F7A35]" : "bg-[#F1F3F5] text-[#68707B]"}`}>
-                                    {isFilled ? "Đã nhập" : "Chưa nhập"}
-                                  </span>
-                                </div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedBy || "-"}</div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.updatedAt || "-"}</div>
-                              </div>
-                            );
-                          })}
+                  <div className="space-y-3">
+                    <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3 border-b-[0.5px] border-[#E7E6E9] pb-3">
+                          <div className="text-[20px] font-medium uppercase text-foreground">COST INFORMATION (CHI PHÍ)</div>
+                          <div />
                         </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-[15px] font-semibold text-foreground">Danh sách chứng từ</div>
-                    <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[1220px]">
-                          <div className="grid grid-cols-[1.4fr_0.7fr_0.6fr_1.6fr_1.1fr_0.9fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                            {["Tên chứng từ", "Bắt buộc", "Số file", "File", "Hành động", "Người upload", "Thời gian upload"].map((label) => (
-                              <div key={label} className="px-4 py-2.5">{label}</div>
-                            ))}
-                          </div>
-                          {visibleInlandDocumentRows.map((row) => {
-                            const isMissing = row.required && row.files.length === 0;
-                            return (
-                              <div key={row.id} className={`grid grid-cols-[1.4fr_0.7fr_0.6fr_1.6fr_1.1fr_0.9fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground ${isMissing ? "bg-[#FFF5F5]" : ""}`}>
-                                <div className="flex min-h-[38px] items-start px-4 py-2">{row.documentName}</div>
-                                <div className={`flex min-h-[38px] items-start px-4 py-2 ${isMissing ? "font-medium text-[#D14343]" : ""}`}>{row.required ? "Yes" : "No"}</div>
-                                <div className={`flex min-h-[38px] items-start px-4 py-2 ${isMissing ? "font-medium text-[#D14343]" : ""}`}>{row.files.length}</div>
-                                <div className="px-4 py-2">
-                                  {row.files.length > 0 ? (
-                                    <div className="space-y-1">
-                                      {row.files.map((file) => (
-                                        <div key={file.id} className="flex items-center justify-between gap-2 text-[12px]">
-                                          <span className="truncate text-foreground">{file.name}</span>
-                                          <span className="shrink-0 text-muted-foreground">{file.sizeLabel}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className={isMissing ? "text-[12px] font-medium text-[#D14343]" : "text-[12px] text-muted-foreground"}>{row.displayMode === "DISPLAY_ONLY" ? "Chỉ hiển thị" : "Chưa có file"}</span>
-                                  )}
-                                </div>
-                                <div className="flex min-h-[38px] items-start gap-3 px-4 py-2">
-                                  {row.displayMode !== "DISPLAY_ONLY" ? (
-                                    <button type="button" onClick={() => openInlandUpload(row.id)} className="text-[13px] font-medium text-[#245698] transition hover:text-[#1b467d]">Tải lên</button>
-                                  ) : (
-                                    <span className="text-[13px] text-muted-foreground">-</span>
-                                  )}
-                                  {row.files.length > 0 ? (
-                                    <>
-                                      <button type="button" onClick={() => downloadInlandDocument(row.id)} className="text-[13px] font-medium text-[#245698] transition hover:text-[#1b467d]">Download</button>
-                                      <button type="button" onClick={() => deleteInlandDocumentFiles(row.id)} className="text-[13px] font-medium text-[#C75B12] transition hover:text-[#A6480C]">Delete</button>
-                                    </>
-                                  ) : null}
-                                </div>
-                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.uploadedBy || "-"}</div>
-                                <div className="flex min-h-[38px] items-start px-4 py-2 text-[#4B5563]">{row.uploadedAt || "-"}</div>
+                        <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                          <div className="overflow-x-auto">
+                            <div className="min-w-[1280px]">
+                              <div className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                                {["#", "Loại chi phí", "Qty", "Unit", "Price (₫)", "Amount (₫)", "VAT%", "VAT (₫)", "Total (₫)", "Upload chứng từ"].map((label) => (
+                                  <div key={label} className="px-4 py-2.5">
+                                    {label}
+                                  </div>
+                                ))}
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {inlandValidationErrors.length > 0 ? (
-                    <div className="rounded-[10px] border border-[#F3D0B0] bg-[#FFF8F2] px-4 py-3">
-                      <div className="mb-2 text-[14px] font-semibold text-foreground">Danh sách lỗi cần xử lý</div>
-                      <div className="space-y-2">
-                        {inlandValidationErrors.map((error) => (
-                          <div key={error.rowId} className="flex items-start gap-2 text-[13px] text-foreground">
-                            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#C75B12]" strokeWidth={1.9} />
-                            <div>
-                              <div>{error.message}</div>
-                              <div className="text-[12px] text-muted-foreground">Dòng liên quan: {error.relatedRow}</div>
+                              {visibleInlandCostRows.map((row, index) => (
+                                <div
+                                  key={row.id}
+                                  className="grid grid-cols-[0.5fr_3.6fr_0.7fr_1fr_1fr_1.1fr_0.8fr_1.1fr_1.2fr_1.4fr] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
+                                >
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#A0A7B4]">{index + 1}</div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <input
+                                      value={row.feeName}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, feeName: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="Nhập tên phí..."
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <input
+                                      value={row.quantity}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, quantity: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="SL"
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <input
+                                      value={row.unit}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, unit: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="Đơn vị"
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <input
+                                      value={row.price}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, price: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="Đơn giá"
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                                    <input
+                                      value={row.amount}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, amount: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="Thành tiền"
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <input
+                                      value={row.vatRate}
+                                      onChange={(event) =>
+                                        setInlandCostRowsByType((current) => ({
+                                          ...current,
+                                          [inlandTradeType]: current[inlandTradeType].map((item) =>
+                                            item.id === row.id ? { ...item, vatRate: event.target.value } : item
+                                          )
+                                        }))
+                                      }
+                                      placeholder="VAT%"
+                                      className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
+                                    />
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#9CA3AF]">
+                                    <span>{row.vatAmount || "-"}</span>
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 font-semibold">
+                                    <span>{row.total || "-"}</span>
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openInlandUpload(`cost:${row.id}`)}
+                                      className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3.5 text-[14px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                    >
+                                      <Upload className="h-4 w-4" strokeWidth={2} />
+                                      <span>{row.attachmentNames.length > 0 ? `${row.attachmentNames.length} file` : "Tải lên"}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="border-b border-[#E7E6E9] bg-white">
+                                <button
+                                  type="button"
+                                  onClick={addInlandCostRow}
+                                  className="flex h-[38px] items-center px-4 text-[15px] font-medium text-[#4A90E2] transition hover:bg-[#F8FAFF]"
+                                >
+                                  + Thêm dòng phí
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                        <div className="flex justify-start">
+                          <button
+                            type="button"
+                            onClick={openInlandDebitNote}
+                            className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-4 text-[14px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                          >
+                            <FileText className="h-4 w-4" strokeWidth={2} />
+                            <span>Tạo Debit Note</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  ) : null}
+                  </div>
 
-                  <div ref={inlandAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
-                    <button
-                      type="button"
-                      onClick={() => setIsInlandAuditLogOpen((current) => !current)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
-                    >
-                      <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
-                      <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isInlandAuditLogOpen ? "rotate-180" : ""}`} strokeWidth={1.8} />
-                    </button>
-                    {isInlandAuditLogOpen ? (
-                      <div className="border-t border-[#E7E6E9]">
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div className="space-y-3">
+                      <div className="border-b-[0.5px] border-[#E7E6E9] pb-3 text-[20px] font-medium uppercase text-foreground">DOCUMENT MANAGEMENT (CHỨNG TỪ)</div>
+                      <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
                         <div className="overflow-x-auto">
-                          <div className="min-w-[980px]">
-                            <div className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
-                              {["Hành động", "Đối tượng", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
-                                <div key={label} className="px-4 py-2.5">{label}</div>
+                          <div className="min-w-[1120px]">
+                            <div className="grid grid-cols-[52px_2.3fr_1.7fr_1fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                              {["#", "Tên chứng từ", "Hành động", "Trạng thái", "Cập nhật bởi", "Thời gian cập nhật"].map((label) => (
+                                <div key={label} className={label === "#" ? "px-2 py-2.5 text-center" : "px-4 py-2.5"}>
+                                  {label}
+                                </div>
                               ))}
                             </div>
-                            {visibleInlandAuditRows.map((row) => (
-                              <div key={row.id} className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
-                                <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
-                                <div className="flex min-h-[38px] items-center px-4">{row.target}</div>
-                                <div className="flex min-h-[38px] items-center px-4">
-                                  <span className="truncate">{row.beforeValue}</span>
-                                  <span className="mx-2 text-muted-foreground">→</span>
-                                  <span className="truncate">{row.afterValue}</span>
+                            {visibleInlandDocumentRows.map((row, index) => {
+                              const inlandUploadAndViewDocuments = new Set([
+                                "BL",
+                                "AN",
+                                "DO",
+                                "EIR",
+                                "Các chứng từ khác",
+                                "PoB - các phiếu thu/hóa đơn chi hộ"
+                              ]);
+                              const inlandCreateAndViewDocuments = new Set([
+                                "Biên bản giao hàng",
+                                "Debit note",
+                                "Đề nghị thanh toán",
+                                "AN tàu nội địa"
+                              ]);
+                              const documentStatus =
+                                row.documentName === "Debit note"
+                                  ? getDebitNoteDocumentStatusMeta(activeInlandDebitNoteStatus)
+                                  : row.documentName === "Đề nghị thanh toán"
+                                    ? customsDocumentStatusMeta[activeInlandPaymentRequestStatus]
+                                    : row.displayMode === "DISPLAY_ONLY"
+                                      ? { label: "Nháp", className: "bg-[#F1F3F5] text-[#68707B]" }
+                                      : row.files.length > 0
+                                        ? { label: "Đã xác nhận", className: "bg-[#EAF7EE] text-[#1F7A35]" }
+                                        : row.required
+                                          ? { label: "Chờ xác nhận", className: "bg-[#FFF1E8] text-[#C75B12]" }
+                                          : { label: "Nháp", className: "bg-[#F1F3F5] text-[#68707B]" };
+                              const canCreate = inlandCreateAndViewDocuments.has(row.documentName);
+                              const canUpload = !canCreate && row.displayMode !== "DISPLAY_ONLY";
+                              const canView =
+                                canCreate ||
+                                row.files.length > 0 ||
+                                row.displayMode === "DISPLAY_ONLY" ||
+                                inlandUploadAndViewDocuments.has(row.documentName);
+                              return (
+                                <div
+                                  key={row.id}
+                                  className="grid grid-cols-[52px_2.3fr_1.7fr_1fr_1fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground"
+                                >
+                                  <div className="flex min-h-[40px] items-center justify-center px-2 py-2 text-[#A0A7B4]">
+                                    {index + 1}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">{row.documentName}</div>
+                                  <div className="flex min-h-[40px] items-center gap-2 px-4 py-2">
+                                    {canCreate ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            row.documentName === "Debit note"
+                                              ? openInlandDebitNotesList()
+                                              : viewInlandDocumentFiles(row.id)
+                                          }
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                        >
+                                          <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                                          <span>Tạo mới</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={openInlandDebitNote}
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                                          <span>Xem</span>
+                                        </button>
+                                      </>
+                                    ) : canUpload ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => openInlandUpload(row.id)}
+                                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                        >
+                                          <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                                          <span>Tải lên</span>
+                                        </button>
+                                        {canView ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => downloadInlandDocument(row.id)}
+                                            className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                          >
+                                            <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                                            <span>Xem</span>
+                                          </button>
+                                        ) : null}
+                                      </>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" strokeWidth={2} />
+                                        <span>Xem</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2">
+                                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${documentStatus.className}`}>
+                                      {documentStatus.label}
+                                    </span>
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#4B5563]">
+                                    {row.uploadedBy || (canCreate ? "Hệ thống" : "-")}
+                                  </div>
+                                  <div className="flex min-h-[40px] items-center px-4 py-2 text-[#4B5563]">
+                                    {row.uploadedAt || (canCreate ? "12/03/2026 14:20" : "-")}
+                                  </div>
                                 </div>
-                                <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
-                                <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       </div>
-                    ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[14px] border-[0.5px] border-[#DADCE3] bg-white px-5 py-5">
+                    <div ref={inlandAuditSectionRef} className="rounded-[10px] border border-[#E7E6E9] bg-white">
+                      <button
+                        type="button"
+                        onClick={() => setIsInlandAuditLogOpen((current) => !current)}
+                        className="flex w-full items-center justify-between px-4 py-3 text-left"
+                      >
+                        <span className="text-[15px] font-semibold text-foreground">Lịch sử thay đổi</span>
+                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isInlandAuditLogOpen ? "rotate-180" : ""}`} strokeWidth={1.8} />
+                      </button>
+                      {isInlandAuditLogOpen ? (
+                        <div className="border-t border-[#E7E6E9]">
+                          <div className="overflow-x-auto">
+                            <div className="min-w-[980px]">
+                              <div className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[12px] font-medium text-muted-foreground">
+                                {["Hành động", "Đối tượng", "Giá trị trước → sau", "Người thực hiện", "Thời gian"].map((label) => (
+                                  <div key={label} className="px-4 py-2.5">{label}</div>
+                                ))}
+                              </div>
+                              {visibleInlandAuditRows.map((row) => (
+                                <div key={row.id} className="grid grid-cols-[1fr_0.9fr_1.8fr_1fr_1fr] border-b border-[#E7E6E9] text-[13px] text-foreground">
+                                  <div className="flex min-h-[38px] items-center px-4">{row.action}</div>
+                                  <div className="flex min-h-[38px] items-center px-4">{row.target}</div>
+                                  <div className="flex min-h-[38px] items-center px-4">
+                                    <span className="truncate">{row.beforeValue}</span>
+                                    <span className="mx-2 text-muted-foreground">→</span>
+                                    <span className="truncate">{row.afterValue}</span>
+                                  </div>
+                                  <div className="flex min-h-[38px] items-center px-4">{row.actor}</div>
+                                  <div className="flex min-h-[38px] items-center px-4 text-[#4B5563]">{row.time}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -16527,7 +17572,7 @@ export default function Page() {
             <div className="px-5 py-5">
               <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
                 <div className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                  {["Tên chứng từ", "Thời gian", "Trạng thái"].map((label) => (
+                  {["Tên debit note", "Thời gian", "Trạng thái"].map((label) => (
                     <div key={label} className="px-4 py-2.5">
                       {label}
                     </div>
@@ -16540,7 +17585,15 @@ export default function Page() {
                       key={row.id}
                       className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
                     >
-                      <div className="flex min-h-[52px] items-center px-4 py-2 font-medium">{row.title}</div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => openCustomsDebitNoteFromList(row.status)}
+                          className="text-left text-[15px] font-medium text-[#245698] transition hover:underline"
+                        >
+                          {row.title}
+                        </button>
+                      </div>
                       <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.timestamp}</div>
                       <div className="flex min-h-[52px] items-center px-4 py-2">
                         <span
@@ -16581,6 +17634,90 @@ export default function Page() {
         </div>
       ) : null}
 
+      {isInlandDebitNotesListOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsInlandDebitNotesListOpen(false)}
+        >
+          <div
+            className="w-full max-w-[760px] overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Debit notes</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsInlandDebitNotesListOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+
+            <div className="px-5 py-5">
+              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                <div className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                  {["Tên debit note", "Thời gian", "Trạng thái"].map((label) => (
+                    <div key={label} className="px-4 py-2.5">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                {inlandDebitNoteListRows.map((row) => {
+                  const isApproved = row.status === "approved";
+                  return (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                    >
+                      <div className="flex min-h-[52px] items-center px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => openInlandDebitNoteFromList(row.status)}
+                          className="text-left text-[15px] font-medium text-[#245698] transition hover:underline"
+                        >
+                          {row.title}
+                        </button>
+                      </div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.timestamp}</div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2">
+                        <span
+                          className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[13px] font-medium ${
+                            isApproved ? "bg-[#EEF6E7] text-[#4E8A14]" : "bg-[#F5F5F4] text-[#6B7280]"
+                          }`}
+                        >
+                          <span className={`h-2.5 w-2.5 rounded-full ${isApproved ? "bg-[#4E8A14]" : "bg-[#9CA3AF]"}`} />
+                          {isApproved ? "Đã duyệt" : "Đã hủy"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={createInlandDebitNoteFromList}
+                  disabled={!canCreateInlandDebitNote}
+                  className={`inline-flex h-10 w-full items-center justify-center rounded-full border-[0.5px] px-4 text-[15px] font-medium transition ${
+                    canCreateInlandDebitNote
+                      ? "border-[#CBCBCB] bg-white text-foreground hover:bg-[#fafafa]"
+                      : "cursor-not-allowed border-[#E5E7EB] bg-[#F7F7F8] text-[#9CA3AF]"
+                  }`}
+                >
+                  + Tạo debit note mới
+                </button>
+                <div className="mt-3 text-center text-[14px] font-medium text-muted-foreground">
+                  Chỉ có thể tạo mới khi tất cả debit note đã bị hủy
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {isCustomsDocumentFilesModalOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
@@ -16606,8 +17743,8 @@ export default function Page() {
 
             <div className="px-5 py-5">
               <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                <div className="grid grid-cols-[2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                  {["Tên file", "Thời gian tải lên"].map((label) => (
+                <div className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                  {["Tên file", "Thời gian tải lên", "Hành động"].map((label) => (
                     <div key={label} className="px-4 py-2.5">
                       {label}
                     </div>
@@ -16616,7 +17753,7 @@ export default function Page() {
                 {visibleCustomsGeneratedDocumentFiles.map((file) => (
                   <div
                     key={file.id}
-                    className="grid grid-cols-[2fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                    className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
                   >
                     <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
                       <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#EEF3FF] text-[#245698]">
@@ -16638,6 +17775,24 @@ export default function Page() {
                     <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">
                       {file.uploadedAt}
                     </div>
+                    <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => replaceCustomsDocumentFile(file.id)}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      >
+                        <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                        <span>Thay đổi file</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Xóa ${file.name}`}
+                        onClick={() => deleteCustomsGeneratedDocumentFile(file.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border-[0.5px] border-[#E5E7EB] bg-white text-[#6B7280] transition hover:border-[#F3D0D0] hover:bg-[#FFF7F7] hover:text-[#C53B3B]"
+                      >
+                        <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -16655,8 +17810,8 @@ export default function Page() {
             className="flex max-h-[92vh] w-full max-w-[1240px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-3">
                 <div className="text-[18px] font-semibold text-foreground">Tờ khai hải quan</div>
                 <button
                   type="button"
@@ -16685,37 +17840,14 @@ export default function Page() {
                   <span>Xuất XML</span>
                 </button>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-[13px] font-medium text-muted-foreground">Zoom</label>
-                <select
-                  value={customsDeclarationZoom}
-                  onChange={(event) => setCustomsDeclarationZoom(Number(event.target.value) as 100 | 125 | 150)}
-                  className="h-8 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground outline-none transition focus:border-black"
-                >
-                  <option value={100}>100%</option>
-                  <option value={125}>125%</option>
-                  <option value={150}>150%</option>
-                </select>
-              <button
-                type="button"
-                aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                onClick={() => setIsCustomsDeclarationOpen(false)}
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-              </div>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-5 pb-10">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-3">
-                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
-                  {customsDebitNoteSteps.map((step, index) => (
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleDebitNoteFlowSteps.map((step, index) => (
                     <div
-                      key={`customs-declaration-${step.key}`}
+                      key={`customs-declaration-header-${step.key}`}
                       className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
-                        index <= activeCustomsDebitNoteStepIndex
-                          ? index === activeCustomsDebitNoteStepIndex
+                        index <= activeVisibleCustomsDeclarationStepIndex
+                          ? index === activeVisibleCustomsDeclarationStepIndex
                             ? "bg-[#2054a3] text-white"
                             : "bg-[#EAF1FB] text-[#245698]"
                           : "bg-[#F3F4F6] text-muted-foreground"
@@ -16725,37 +17857,33 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeCustomsDebitNoteStatus === "draft" ? (
-                    <button
-                      type="button"
-                      onClick={sendCustomsDebitNoteForConfirmation}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Gửi xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
-                    <button
-                      type="button"
-                      onClick={confirmCustomsDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Đã xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "confirmed" ? (
-                    <button
-                      type="button"
-                      onClick={createPaymentRequestFromDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Tạo Đề nghị thanh toán
-                    </button>
-                  ) : null}
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsCustomsDeclarationOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-5 pb-10">
+              <div className="mb-3 flex justify-end">
+                <div className="flex items-center gap-2">
+                  <label className="text-[13px] font-medium text-muted-foreground">Zoom</label>
+                  <select
+                    value={customsDeclarationZoom}
+                    onChange={(event) => setCustomsDeclarationZoom(Number(event.target.value) as 100 | 125 | 150)}
+                    className="h-8 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground outline-none transition focus:border-black"
+                  >
+                    <option value={100}>100%</option>
+                    <option value={125}>125%</option>
+                    <option value={150}>150%</option>
+                  </select>
                 </div>
               </div>
-              <div className="flex w-full justify-center">
+              <div className="flex w-full justify-center pb-12">
               <div
                 className="overflow-hidden rounded-[12px] border border-[#1F2937] bg-white text-[9px] leading-[1.05]"
                 style={{
@@ -17344,337 +18472,110 @@ export default function Page() {
                       </div>
                     ))}
 
-                    <button
-                      type="button"
-                      onClick={addCustomsDeclarationGoodsItem}
-                      className="inline-flex h-9 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-4 text-[14px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                    >
-                      + Thêm Mã quản lý riêng
-                    </button>
                   </div>
                 </div>
               </div>
               </div>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isCustomsDebitNoteOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
-          onClick={() => setIsCustomsDebitNoteOpen(false)}
-        >
-          <div
-            className="w-full max-w-[1240px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+            <div className="border-t-[0.5px] border-border px-5 py-3">
+              <div className="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() =>
-                    setToast({
-                      kind: "success",
-                      message: "Đang xuất PDF Debit Note."
-                    })
-                  }
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                  onClick={addCustomsDeclarationGoodsItem}
+                  className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
                 >
-                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                  <span>Xuất PDF</span>
+                  + Thêm Mã quản lý riêng
                 </button>
-              </div>
-              <button
-                type="button"
-                aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                onClick={() => setIsCustomsDebitNoteOpen(false)}
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-            </div>
-
-            <div className="px-5 py-5">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-3">
-                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
-                  {customsDebitNoteSteps.map((step, index) => (
-                    <div
-                      key={step.key}
-                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
-                        index <= activeCustomsDebitNoteStepIndex
-                          ? index === activeCustomsDebitNoteStepIndex
-                            ? "bg-[#2054a3] text-white"
-                            : "bg-[#EAF1FB] text-[#245698]"
-                          : "bg-[#F3F4F6] text-muted-foreground"
-                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
-                    >
-                      {step.label}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setToast({
-                        kind: "success",
-                        message: "Đang xuất PDF Debit Note."
-                      })
-                    }
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                  >
-                    <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                    <span>Xuất PDF</span>
-                  </button>
-                  {activeCustomsDebitNoteStatus === "draft" ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  {activeCustomsDeclarationStatus === "draft" ? (
                     <button
                       type="button"
-                      onClick={sendCustomsDebitNoteForConfirmation}
+                      onClick={sendCustomsDeclarationForConfirmation}
                       className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                     >
                       Gửi xác nhận
                     </button>
                   ) : null}
-                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
-                    <button
-                      type="button"
-                      onClick={confirmCustomsDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Đã xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "confirmed" ? (
-                    <button
-                      type="button"
-                      onClick={createPaymentRequestFromDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Tạo Đề nghị thanh toán
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="mb-4 grid gap-x-8 gap-y-3 rounded-[10px] border border-[#E7E6E9] bg-[#FCFCFD] px-4 py-3 lg:grid-cols-2">
-                <div className="flex items-center gap-3 text-[14px] text-foreground">
-                  <span className="min-w-[110px] text-muted-foreground">Customer</span>
-                  <span>{shipmentDetailCustomerName}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[14px] text-foreground">
-                  <span className="min-w-[110px] text-muted-foreground">Shipment ID</span>
-                  <span>{shipmentDetailNumber}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[14px] text-foreground">
-                  <span className="min-w-[110px] text-muted-foreground">Module</span>
-                  <span>{customsTradeType === "export" ? "Export" : "Import"}</span>
-                </div>
-                <div className="flex items-center gap-3 text-[14px] text-foreground">
-                  <span className="min-w-[110px] text-muted-foreground">Shipment Date</span>
-                  <span>
-                    {shipmentDetailShipmentDate
-                      ? new Date(shipmentDetailShipmentDate).toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric"
-                        })
-                      : "-"}
-                  </span>
-                </div>
-              </div>
-              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                <div className="overflow-x-auto">
-                  <div className="min-w-[1160px]">
-                    <div className="grid grid-cols-[3.2fr_0.9fr_1.1fr_1.1fr_1.2fr_0.9fr_1.2fr_1.2fr_auto] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                      {["Loại chi phí", "Quantity", "Unit", "Price (đ)", "Amount (đ)", "VAT%", "VAT value (đ)", "Total (đ)", ""].map((label) => (
-                        <div key={label} className="px-4 py-2.5">
-                          {label}
-                        </div>
-                      ))}
-                    </div>
-                    {visibleCustomsDebitNoteRows.map((row) => (
-                      <div
-                        key={`debit-note-${row.id}`}
-                        className="grid grid-cols-[3.2fr_0.9fr_1.1fr_1.1fr_1.2fr_0.9fr_1.2fr_1.2fr_auto] border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground"
-                      >
-                        <div className="flex min-h-[40px] items-center px-4 py-2">
-                          <input
-                            value={row.feeName}
-                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "feeName", event.target.value)}
-                            placeholder="Nhập tên phí..."
-                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
-                          />
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2">
-                          <input
-                            value={row.quantity}
-                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "quantity", event.target.value)}
-                            placeholder="SL"
-                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
-                          />
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2">
-                          <input
-                            value={row.unit}
-                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "unit", event.target.value)}
-                            placeholder="Đơn vị"
-                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
-                          />
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2">
-                          <input
-                            value={row.price}
-                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "price", event.target.value)}
-                            placeholder="Đơn giá"
-                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
-                          />
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
-                          <span>{row.amount || "-"}</span>
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2">
-                          <input
-                            value={row.vatRate}
-                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "vatRate", event.target.value)}
-                            placeholder="VAT%"
-                            className="h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] focus:border-black"
-                          />
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2 text-[#9CA3AF]">
-                          <span>{row.vatAmount || "-"}</span>
-                        </div>
-                        <div className="flex min-h-[40px] items-center px-4 py-2 font-semibold">
-                          <span>{row.total || "-"}</span>
-                        </div>
-                        <div className="flex min-h-[40px] items-center justify-end px-2 py-2">
-                          <button
-                            type="button"
-                            onClick={() => deleteCustomsDebitNoteRow(row.id)}
-                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
-                          >
-                            <Trash2 className="h-4 w-4" strokeWidth={1.9} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="border-b border-[#E7E6E9] bg-white">
-                      <button
-                        type="button"
-                        onClick={addCustomsDebitNoteRow}
-                        className="flex h-[38px] items-center px-4 text-[15px] font-medium text-[#4A90E2] transition hover:bg-[#F8FAFF]"
-                      >
-                        + Thêm dòng phí
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-[8.5fr_1.2fr_auto] border-t border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground">
-                      <div className="px-4 py-3 text-right font-medium">Total Debit Note</div>
-                      <div className="px-4 py-3 font-semibold text-[#D14343]">
-                        {customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}
-                      </div>
-                      <div />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isCustomsDebitNotePreviewOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
-          onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
-        >
-          <div
-            className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
-              <div className="flex items-center gap-3">
-                <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setToast({
-                      kind: "success",
-                      message: "Đang xuất PDF Debit Note."
-                    })
-                  }
-                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                >
-                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
-                  <span>Xuất PDF</span>
-                </button>
-              </div>
-              <button
-                type="button"
-                aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-4">
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-2.5">
-                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
-                  {customsDebitNoteSteps.map((step, index) => (
-                    <div
-                      key={`debit-preview-${step.key}`}
-                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
-                        index <= activeCustomsDebitNoteStepIndex
-                          ? index === activeCustomsDebitNoteStepIndex
-                            ? "bg-[#2054a3] text-white"
-                            : "bg-[#EAF1FB] text-[#245698]"
-                          : "bg-[#F3F4F6] text-muted-foreground"
-                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
-                    >
-                      {step.label}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeCustomsDebitNoteStatus === "draft" ? (
-                    <button
-                      type="button"
-                      onClick={sendCustomsDebitNoteForConfirmation}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Gửi xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
-                    <button
-                      type="button"
-                      onClick={confirmCustomsDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Đã xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "confirmed" ? (
+                  {activeCustomsDeclarationStatus === "pending_confirmation" ? (
                     <>
                       <button
                         type="button"
-                        onClick={createPaymentRequestFromDebitNote}
-                        className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                        onClick={moveCustomsDeclarationBackToDraft}
+                        className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
                       >
-                        Tạo Đề nghị thanh toán
+                        Đưa về nháp
                       </button>
                       <button
                         type="button"
-                        disabled
-                        className="inline-flex h-8 cursor-not-allowed items-center rounded-full border-[0.5px] border-[#E7E8EC] bg-[#F7F7F8] px-3 text-[13px] font-medium text-[#9CA3AF]"
+                        onClick={confirmCustomsDeclaration}
+                        className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                       >
-                        Hủy
+                        Xác nhận
                       </button>
                     </>
                   ) : null}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isInlandDebitNoteOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsInlandDebitNoteOpen(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất PDF Debit Note."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất PDF</span>
+                </button>
+              </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleDebitNoteFlowSteps.map((step, index) => (
+                    <div
+                      key={`inland-header-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeVisibleInlandDebitNoteStepIndex
+                          ? index === activeVisibleInlandDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsInlandDebitNoteOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
               <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
                 <div className="border-b border-[#1F2937] px-5 py-3">
                   <div className="grid grid-cols-[150px_1fr] items-center gap-3">
@@ -17729,7 +18630,7 @@ export default function Page() {
                       <tr className="border-b border-[#1F2937]">
                         {["Loại chi phí", "Quantity", "Unit", "Price", "Amount", "VAT", "Total"].map((label, index) => (
                           <th
-                            key={label}
+                            key={`inland-preview-${label}`}
                             className={`px-3 py-2 text-center font-bold ${index < 6 ? "border-r border-[#1F2937]" : ""}`}
                           >
                             {label}
@@ -17738,12 +18639,13 @@ export default function Page() {
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleCustomsDebitNoteRows.map((row) => (
-                        <tr key={`debit-preview-${row.id}`} className="border-b border-[#1F2937]">
+                    {visibleInlandDebitNoteRows.map((row) => (
+                        <tr key={`inland-preview-${row.id}`} className="border-b border-[#1F2937]">
                           <td className="border-r border-[#1F2937] px-3 py-1.5 align-top">
                             <input
                               value={row.feeName}
-                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "feeName", event.target.value)}
+                              onChange={(event) => updateInlandDebitNoteRow(row.id, "feeName", event.target.value)}
+                              readOnly={activeInlandDebitNoteStatus !== "draft"}
                               placeholder="Nhập tên phí..."
                               className="w-full bg-transparent text-[14px] text-foreground outline-none"
                             />
@@ -17751,7 +18653,8 @@ export default function Page() {
                           <td className="border-r border-[#1F2937] px-3 py-1.5 text-center align-top">
                             <input
                               value={row.quantity}
-                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "quantity", event.target.value)}
+                              onChange={(event) => updateInlandDebitNoteRow(row.id, "quantity", event.target.value)}
+                              readOnly={activeInlandDebitNoteStatus !== "draft"}
                               placeholder="SL"
                               className="w-full bg-transparent text-center text-[14px] text-foreground outline-none"
                             />
@@ -17759,7 +18662,8 @@ export default function Page() {
                           <td className="border-r border-[#1F2937] px-3 py-1.5 align-top">
                             <input
                               value={row.unit}
-                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "unit", event.target.value)}
+                              onChange={(event) => updateInlandDebitNoteRow(row.id, "unit", event.target.value)}
+                              readOnly={activeInlandDebitNoteStatus !== "draft"}
                               placeholder="Đơn vị"
                               className="w-full bg-transparent text-[14px] text-foreground outline-none"
                             />
@@ -17767,7 +18671,8 @@ export default function Page() {
                           <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">
                             <input
                               value={row.price}
-                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "price", event.target.value)}
+                              onChange={(event) => updateInlandDebitNoteRow(row.id, "price", event.target.value)}
+                              readOnly={activeInlandDebitNoteStatus !== "draft"}
                               placeholder="Đơn giá"
                               className="w-full bg-transparent text-right text-[14px] text-foreground outline-none"
                             />
@@ -17782,8 +18687,600 @@ export default function Page() {
                           Total of Debit Note
                         </td>
                         <td className="px-3 py-3 text-right text-[18px] font-bold">
+                          {inlandDebitNoteGrandTotal ? `${inlandDebitNoteGrandTotal} đ` : "-"}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-3 text-[15px] text-foreground">
+                  {["Kế toán trưởng", "Trưởng bộ phận", "Người đề nghị"].map((label, index) => (
+                    <div key={`inland-${label}`} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 text-right">{index === 2 ? currentUserName : ""}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="w-[152px] rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3">
+                    <InlineCompactDateField
+                      value={activeInlandDebitNoteDueDate}
+                      onChange={(value) =>
+                        setInlandDebitNoteDueDateByType((current) => ({
+                          ...current,
+                          [inlandTradeType]: value
+                        }))
+                      }
+                      placeholder="dd/mm/yyyy"
+                      textSizeClass="text-[13px] font-medium"
+                      heightClass="h-8"
+                      readOnly={activeInlandDebitNoteStatus !== "draft"}
+                    />
+                  </div>
+                </div>
+                {activeInlandDebitNoteStatus === "draft" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setToast({
+                          kind: "success",
+                          message: "Đã lưu nháp Debit Note."
+                        })
+                      }
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendInlandDebitNoteForConfirmation}
+                      disabled={!activeInlandDebitNoteDueDate.trim()}
+                      className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                        activeInlandDebitNoteDueDate.trim()
+                          ? "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                          : "cursor-not-allowed bg-[#D7DCE8] text-white"
+                      }`}
+                    >
+                      Gửi xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeInlandDebitNoteStatus === "pending_confirmation" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={moveInlandDebitNoteBackToDraft}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Đưa về nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmInlandDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsDebitNoteOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsDebitNoteOpen(false)}
+        >
+          <div
+            className="w-full max-w-[1240px] rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất PDF Debit Note."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất PDF</span>
+                </button>
+              </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleDebitNoteFlowSteps.map((step, index) => (
+                    <div
+                      key={`customs-header-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeVisibleCustomsDebitNoteStepIndex
+                          ? index === activeVisibleCustomsDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsCustomsDebitNoteOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-5">
+              <div className="mb-4 grid gap-x-8 gap-y-3 rounded-[10px] border border-[#E7E6E9] bg-[#FCFCFD] px-4 py-3 lg:grid-cols-2">
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Customer</span>
+                  <span>{shipmentDetailCustomerName}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Shipment ID</span>
+                  <span>{shipmentDetailNumber}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Module</span>
+                  <span>{customsTradeType === "export" ? "Export" : "Import"}</span>
+                </div>
+                <div className="flex items-center gap-3 text-[14px] text-foreground">
+                  <span className="min-w-[110px] text-muted-foreground">Shipment Date</span>
+                  <span>
+                    {shipmentDetailShipmentDate
+                      ? new Date(shipmentDetailShipmentDate).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[1160px]">
+                    <div
+                      className={`grid ${
+                        activeCustomsDebitNoteStatus === "draft"
+                          ? "grid-cols-[4.85fr_0.45fr_0.55fr_0.55fr_1.2fr_0.9fr_1.2fr_1.2fr_auto]"
+                          : "grid-cols-[4.85fr_0.45fr_0.55fr_0.55fr_1.2fr_0.9fr_1.2fr_1.2fr]"
+                      } border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground`}
+                    >
+                      {[
+                        "Loại chi phí",
+                        "Quantity",
+                        "Unit",
+                        "Price (đ)",
+                        "Amount (đ)",
+                        "VAT%",
+                        "VAT value (đ)",
+                        "Total (đ)",
+                        ...(activeCustomsDebitNoteStatus === "draft" ? [""] : [])
+                      ].map((label) => (
+                        <div key={label} className="px-4 py-2.5">
+                          {label}
+                        </div>
+                      ))}
+                    </div>
+                    {visibleCustomsDebitNoteRows.map((row) => (
+                      <div
+                        key={`debit-note-${row.id}`}
+                        className={`grid ${
+                          activeCustomsDebitNoteStatus === "draft"
+                            ? "grid-cols-[4.85fr_0.45fr_0.55fr_0.55fr_1.2fr_0.9fr_1.2fr_1.2fr_auto]"
+                            : "grid-cols-[4.85fr_0.45fr_0.55fr_0.55fr_1.2fr_0.9fr_1.2fr_1.2fr]"
+                        } border-b border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground`}
+                      >
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.feeName}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "feeName", event.target.value)}
+                            readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                            placeholder="Nhập tên phí..."
+                            className={`h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] ${
+                              activeCustomsDebitNoteStatus === "draft" ? "focus:border-black" : ""
+                            }`}
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.quantity}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "quantity", event.target.value)}
+                            readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                            placeholder="SL"
+                            className={`h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] ${
+                              activeCustomsDebitNoteStatus === "draft" ? "focus:border-black" : ""
+                            }`}
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.unit}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "unit", event.target.value)}
+                            readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                            placeholder="Đơn vị"
+                            className={`h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] ${
+                              activeCustomsDebitNoteStatus === "draft" ? "focus:border-black" : ""
+                            }`}
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.price}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "price", event.target.value)}
+                            readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                            placeholder="Đơn giá"
+                            className={`h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] ${
+                              activeCustomsDebitNoteStatus === "draft" ? "focus:border-black" : ""
+                            }`}
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 font-medium">
+                          <span>{row.amount || "-"}</span>
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2">
+                          <input
+                            value={row.vatRate}
+                            onChange={(event) => updateCustomsDebitNoteRow(row.id, "vatRate", event.target.value)}
+                            readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                            placeholder="VAT%"
+                            className={`h-8 w-full border-b border-transparent bg-transparent px-0 text-[15px] text-foreground outline-none transition-colors placeholder:text-[#C3C7CF] ${
+                              activeCustomsDebitNoteStatus === "draft" ? "focus:border-black" : ""
+                            }`}
+                          />
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 text-[#9CA3AF]">
+                          <span>{row.vatAmount || "-"}</span>
+                        </div>
+                        <div className="flex min-h-[40px] items-center px-4 py-2 font-semibold">
+                          <span>{row.total || "-"}</span>
+                        </div>
+                        {activeCustomsDebitNoteStatus === "draft" ? (
+                          <div className="flex min-h-[40px] items-center justify-end px-2 py-2">
+                            <button
+                              type="button"
+                              onClick={() => deleteCustomsDebitNoteRow(row.id)}
+                              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                            >
+                              <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                    {activeCustomsDebitNoteStatus === "draft" ? (
+                      <div className="border-b border-[#E7E6E9] bg-white">
+                        <button
+                          type="button"
+                          onClick={addCustomsDebitNoteRow}
+                          className="flex h-[38px] items-center px-4 text-[15px] font-medium text-[#4A90E2] transition hover:bg-[#F8FAFF]"
+                        >
+                          + Thêm dòng phí
+                        </button>
+                      </div>
+                    ) : null}
+                    <div
+                      className={`grid ${
+                        activeCustomsDebitNoteStatus === "draft" ? "grid-cols-[8.5fr_1.2fr_auto]" : "grid-cols-[8.5fr_1.2fr]"
+                      } border-t border-[#E7E6E9] bg-[#FCFCFD] text-[15px] text-foreground`}
+                    >
+                      <div className="px-4 py-3 text-right font-medium">Total Debit Note</div>
+                      <div className="px-4 py-3 font-semibold text-[#D14343]">
+                        {customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}
+                      </div>
+                      {activeCustomsDebitNoteStatus === "draft" ? <div /> : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="w-[152px] rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3">
+                    <InlineCompactDateField
+                      value={activeCustomsDebitNoteDueDate}
+                      onChange={(value) =>
+                        setCustomsDebitNoteDueDateByType((current) => ({
+                          ...current,
+                          [customsTradeType]: value
+                        }))
+                      }
+                      placeholder="dd/mm/yyyy"
+                      textSizeClass="text-[13px] font-medium"
+                      heightClass="h-8"
+                      readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                    />
+                  </div>
+                </div>
+                {activeCustomsDebitNoteStatus === "draft" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setToast({
+                          kind: "success",
+                          message: "Đã lưu nháp Debit Note."
+                        })
+                      }
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendCustomsDebitNoteForConfirmation}
+                      disabled={!activeCustomsDebitNoteDueDate.trim()}
+                      className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                        activeCustomsDebitNoteDueDate.trim()
+                          ? "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                          : "cursor-not-allowed bg-[#D7DCE8] text-white"
+                      }`}
+                    >
+                      Gửi xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={moveCustomsDebitNoteBackToDraft}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Đưa về nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmCustomsDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsDebitNotePreviewOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="text-[18px] font-semibold text-foreground">Debit Note</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất PDF Debit Note."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất PDF</span>
+                </button>
+              </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleDebitNoteFlowSteps.map((step, index) => (
+                    <div
+                      key={`debit-preview-header-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeVisibleCustomsDebitNoteStepIndex
+                          ? index === activeVisibleCustomsDebitNoteStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsCustomsDebitNotePreviewOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
+                <div className="border-b border-[#1F2937] px-5 py-3">
+                  <div className="grid grid-cols-[150px_1fr] items-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <Image
+                        src="/pi-doc-logo.png"
+                        alt="PI Logistics"
+                        width={140}
+                        height={84}
+                        className="h-auto w-[140px] object-contain"
+                      />
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <div className="text-[16px] font-bold uppercase text-foreground">PI Logistics Corporation</div>
+                      <div className="text-[13px] text-foreground">5th Floor, HKC Building, 285 Doi Can Str, Ba Dinh Dist, Hanoi, Vietnam</div>
+                      <div className="flex items-center justify-center gap-6 text-[13px] text-foreground">
+                        <span>Tel: +84-24-62662669</span>
+                        <span>Fax: +84-24-62662660</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-5 py-4 text-center">
+                  <div className="text-[20px] font-bold uppercase text-foreground">Debit Note</div>
+                </div>
+
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Khách hàng:</div>
+                  <div className="px-4 py-1.5 font-semibold">{shipmentDetailCustomerName}</div>
+                </div>
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Shipment ID:</div>
+                  <div className="px-4 py-1.5 font-semibold">{shipmentDetailNumber}</div>
+                </div>
+                <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-1.5 font-semibold">Ngày vận chuyển:</div>
+                  <div className="px-4 py-1.5 font-semibold">
+                    {shipmentDetailShipmentDate
+                      ? new Date(shipmentDetailShipmentDate).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })
+                      : "-"}
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-[14px] text-foreground">
+                    <thead>
+                      <tr className="border-b border-[#1F2937]">
+                        {[
+                          "Loại chi phí",
+                          "Quantity",
+                          "Unit",
+                          "Price",
+                          "Amount",
+                          "VAT",
+                          "Total",
+                          ...(activeCustomsDebitNoteStatus === "draft" ? [""] : [])
+                        ].map((label, index) => {
+                          const widthClass =
+                            index === 0
+                              ? "w-[38%] min-w-[340px]"
+                              : index === 1
+                                ? "w-[64px]"
+                                : index === 2
+                                  ? "w-[88px]"
+                                  : index === 3
+                                    ? "w-[88px]"
+                                      : index === 4
+                                        ? "w-[120px]"
+                                      : index === 5
+                                        ? "w-[110px]"
+                                      : index === 6
+                                          ? "w-[126px]"
+                                          : "w-[44px]";
+                          return (
+                            <th
+                              key={label}
+                              className={`${widthClass} px-3 py-2 text-center font-bold ${
+                                index < (activeCustomsDebitNoteStatus === "draft" ? 7 : 6) ? "border-r border-[#1F2937]" : ""
+                              }`}
+                            >
+                              {label}
+                            </th>
+                          );
+                        })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visibleCustomsDebitNoteRows.map((row) => (
+                        <tr key={`debit-preview-${row.id}`} className="border-b border-[#1F2937]">
+                          <td className="w-[38%] min-w-[340px] border-r border-[#1F2937] px-3 py-1.5 align-top">
+                            <input
+                              value={row.feeName}
+                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "feeName", event.target.value)}
+                              readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                              placeholder="Nhập tên phí..."
+                              className="w-full bg-transparent text-[14px] text-foreground outline-none"
+                            />
+                          </td>
+                          <td className="w-[64px] border-r border-[#1F2937] px-3 py-1.5 text-center align-top">
+                            <input
+                              value={row.quantity}
+                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "quantity", event.target.value)}
+                              readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                              placeholder="SL"
+                              className="w-full bg-transparent text-center text-[14px] text-foreground outline-none"
+                            />
+                          </td>
+                          <td className="w-[88px] border-r border-[#1F2937] px-3 py-1.5 align-top">
+                            <input
+                              value={row.unit}
+                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "unit", event.target.value)}
+                              readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                              placeholder="Đơn vị"
+                              className="w-full bg-transparent text-[14px] text-foreground outline-none"
+                            />
+                          </td>
+                          <td className="w-[88px] border-r border-[#1F2937] px-3 py-1.5 text-right align-top">
+                            <input
+                              value={row.price}
+                              onChange={(event) => updateCustomsDebitNoteRow(row.id, "price", event.target.value)}
+                              readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                              placeholder="Đơn giá"
+                              className="w-full bg-transparent text-right text-[14px] text-foreground outline-none"
+                            />
+                          </td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">{row.amount ? `${row.amount} đ` : "-"}</td>
+                          <td className="border-r border-[#1F2937] px-3 py-1.5 text-right align-top">{row.vatAmount ? `${row.vatAmount} đ` : "-"}</td>
+                          <td
+                            className={`${
+                              activeCustomsDebitNoteStatus === "draft" ? "border-r border-[#1F2937]" : ""
+                            } px-3 py-1.5 text-right align-top font-semibold`}
+                          >
+                            {row.total ? `${row.total} đ` : "-"}
+                          </td>
+                          {activeCustomsDebitNoteStatus === "draft" ? (
+                            <td className="px-2 py-1.5 align-top">
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteCustomsDebitNoteRow(row.id)}
+                                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-[#EEF3FF] hover:text-[#245698]"
+                                >
+                                  <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={6} className="border-r border-[#1F2937] px-3 py-3 text-center text-[18px] font-bold uppercase">
+                          Total of Debit Note
+                        </td>
+                        <td className={`${activeCustomsDebitNoteStatus === "draft" ? "border-r border-[#1F2937]" : ""} px-3 py-3 text-right text-[18px] font-bold`}>
                           {customsDebitNoteGrandTotal ? `${customsDebitNoteGrandTotal} đ` : "-"}
                         </td>
+                        {activeCustomsDebitNoteStatus === "draft" ? <td /> : null}
                       </tr>
                     </tbody>
                   </table>
@@ -17799,6 +19296,72 @@ export default function Page() {
                   ))}
                 </div>
               </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="w-[152px] rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3">
+                    <InlineCompactDateField
+                      value={activeCustomsDebitNoteDueDate}
+                      onChange={(value) =>
+                        setCustomsDebitNoteDueDateByType((current) => ({
+                          ...current,
+                          [customsTradeType]: value
+                        }))
+                      }
+                      placeholder="dd/mm/yyyy"
+                      textSizeClass="text-[13px] font-medium"
+                      heightClass="h-8"
+                      readOnly={activeCustomsDebitNoteStatus !== "draft"}
+                    />
+                  </div>
+                </div>
+                {activeCustomsDebitNoteStatus === "draft" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setToast({
+                          kind: "success",
+                          message: "Đã lưu nháp Debit Note."
+                        })
+                      }
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendCustomsDebitNoteForConfirmation}
+                      disabled={!activeCustomsDebitNoteDueDate.trim()}
+                      className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                        activeCustomsDebitNoteDueDate.trim()
+                          ? "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                          : "cursor-not-allowed bg-[#D7DCE8] text-white"
+                      }`}
+                    >
+                      Gửi xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={moveCustomsDebitNoteBackToDraft}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Đưa về nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmCustomsDebitNote}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -17813,7 +19376,7 @@ export default function Page() {
             className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
               <div className="flex items-center gap-3">
                 <div className="text-[18px] font-semibold text-foreground">Đề nghị thanh toán</div>
                 <button
@@ -17830,25 +19393,14 @@ export default function Page() {
                   <span>Xuất PDF</span>
                 </button>
               </div>
-              <button
-                type="button"
-                aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
-                onClick={() => setIsCustomsPaymentRequestOpen(false)}
-              >
-                <X className="h-4 w-4" strokeWidth={1.8} />
-              </button>
-            </div>
-
-            <div className="overflow-y-auto px-5 py-4">
-              <div className="mb-3 flex flex-wrap items-start justify-between gap-4 rounded-[10px] border border-[#E7E6E9] bg-white px-4 py-2.5">
-                <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
-                  {customsDebitNoteSteps.map((step, index) => (
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleCustomsDebitNoteSteps.map((step, index) => (
                     <div
-                      key={`payment-request-${step.key}`}
+                      key={`customs-payment-header-${step.key}`}
                       className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
-                        index <= activeCustomsDebitNoteStepIndex
-                          ? index === activeCustomsDebitNoteStepIndex
+                        index <= activeVisibleCustomsPaymentRequestStepIndex
+                          ? index === activeVisibleCustomsPaymentRequestStepIndex
                             ? "bg-[#2054a3] text-white"
                             : "bg-[#EAF1FB] text-[#245698]"
                           : "bg-[#F3F4F6] text-muted-foreground"
@@ -17858,37 +19410,18 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeCustomsDebitNoteStatus === "draft" ? (
-                    <button
-                      type="button"
-                      onClick={sendCustomsDebitNoteForConfirmation}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Gửi xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "pending_confirmation" ? (
-                    <button
-                      type="button"
-                      onClick={confirmCustomsDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Đã xác nhận
-                    </button>
-                  ) : null}
-                  {activeCustomsDebitNoteStatus === "confirmed" ? (
-                    <button
-                      type="button"
-                      onClick={createPaymentRequestFromDebitNote}
-                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
-                    >
-                      Tạo Đề nghị thanh toán
-                    </button>
-                  ) : null}
-                </div>
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsCustomsPaymentRequestOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
               </div>
+            </div>
 
+            <div className="overflow-y-auto px-5 py-4">
               <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
                 <div className="border-b border-[#1F2937] px-5 py-3">
                   <div className="grid grid-cols-[150px_1fr] items-center gap-3">
@@ -18015,6 +19548,341 @@ export default function Page() {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="w-[152px] rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3">
+                    <InlineCompactDateField
+                      value={activeCustomsPaymentRequestDueDate}
+                      onChange={(value) =>
+                        setCustomsPaymentRequestDueDateByType((current) => ({
+                          ...current,
+                          [customsTradeType]: value
+                        }))
+                      }
+                      placeholder="dd/mm/yyyy"
+                      textSizeClass="text-[13px] font-medium"
+                      heightClass="h-8"
+                      readOnly={activeCustomsPaymentRequestStatus !== "draft"}
+                    />
+                  </div>
+                </div>
+                {activeCustomsPaymentRequestStatus === "draft" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setToast({
+                          kind: "success",
+                          message: "Đã lưu nháp Đề nghị thanh toán."
+                        })
+                      }
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendCustomsPaymentRequestForConfirmation}
+                      disabled={!activeCustomsPaymentRequestDueDate.trim()}
+                      className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                        activeCustomsPaymentRequestDueDate.trim()
+                          ? "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                          : "cursor-not-allowed bg-[#D7DCE8] text-white"
+                      }`}
+                    >
+                      Gửi xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeCustomsPaymentRequestStatus === "pending_confirmation" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={moveCustomsPaymentRequestBackToDraft}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Đưa về nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmCustomsPaymentRequest}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeCustomsPaymentRequestStatus === "pending_payment" ? (
+                  <button
+                    type="button"
+                    onClick={markCustomsPaymentRequestPaid}
+                    className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                  >
+                    Đã thanh toán
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isInlandPaymentRequestOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsInlandPaymentRequestOpen(false)}
+        >
+          <div
+            className="flex max-h-[88vh] w-full max-w-[1120px] flex-col overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-4 border-b-[0.5px] border-border px-5 py-4">
+              <div className="flex items-center gap-3">
+                <div className="text-[18px] font-semibold text-foreground">Đề nghị thanh toán</div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToast({
+                      kind: "success",
+                      message: "Đang xuất PDF Đề nghị thanh toán."
+                    })
+                  }
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                >
+                  <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                  <span>Xuất PDF</span>
+                </button>
+              </div>
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                  {visibleCustomsDebitNoteSteps.map((step, index) => (
+                    <div
+                      key={`inland-payment-header-${step.key}`}
+                      className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                        index <= activeVisibleInlandPaymentRequestStepIndex
+                          ? index === activeVisibleInlandPaymentRequestStepIndex
+                            ? "bg-[#2054a3] text-white"
+                            : "bg-[#EAF1FB] text-[#245698]"
+                          : "bg-[#F3F4F6] text-muted-foreground"
+                      } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
+                    >
+                      {step.label}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Đóng modal"
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                  onClick={() => setIsInlandPaymentRequestOpen(false)}
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="overflow-hidden rounded-[10px] border border-[#1F2937] bg-white">
+                <div className="border-b border-[#1F2937] px-5 py-3">
+                  <div className="grid grid-cols-[150px_1fr] items-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <Image
+                        src="/pi-doc-logo.png"
+                        alt="PI Logistics"
+                        width={140}
+                        height={84}
+                        className="h-auto w-[140px] object-contain"
+                      />
+                    </div>
+                    <div className="space-y-1 text-center">
+                      <div className="text-[16px] font-bold uppercase text-foreground">PI Logistics Corporation</div>
+                      <div className="text-[13px] text-foreground">5th Floor, HKC Building, 285 Doi Can Str, Ngoc Ha Ward, Hanoi, Vietnam</div>
+                      <div className="flex items-center justify-center gap-6 text-[13px] text-foreground">
+                        <span>Tel: +84-4-62662669</span>
+                        <span>Email: admin@pacific.com.vn</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-[#1F2937] px-5 py-4 text-center">
+                  <div className="text-[19px] font-bold uppercase text-foreground">Phiếu đề nghị thanh toán</div>
+                  <div className="mt-1 px-6">
+                    <input
+                      value={inlandPaymentRequestDateText}
+                      onChange={(event) => setInlandPaymentRequestDateText(event.target.value)}
+                      className="w-full bg-transparent text-center text-[14px] font-semibold italic text-foreground outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[140px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-2 font-semibold">Họ và tên:</div>
+                  <div className="px-4 py-2">
+                    <input
+                      value={inlandPaymentRequestFullName}
+                      onChange={(event) => setInlandPaymentRequestFullName(event.target.value)}
+                      className="w-full bg-transparent text-[15px] text-foreground outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-[140px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
+                  <div className="border-r border-[#1F2937] px-4 py-2 font-semibold">Bộ phận:</div>
+                  <div className="px-4 py-2">
+                    <input
+                      value={inlandPaymentRequestDepartment}
+                      onChange={(event) => setInlandPaymentRequestDepartment(event.target.value)}
+                      className="w-full bg-transparent text-[15px] text-foreground outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-[14px] text-foreground">
+                    <thead>
+                      <tr className="border-b border-[#1F2937]">
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">STT</th>
+                        <th colSpan={2} className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">Chứng từ</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-bold">Diễn giải</th>
+                        <th className="px-2 py-2 text-center font-bold">Số tiền (VND)</th>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <th className="border-r border-[#1F2937] px-2 py-2" />
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-semibold">Số</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2 text-center font-semibold">Ngày</th>
+                        <th className="border-r border-[#1F2937] px-2 py-2" />
+                        <th className="px-2 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: Math.max(8, inlandPaymentRequestRows.length) }).map((_, index) => {
+                        const row = inlandPaymentRequestRows[index];
+                        return (
+                          <tr key={`inland-payment-request-row-${index}`} className="border-b border-[#1F2937]">
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 text-center align-top">{row ? index + 1 : ""}</td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">{row ? shipmentDetailNumber : ""}</td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">{row ? "02/04/2026" : ""}</td>
+                            <td className="border-r border-[#1F2937] px-2 py-1.5 align-top">{row?.feeName || ""}</td>
+                            <td className="px-2 py-1.5 text-right align-top">{row?.total ? `${row.total} đ` : ""}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Tổng số</td>
+                        <td className="px-3 py-1.5 text-right font-bold">{inlandDebitNoteGrandTotal ? `${inlandDebitNoteGrandTotal} đ` : "-"}</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Trừ tạm ứng</td>
+                        <td className="px-3 py-1.5 text-right font-bold">-</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={4} className="border-r border-[#1F2937] px-3 py-1.5 text-right font-bold">Số tiền thanh toán</td>
+                        <td className="px-3 py-1.5 text-right font-bold">{inlandDebitNoteGrandTotal ? `${inlandDebitNoteGrandTotal} đ` : "-"}</td>
+                      </tr>
+                      <tr className="border-b border-[#1F2937]">
+                        <td colSpan={2} className="border-r border-[#1F2937] px-3 py-2.5 font-bold italic">Bằng chữ</td>
+                        <td colSpan={3} className="px-3 py-2.5 font-semibold">#ERROR!</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid grid-cols-3 border-b border-[#1F2937] text-[15px] text-foreground">
+                  {["Trưởng bộ phận", "Kế toán trưởng", "Người đề nghị"].map((label, index) => (
+                    <div key={`inland-${label}`} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center font-bold">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 italic">Ngày/tháng: ...............</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-3 text-[15px] text-foreground">
+                  {["Giám đốc duyệt", "Thủ quỹ", "Người nhận"].map((label, index) => (
+                    <div key={`inland-bottom-${label}`} className={`${index < 2 ? "border-r border-[#1F2937]" : ""}`}>
+                      <div className="border-b border-[#1F2937] px-3 py-2 text-center font-bold">{label}</div>
+                      <div className="h-[72px] px-3 py-2" />
+                      <div className="px-3 py-2 italic">Ngày/tháng: ...............</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[13px] font-medium text-muted-foreground">Hạn thanh toán:</span>
+                  <div className="w-[152px] rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3">
+                    <InlineCompactDateField
+                      value={activeInlandPaymentRequestDueDate}
+                      onChange={(value) =>
+                        setInlandPaymentRequestDueDateByType((current) => ({
+                          ...current,
+                          [inlandTradeType]: value
+                        }))
+                      }
+                      placeholder="dd/mm/yyyy"
+                      textSizeClass="text-[13px] font-medium"
+                      heightClass="h-8"
+                      readOnly={activeInlandPaymentRequestStatus !== "draft"}
+                    />
+                  </div>
+                </div>
+                {activeInlandPaymentRequestStatus === "draft" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setToast({
+                          kind: "success",
+                          message: "Đã lưu nháp Đề nghị thanh toán."
+                        })
+                      }
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendInlandPaymentRequestForConfirmation}
+                      disabled={!activeInlandPaymentRequestDueDate.trim()}
+                      className={`inline-flex h-8 items-center rounded-full px-3 text-[13px] font-medium transition ${
+                        activeInlandPaymentRequestDueDate.trim()
+                          ? "bg-[#2054a3] text-white hover:bg-[#1b467d]"
+                          : "cursor-not-allowed bg-[#D7DCE8] text-white"
+                      }`}
+                    >
+                      Gửi xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeInlandPaymentRequestStatus === "pending_confirmation" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={moveInlandPaymentRequestBackToDraft}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                    >
+                      Đưa về nháp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={confirmInlandPaymentRequest}
+                      className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                    >
+                      Xác nhận
+                    </button>
+                  </>
+                ) : null}
+                {activeInlandPaymentRequestStatus === "pending_payment" ? (
+                  <button
+                    type="button"
+                    onClick={markInlandPaymentRequestPaid}
+                    className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                  >
+                    Đã thanh toán
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
