@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   Download,
   Eye,
   FileText,
@@ -808,9 +809,19 @@ type CustomsAuditRow = {
   actor: string;
   time: string;
 };
-type CustomsDebitNoteListStatus = "approved" | "cancelled";
+type CustomsDebitNoteListStatus = "draft" | "approved" | "cancelled";
+type CustomsPaymentRequestListStatus = "draft" | "pending_confirmation" | "paid";
+type CustomsPaymentRequestListRow = {
+  id: string;
+  title: string;
+  status: CustomsPaymentRequestListStatus;
+  dueDate: string;
+};
 
 function mapDebitListStatusToFlowStatus(status: CustomsDebitNoteListStatus): CustomsDebitNoteStatus {
+  if (status === "draft") {
+    return "draft";
+  }
   return status === "approved" ? "pending_payment" : "cancelled";
 }
 type CustomsDeclarationGoodsItem = {
@@ -1561,19 +1572,19 @@ const bookingStatusMeta: Record<
 > = {
   draft: {
     label: "Nháp",
-    className: "bg-[#E5E7EB] text-black"
+    className: "bg-[#F3F4F6] text-[#4B5563]"
   },
   pending: {
-    label: "Chờ xác nhận",
-    className: "bg-[#F5BF13] text-[#1F1F1F]"
+    label: "Xác nhận",
+    className: "bg-[#FFF4E5] text-[#C75B12]"
   },
   confirmed: {
-    label: "Đã xác nhận",
-    className: "bg-[#0879C9] text-white"
+    label: "Đang hoàn thành",
+    className: "bg-[#E7F6EC] text-[#18794E]"
   },
   canceled: {
     label: "Đã hủy",
-    className: "bg-[#F33233] text-white"
+    className: "bg-[#FDECEC] text-[#D14343]"
   }
 };
 const customsServicePackages = [
@@ -1672,6 +1683,13 @@ function getCurrentYearDateRange() {
   };
 }
 
+function formatDateToIso(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 const portFilterLabels: Record<string, string> = {
   "TP.HCM": "VNSGN - Cảng Cát Lái, TP.HCM",
   "Hồ Chí Minh": "VNSGN - Cảng Cát Lái, TP.HCM",
@@ -1763,6 +1781,12 @@ const shipmentDetailPodOptions = [
   { value: "HKHKG — Hong Kong", label: "HKHKG — Hong Kong", flag: "🇭🇰", meta: "Hong Kong · Hong Kong" },
   { value: "JPTYO — Tokyo", label: "JPTYO — Tokyo", flag: "🇯🇵", meta: "Tokyo · Japan" }
 ] satisfies Array<SelectOption & { flag: string; meta: string }>;
+const shipmentDetailServiceTypeOptions = ["Customs", "Inland", "Oversea"] as const;
+const shipmentListAssignedStaffOptions = [
+  "Nguyen Van A — CS",
+  "An Phạm — CS",
+  "Tran Minh Duc — CS"
+] as const;
 const initialCustomerListFilterState: CustomerListFilterState = {
   contacts: [],
   companies: [],
@@ -1812,6 +1836,59 @@ function formatBookingCode(code: string) {
 
 function formatShipmentCodeFromBooking(code: string) {
   return code.replace(/^BR-/, "SHP-").replaceAll("-", "\u2011");
+}
+
+function parseShipmentSequence(code: string) {
+  const match = code.match(/(\d{4})$/);
+  return match ? Number(match[1]) : 0;
+}
+
+const shipmentRouteCodeMap: Record<string, string> = {
+  "Hải Phòng": "HPH",
+  "Hai Phong": "HPH",
+  "TP.HCM": "SGN",
+  "Ho Chi Minh": "SGN",
+  "Đà Nẵng": "DAD",
+  "Da Nang": "DAD",
+  Bangkok: "BKK",
+  "Laem Chabang": "LCB",
+  Tokyo: "JPTYO",
+  Osaka: "JPOSA",
+  Shanghai: "CNSHA",
+  Singapore: "SGSIN",
+  Manila: "PHMNL",
+  "Hong Kong": "HKHKG",
+  Jakarta: "IDCGK",
+  Busan: "KRPUS"
+};
+
+function getShipmentRouteCode(location: string) {
+  return shipmentRouteCodeMap[location] ?? location.slice(0, 3).toUpperCase();
+}
+
+function isVietnamShipmentLocation(location: string) {
+  return ["Hải Phòng", "Hai Phong", "TP.HCM", "Ho Chi Minh", "Đà Nẵng", "Da Nang", "Cần Thơ"].includes(location);
+}
+
+function getShipmentDirectionLabel(row: BookingRow) {
+  return isVietnamShipmentLocation(row.route.from) ? "EXPORT" : "IMPORT";
+}
+
+function getShipmentListCargoType(row: BookingRow) {
+  return parseShipmentSequence(row.code) % 3 === 0 ? "LCL" : "FCL";
+}
+
+function getShipmentEnabledServices(row: BookingRow) {
+  const sequence = parseShipmentSequence(row.code);
+  return [
+    "Customs",
+    ...(sequence % 2 === 0 ? ["Inland"] : []),
+    "Oversea"
+  ] as Array<"Customs" | "Inland" | "Oversea">;
+}
+
+function getShipmentRouteSummary(row: BookingRow) {
+  return `${getShipmentDirectionLabel(row)} - ${getShipmentRouteCode(row.route.from)} → ${getShipmentRouteCode(row.route.to)}`;
 }
 
 function formatPortFilterLabel(port: string) {
@@ -2885,7 +2962,8 @@ function InlineDropdownField({
   options,
   onToggle,
   error,
-  readOnly = false
+  readOnly = false,
+  chipDisplay = false
 }: {
   label: string;
   values: string[];
@@ -2893,6 +2971,7 @@ function InlineDropdownField({
   onToggle: (value: string) => void;
   error?: string;
   readOnly?: boolean;
+  chipDisplay?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -2917,23 +2996,59 @@ function InlineDropdownField({
   return (
     <InlineFieldShell label={label} error={error} readOnly={readOnly}>
       <div ref={containerRef} className="relative">
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={readOnly ? -1 : 0}
           onClick={() => {
             if (!readOnly) {
               setIsOpen((current) => !current);
             }
           }}
+          onKeyDown={(event) => {
+            if (readOnly) {
+              return;
+            }
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setIsOpen((current) => !current);
+            }
+          }}
           className="flex min-h-[40px] w-full items-center justify-between gap-3 bg-transparent px-0 text-left text-[15px] text-foreground outline-none"
         >
-          <span className={values.length > 0 ? "text-foreground" : "text-[#C0C5D2]"}>{selectedLabel}</span>
+          {chipDisplay && values.length > 0 ? (
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+              {values.map((value) => (
+                <span
+                  key={value}
+                  className="inline-flex max-w-full items-center gap-1 rounded-full bg-[#EEF3FF] px-2.5 py-1 text-[13px] font-medium text-[#245698]"
+                >
+                  <span className="truncate">{value}</span>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onToggle(value);
+                      }}
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[#245698] transition hover:bg-[rgba(36,86,152,0.1)]"
+                      aria-label={`Xóa ${value}`}
+                    >
+                      <X className="h-3 w-3" strokeWidth={2.1} />
+                    </button>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className={values.length > 0 ? "text-foreground" : "text-[#C0C5D2]"}>{selectedLabel}</span>
+          )}
           <ChevronDown
             className={`h-4 w-4 shrink-0 text-muted-foreground transition-opacity ${
               isOpen ? "opacity-100" : "opacity-0"
             }`}
             strokeWidth={1.8}
           />
-        </button>
+        </div>
 
         {isOpen && !readOnly ? (
           <div className="absolute left-0 top-full z-20 mt-1 max-h-64 min-w-[220px] w-[50%] overflow-y-auto rounded-[14px] border border-[#DADCE3] bg-[#f7f7f7] shadow-[0_12px_24px_rgba(17,17,17,0.12)]">
@@ -3477,6 +3592,8 @@ export default function Page() {
   const serviceDetailFeeInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customsUploadInputRef = useRef<HTMLInputElement | null>(null);
   const inlandUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const customsPaymentRequestInvoiceUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const inlandPaymentRequestInvoiceUploadInputRef = useRef<HTMLInputElement | null>(null);
   const overseaUploadInputRef = useRef<HTMLInputElement | null>(null);
   const customerAddressInlineFormRef = useRef<HTMLDivElement | null>(null);
   const customerContactInlineFormRef = useRef<HTMLDivElement | null>(null);
@@ -3498,6 +3615,7 @@ export default function Page() {
   const detailsActionMenuRef = useRef<HTMLDivElement | null>(null);
   const customerTitleMenuRef = useRef<HTMLDivElement | null>(null);
   const customerBulkActionMenuRef = useRef<HTMLDivElement | null>(null);
+  const shipmentBulkActionMenuRef = useRef<HTMLDivElement | null>(null);
   const globalSearchMenuRef = useRef<HTMLDivElement | null>(null);
   const customerSearchRef = useRef<HTMLDivElement | null>(null);
   const customerCreateContractRef = useRef<HTMLDivElement | null>(null);
@@ -3534,6 +3652,7 @@ export default function Page() {
   const [isDetailsActionMenuOpen, setIsDetailsActionMenuOpen] = useState(false);
   const [isCustomerTitleMenuOpen, setIsCustomerTitleMenuOpen] = useState(false);
   const [isCustomerBulkActionMenuOpen, setIsCustomerBulkActionMenuOpen] = useState(false);
+  const [isShipmentBulkActionMenuOpen, setIsShipmentBulkActionMenuOpen] = useState(false);
   const [isGlobalSearchMenuOpen, setIsGlobalSearchMenuOpen] = useState(false);
   const [customerStatusOverrides, setCustomerStatusOverrides] = useState<Record<string, CustomerAccountStatus>>({});
   const [contractStatusOverrides, setContractStatusOverrides] = useState<Record<string, ContractRow["status"]>>({});
@@ -3541,15 +3660,24 @@ export default function Page() {
   const [deletedContractCodes, setDeletedContractCodes] = useState<string[]>([]);
   const [selectedSearchFilters, setSelectedSearchFilters] = useState<Record<string, string[]>>({});
   const [selectedSearchGroupOptions, setSelectedSearchGroupOptions] = useState<string[]>([]);
+  const defaultShipmentCreatedDateTo = formatDateToIso(new Date());
+  const defaultShipmentCreatedDateFrom = formatDateToIso(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
+  const [shipmentCreatedDateRange, setShipmentCreatedDateRange] = useState({
+    from: defaultShipmentCreatedDateFrom,
+    to: defaultShipmentCreatedDateTo
+  });
   const [isCustomerImportModalOpen, setIsCustomerImportModalOpen] = useState(false);
   const [isContractImportModalOpen, setIsContractImportModalOpen] = useState(false);
   const [isCustomsDebitNoteOpen, setIsCustomsDebitNoteOpen] = useState(false);
   const [isCustomsDebitNotesListOpen, setIsCustomsDebitNotesListOpen] = useState(false);
   const [isCustomsDebitNotePreviewOpen, setIsCustomsDebitNotePreviewOpen] = useState(false);
   const [isCustomsPaymentRequestOpen, setIsCustomsPaymentRequestOpen] = useState(false);
+  const [isCustomsPaymentRequestListOpen, setIsCustomsPaymentRequestListOpen] = useState(false);
+  const [isCustomsPaymentRequestInvoiceModalOpen, setIsCustomsPaymentRequestInvoiceModalOpen] = useState(false);
   const [isInlandDebitNoteOpen, setIsInlandDebitNoteOpen] = useState(false);
   const [isInlandDebitNotesListOpen, setIsInlandDebitNotesListOpen] = useState(false);
   const [isInlandPaymentRequestOpen, setIsInlandPaymentRequestOpen] = useState(false);
+  const [isInlandPaymentRequestInvoiceModalOpen, setIsInlandPaymentRequestInvoiceModalOpen] = useState(false);
   const [isCustomsDocumentFilesModalOpen, setIsCustomsDocumentFilesModalOpen] = useState(false);
   const [isCustomsDeclarationOpen, setIsCustomsDeclarationOpen] = useState(false);
   const [activeCustomsReplacingFileId, setActiveCustomsReplacingFileId] = useState<string | null>(null);
@@ -3577,6 +3705,40 @@ export default function Page() {
     import: "",
     export: ""
   });
+  const [customsPaymentRequestInvoiceNameByType, setCustomsPaymentRequestInvoiceNameByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
+  });
+  const [customsDebitNoteListRowsByType, setCustomsDebitNoteListRowsByType] = useState<
+    Record<CustomsTradeType, Array<{ id: string; title: string; timestamp: string; dueDate: string; status: CustomsDebitNoteListStatus }>>
+  >({
+    import: [
+      { id: "import-debit-note-draft", title: "Debit Note 09 04 2026", timestamp: "09 Apr 2026, 09:10", dueDate: "16/04/2026", status: "draft" },
+      { id: "import-debit-note-approved", title: "Debit Note 03 04 2025", timestamp: "03 Apr 2025, 09:41", dueDate: "10/04/2025", status: "approved" },
+      { id: "import-debit-note-draft-2", title: "Debit Note 01 04 2025", timestamp: "01 Apr 2025, 14:20", dueDate: "08/04/2025", status: "draft" },
+      { id: "import-debit-note-draft-3", title: "Debit Note 28 03 2025", timestamp: "28 Mar 2025, 11:05", dueDate: "05/04/2025", status: "draft" }
+    ],
+    export: [
+      { id: "export-debit-note-draft", title: "Debit Note 09 04 2026", timestamp: "09 Apr 2026, 09:10", dueDate: "16/04/2026", status: "draft" },
+      { id: "export-debit-note-approved", title: "Debit Note 03 04 2025", timestamp: "03 Apr 2025, 09:41", dueDate: "10/04/2025", status: "approved" },
+      { id: "export-debit-note-draft-2", title: "Debit Note 01 04 2025", timestamp: "01 Apr 2025, 14:20", dueDate: "08/04/2025", status: "draft" },
+      { id: "export-debit-note-draft-3", title: "Debit Note 28 03 2025", timestamp: "28 Mar 2025, 11:05", dueDate: "05/04/2025", status: "draft" }
+    ]
+  });
+  const [customsPaymentRequestListRowsByType, setCustomsPaymentRequestListRowsByType] = useState<
+    Record<CustomsTradeType, CustomsPaymentRequestListRow[]>
+  >({
+    import: [
+      { id: "import-payment-request-1", title: "Đề nghị thanh toán 01", status: "draft", dueDate: "16/04/2026" },
+      { id: "import-payment-request-2", title: "Đề nghị thanh toán 02", status: "pending_confirmation", dueDate: "18/04/2026" },
+      { id: "import-payment-request-3", title: "Đề nghị thanh toán 03", status: "paid", dueDate: "12/04/2026" }
+    ],
+    export: [
+      { id: "export-payment-request-1", title: "Đề nghị thanh toán 01", status: "draft", dueDate: "17/04/2026" },
+      { id: "export-payment-request-2", title: "Đề nghị thanh toán 02", status: "pending_confirmation", dueDate: "20/04/2026" },
+      { id: "export-payment-request-3", title: "Đề nghị thanh toán 03", status: "paid", dueDate: "14/04/2026" }
+    ]
+  });
   const [inlandPaymentRequestDateText, setInlandPaymentRequestDateText] = useState("Ngày 2 tháng 4 năm 2026");
   const [inlandPaymentRequestFullName, setInlandPaymentRequestFullName] = useState(currentUserName);
   const [inlandPaymentRequestDepartment, setInlandPaymentRequestDepartment] = useState("Inland");
@@ -3589,6 +3751,26 @@ export default function Page() {
   const [inlandPaymentRequestDueDateByType, setInlandPaymentRequestDueDateByType] = useState<Record<CustomsTradeType, string>>({
     import: "",
     export: ""
+  });
+  const [inlandPaymentRequestInvoiceNameByType, setInlandPaymentRequestInvoiceNameByType] = useState<Record<CustomsTradeType, string>>({
+    import: "",
+    export: ""
+  });
+  const [inlandDebitNoteListRowsByType, setInlandDebitNoteListRowsByType] = useState<
+    Record<CustomsTradeType, Array<{ id: string; title: string; timestamp: string; dueDate: string; status: CustomsDebitNoteListStatus }>>
+  >({
+    import: [
+      { id: "import-inland-debit-note-draft", title: "Debit Note 09 04 2026", timestamp: "09 Apr 2026, 09:10", dueDate: "16/04/2026", status: "draft" },
+      { id: "import-inland-debit-note-approved", title: "Debit Note 03 04 2025", timestamp: "03 Apr 2025, 09:41", dueDate: "10/04/2025", status: "approved" },
+      { id: "import-inland-debit-note-draft-2", title: "Debit Note 01 04 2025", timestamp: "01 Apr 2025, 14:20", dueDate: "08/04/2025", status: "draft" },
+      { id: "import-inland-debit-note-draft-3", title: "Debit Note 28 03 2025", timestamp: "28 Mar 2025, 11:05", dueDate: "05/04/2025", status: "draft" }
+    ],
+    export: [
+      { id: "export-inland-debit-note-draft", title: "Debit Note 09 04 2026", timestamp: "09 Apr 2026, 09:10", dueDate: "16/04/2026", status: "draft" },
+      { id: "export-inland-debit-note-approved", title: "Debit Note 03 04 2025", timestamp: "03 Apr 2025, 09:41", dueDate: "10/04/2025", status: "approved" },
+      { id: "export-inland-debit-note-draft-2", title: "Debit Note 01 04 2025", timestamp: "01 Apr 2025, 14:20", dueDate: "08/04/2025", status: "draft" },
+      { id: "export-inland-debit-note-draft-3", title: "Debit Note 28 03 2025", timestamp: "28 Mar 2025, 11:05", dueDate: "05/04/2025", status: "draft" }
+    ]
   });
   const [customsDebitNoteStatusByType, setCustomsDebitNoteStatusByType] = useState<
     Record<CustomsTradeType, CustomsDebitNoteStatus>
@@ -3606,6 +3788,7 @@ export default function Page() {
   });
   const [selectedRowCodes, setSelectedRowCodes] = useState<string[]>([]);
   const [selectedCustomerRowKeys, setSelectedCustomerRowKeys] = useState<string[]>([]);
+  const [selectedShipmentRowKeys, setSelectedShipmentRowKeys] = useState<string[]>([]);
   const [destinationOpenSignal, setDestinationOpenSignal] = useState(0);
   const [openRoutePortMenu, setOpenRoutePortMenu] = useState<"origin" | "destination" | null>(null);
   const [isCustomerSearchOpen, setIsCustomerSearchOpen] = useState(false);
@@ -3638,11 +3821,16 @@ export default function Page() {
   const [shipmentDetailPod, setShipmentDetailPod] = useState("LCB — Laem Chabang");
   const [shipmentDetailPodSub, setShipmentDetailPodSub] = useState("Laem Chabang · Thailand");
   const [shipmentDetailCommodity, setShipmentDetailCommodity] = useState("YAMAHA MOTORCYCLE");
+  const [shipmentDetailServiceTypes, setShipmentDetailServiceTypes] = useState<string[]>([]);
   const [shipmentDetailBookingNo, setShipmentDetailBookingNo] = useState("080600055654");
   const [shipmentDetailShipmentDate, setShipmentDetailShipmentDate] = useState("2026-04-01");
   const [shipmentDetailNumber, setShipmentDetailNumber] = useState("SHP-2025-0047");
   const [shipmentDetailCreatedAt, setShipmentDetailCreatedAt] = useState("2024-12-27");
   const [shipmentDetailCreatedBy, setShipmentDetailCreatedBy] = useState("Nguyen Van A — CS");
+  const [shipmentListSort, setShipmentListSort] = useState<{ key: "shipment" | "createdAt"; direction: "asc" | "desc" }>({
+    key: "createdAt",
+    direction: "desc"
+  });
   const [shipmentDetailInternalNote, setShipmentDetailInternalNote] = useState("");
   const [shipmentDetailExternalNote, setShipmentDetailExternalNote] = useState("");
   const [shipmentDetailAttachments, setShipmentDetailAttachments] = useState<{ id: string; name: string; sizeLabel: string }[]>([]);
@@ -4826,20 +5014,29 @@ export default function Page() {
     : [];
   const normalizedShipmentListSearchQuery = searchQuery.trim().toLowerCase();
   const selectedShipmentStatusFilters = selectedSearchFilters["Trạng thái"] ?? [];
+  const selectedShipmentDirectionFilters = selectedSearchFilters["Chiều vận chuyển"] ?? [];
   const selectedShipmentCargoTypes = selectedSearchFilters["Loại hàng"] ?? [];
-  const selectedShipmentPackagingFilters = selectedSearchFilters["Đóng gói"] ?? [];
   const shipmentListRows = allBookingRows
     .filter((row) => {
       const shipmentCode = formatShipmentCodeFromBooking(row.code).toLowerCase();
+      const displayCargoType = getShipmentListCargoType(row).toLowerCase();
+      const routeSummary = getShipmentRouteSummary(row).toLowerCase();
+      const matchedCustomer = customerRows.find((customerRow) => customerRow.customer === row.customer);
+      const contactName = (matchedCustomer?.contactName ?? "").toLowerCase();
+      const directionLabel = getShipmentDirectionLabel(row);
+      const createdAtTimestamp = parseDisplayDate(row.createdAt);
       const matchesSearch =
         normalizedShipmentListSearchQuery.length === 0 ||
         [
           shipmentCode,
           row.customer.toLowerCase(),
+          contactName,
+          row.packaging.toLowerCase(),
           row.route.from.toLowerCase(),
           row.route.to.toLowerCase(),
-          row.cargoType.toLowerCase(),
-          row.packaging.toLowerCase()
+          routeSummary,
+          displayCargoType,
+          directionLabel.toLowerCase()
         ].some((value) => value.includes(normalizedShipmentListSearchQuery));
 
       if (!matchesSearch) {
@@ -4848,27 +5045,78 @@ export default function Page() {
 
       if (
         selectedShipmentStatusFilters.length > 0 &&
-        !selectedShipmentStatusFilters.includes(bookingStatusMeta[row.status].label)
+        !selectedShipmentStatusFilters.includes(
+          row.status === "draft"
+            ? "Nháp"
+            : row.status === "pending"
+              ? "Xác nhận"
+              : row.status === "confirmed"
+                ? "Đang hoàn thành"
+                : "Đã hủy"
+        )
       ) {
         return false;
       }
 
-      if (selectedShipmentCargoTypes.length > 0 && !selectedShipmentCargoTypes.includes(row.cargoType)) {
+      if (selectedShipmentDirectionFilters.length > 0 && !selectedShipmentDirectionFilters.includes(directionLabel)) {
         return false;
       }
 
-      if (selectedShipmentPackagingFilters.length > 0 && !selectedShipmentPackagingFilters.includes(row.packaging)) {
+      if (selectedShipmentCargoTypes.length > 0 && !selectedShipmentCargoTypes.includes(getShipmentListCargoType(row))) {
+        return false;
+      }
+
+      if (shipmentCreatedDateRange.from) {
+        const fromTimestamp = parseIsoDate(shipmentCreatedDateRange.from);
+        if (createdAtTimestamp < fromTimestamp) {
+          return false;
+        }
+      }
+
+      if (shipmentCreatedDateRange.to) {
+        const toDate = new Date(parseIsoDate(shipmentCreatedDateRange.to));
+        toDate.setHours(23, 59, 59, 999);
+        if (createdAtTimestamp > toDate.getTime()) {
+          return false;
+        }
+      }
+
+      if (!Number.isFinite(createdAtTimestamp)) {
         return false;
       }
 
       return true;
     })
+    .map((row) => {
+      const matchedCustomer = customerRows.find((customerRow) => customerRow.customer === row.customer);
+      const sequence = parseShipmentSequence(row.code);
+      const assignedStaff =
+        shipmentListAssignedStaffOptions[sequence % shipmentListAssignedStaffOptions.length] ?? "Nguyen Van A — CS";
+
+      return {
+        ...row,
+        shipmentCode: formatShipmentCodeFromBooking(row.code),
+        routeSummary: getShipmentRouteSummary(row),
+        customerContact: matchedCustomer?.contactName ?? "Ms. Tra",
+        cargoDisplay: getShipmentListCargoType(row),
+        assignedStaff,
+        statusLabel: bookingStatusMeta[row.status].label,
+        statusClassName: bookingStatusMeta[row.status].className,
+        services: getShipmentEnabledServices(row)
+      };
+    })
     .sort((left, right) => {
-      const dateDiff = parseDisplayDate(right.createdAt) - parseDisplayDate(left.createdAt);
-      if (dateDiff !== 0) {
-        return dateDiff;
+      if (shipmentListSort.key === "shipment") {
+        const codeDiff = left.shipmentCode.localeCompare(right.shipmentCode, "vi");
+        return shipmentListSort.direction === "asc" ? codeDiff : -codeDiff;
       }
-      return left.code.localeCompare(right.code, "vi");
+
+      const dateDiff = parseDisplayDate(left.createdAt) - parseDisplayDate(right.createdAt);
+      if (dateDiff !== 0) {
+        return shipmentListSort.direction === "asc" ? dateDiff : -dateDiff;
+      }
+
+      return left.shipmentCode.localeCompare(right.shipmentCode, "vi");
     });
   const shipmentListPageSize = 10;
   const shipmentListPageCount = Math.max(1, Math.ceil(shipmentListRows.length / shipmentListPageSize));
@@ -4877,7 +5125,7 @@ export default function Page() {
     customerShipmentPage * shipmentListPageSize
   );
   const shipmentListTableColumns =
-    "minmax(148px,0.95fr) minmax(220px,1.45fr) minmax(200px,1.2fr) minmax(120px,0.7fr) minmax(150px,0.9fr) minmax(120px,0.8fr)";
+    "52px minmax(132px,0.8fr) minmax(220px,1.2fr) minmax(77px,0.45fr) minmax(84px,0.5fr) minmax(144px,0.76fr) minmax(120px,0.64fr) minmax(260px,1.25fr)";
   const selectedCustomerContracts = selectedCustomerRow
     ? contractRows.filter((row) => row.customer === selectedCustomerRow.customer).slice(0, 2)
     : [];
@@ -4942,8 +5190,8 @@ export default function Page() {
   const moduleSearchPlaceholder = isCustomerContractsPage
     ? "Tìm kiếm theo Số HĐ, Tên KH, MST KH"
     : isCustomerShipmentListPage
-      ? "Tìm kiếm theo Shipment ID, Khách hàng, Tuyến vận chuyển"
-    : isCustomerServicesPage
+      ? "Tìm SHP, container..."
+      : isCustomerServicesPage
       ? "Tìm kiếm theo Nhóm dịch vụ, Tên dịch vụ"
     : "Tìm kiếm theo tên KH, MST, Mã KH, Email, SĐT";
   const searchFilterSections = [
@@ -4979,15 +5227,15 @@ export default function Page() {
   const shipmentSearchFilterSections = [
     {
       title: "Trạng thái",
-      items: bookingStatuses.map((status) => bookingStatusMeta[status].label),
+      items: ["Nháp", "Xác nhận", "Đang hoàn thành", "Đã hủy"],
+    },
+    {
+      title: "Chiều vận chuyển",
+      items: ["Export", "Import"],
     },
     {
       title: "Loại hàng",
-      items: [...new Set(allBookingRows.map((row) => row.cargoType))],
-    },
-    {
-      title: "Đóng gói",
-      items: [...new Set(allBookingRows.map((row) => row.packaging))],
+      items: ["FCL", "LCL"],
     },
   ] as const;
   const customsBreadcrumb = `Home / Shipments / Shipment Detail / Customs / ${customsTradeType === "import" ? "Import" : "Export"}`;
@@ -5111,27 +5359,220 @@ export default function Page() {
       uploadedAt: `03/04/2026 ${String(9 + index).padStart(2, "0")}:${index % 2 === 0 ? "15" : "41"}`
     }));
   })();
-  const customsDebitNoteListRows: Array<{ id: string; title: string; timestamp: string; status: CustomsDebitNoteListStatus }> = [
+  const customsImportCustomerDocumentRequirements = [
     {
-      id: `${customsTradeType}-debit-note-approved`,
-      title: "Debit Note 03 04 2025",
-      timestamp: "03 Apr 2025, 09:41",
-      status: "approved"
+      id: "invoice",
+      title: "Invoice",
+      requirement: "bắt buộc"
     },
     {
-      id: `${customsTradeType}-debit-note-cancelled-1`,
-      title: "Debit Note 01 04 2025",
-      timestamp: "01 Apr 2025, 14:20",
-      status: "cancelled"
+      id: "invoice-summary",
+      title: "Invoice tổng (mẫu 02)",
+      requirement: "Bắt buộc nếu >=2 Invoice"
     },
     {
-      id: `${customsTradeType}-debit-note-cancelled-2`,
-      title: "Debit Note 28 03 2025",
-      timestamp: "28 Mar 2025, 11:05",
-      status: "cancelled"
+      id: "packing-list",
+      title: "Packing list",
+      requirement: "bắt buộc"
+    },
+    {
+      id: "bill-of-lading",
+      title: "Bill of Lading",
+      requirement: "bắt buộc"
+    },
+    {
+      id: "arrival-notice",
+      title: "Arrival Notice",
+      requirement: "bắt buộc"
+    },
+    {
+      id: "debit",
+      title: "Debit",
+      requirement: "optional (thường phải có với term EXW, FCA, FAS, FOB)"
+    },
+    {
+      id: "other-documents",
+      title: "Các giấy tờ khác",
+      requirement: "optional"
     }
-  ];
+  ] as const;
+  const customsImportCustomerDocumentCards = [
+    {
+      id: "invoice",
+      title: "Invoice",
+      uploadedSummary: "Đã tải lên: 1/1 file(s)",
+      statusLabel: "Hoàn thành",
+      statusClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      iconClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      isExpanded: true,
+      files: [
+        {
+          id: "invoice-main",
+          extension: "PDF",
+          name: "INV_2026_0403.pdf",
+          note: "Bắt buộc",
+          noteClassName: "text-[#8BC34A]",
+          size: "210 KB",
+          uploadedAt: "09:15 03/04/2026"
+        }
+      ]
+    },
+    {
+      id: "invoice-summary",
+      title: "Invoice tổng",
+      uploadedSummary: "Đã tải lên: 1/1 file(s)",
+      statusLabel: "Hoàn thành",
+      statusClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      iconClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      isExpanded: false,
+      files: [
+        {
+          id: "invoice-summary-main",
+          extension: "PDF",
+          name: "Invoice tổng.pdf",
+          note: "Bắt buộc nếu >=2 Invoice",
+          noteClassName: "text-[#8BC34A]",
+          size: "88 KB",
+          uploadedAt: "09:40 03/04/2026"
+        }
+      ]
+    },
+    {
+      id: "packing-list",
+      title: "Packing List",
+      uploadedSummary: "Đã tải lên: 1/2 file(s)",
+      statusLabel: "Đang xử lý",
+      statusClassName: "bg-[#E8F0FF] text-[#245698]",
+      iconClassName: "bg-[#E8F0FF] text-[#245698]",
+      isExpanded: false,
+      files: []
+    },
+    {
+      id: "bill-of-lading",
+      title: "Bill of Lading",
+      uploadedSummary: "Đã tải lên: 0/2 file(s)",
+      statusLabel: "Còn thiếu",
+      statusClassName: "bg-[#FBE9E7] text-[#A5332A]",
+      iconClassName: "bg-[#FBE9E7] text-[#A5332A]",
+      isExpanded: false,
+      files: []
+    },
+    {
+      id: "arrival-notice",
+      title: "Arrival Notice",
+      uploadedSummary: "Đã tải lên: 1/1 file(s)",
+      statusLabel: "Hoàn thành",
+      statusClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      iconClassName: "bg-[#DDF5F0] text-[#0C5C53]",
+      isExpanded: false,
+      files: []
+    },
+    {
+      id: "debit",
+      title: "Debit (Không bắt buộc)",
+      uploadedSummary: "Đã tải lên: 0/0 file(s)",
+      statusLabel: "Tùy chọn",
+      statusClassName: "bg-[#F3F4F6] text-[#6B7280]",
+      iconClassName: "bg-[#F3F4F6] text-[#6B7280]",
+      isExpanded: false,
+      files: []
+    },
+    {
+      id: "other-documents",
+      title: "Các giấy tờ khác (Không bắt buộc)",
+      uploadedSummary: "Đã tải lên: 0/0 file(s)",
+      statusLabel: "Tùy chọn",
+      statusClassName: "bg-[#F3F4F6] text-[#6B7280]",
+      iconClassName: "bg-[#F3F4F6] text-[#6B7280]",
+      isExpanded: false,
+      files: []
+    }
+  ] as const;
+  const customsExportCustomerDocumentCards = [
+    {
+      id: "invoice",
+      title: "Invoice",
+      uploadedSummary: "",
+      statusLabel: "",
+      statusClassName: "",
+      iconClassName: "",
+      isExpanded: true,
+      files: [
+        {
+          id: "export-invoice-main",
+          extension: "PDF",
+          name: "INV_2026_0403.pdf",
+          note: "",
+          noteClassName: "",
+          size: "210 KB",
+          uploadedAt: "09:15 03/04/2026"
+        }
+      ]
+    },
+    {
+      id: "packing-list",
+      title: "Parking list",
+      uploadedSummary: "",
+      statusLabel: "",
+      statusClassName: "",
+      iconClassName: "",
+      isExpanded: true,
+      files: [
+        {
+          id: "export-packing-list-main",
+          extension: "PDF",
+          name: "PKL_2026_0403.pdf",
+          note: "",
+          noteClassName: "",
+          size: "188 KB",
+          uploadedAt: "09:28 03/04/2026"
+        }
+      ]
+    },
+    {
+      id: "booking",
+      title: "Booking",
+      uploadedSummary: "",
+      statusLabel: "",
+      statusClassName: "",
+      iconClassName: "",
+      isExpanded: true,
+      files: [
+        {
+          id: "export-booking-main",
+          extension: "PDF",
+          name: "BOOKING_2026_0403.pdf",
+          note: "",
+          noteClassName: "",
+          size: "154 KB",
+          uploadedAt: "09:40 03/04/2026"
+        }
+      ]
+    },
+    {
+      id: "other-documents",
+      title: "Các giấy tờ khác (Không bắt buộc)",
+      uploadedSummary: "",
+      statusLabel: "",
+      statusClassName: "",
+      iconClassName: "",
+      isExpanded: true,
+      files: []
+    }
+  ] as const;
+  const isViewingCustomsImportCustomerDocuments =
+    customsTradeType === "import" &&
+    activeCustomsDocumentFilesRow?.documentName.startsWith("Các chứng từ khách hàng cung cấp") === true;
+  const isViewingCustomsExportCustomerDocuments =
+    customsTradeType === "export" &&
+    activeCustomsDocumentFilesRow?.documentName.startsWith("Các chứng từ khách hàng cung cấp") === true;
+  const isViewingCustomsCustomerDocuments =
+    isViewingCustomsImportCustomerDocuments || isViewingCustomsExportCustomerDocuments;
+  const visibleCustomsCustomerDocumentCards =
+    customsTradeType === "import" ? customsImportCustomerDocumentCards : customsExportCustomerDocumentCards;
+  const customsDebitNoteListRows = customsDebitNoteListRowsByType[customsTradeType];
   const canCreateCustomsDebitNote = customsDebitNoteListRows.every((row) => row.status === "cancelled");
+  const customsPaymentRequestListRows = customsPaymentRequestListRowsByType[customsTradeType];
   const customsPaymentRequestRows = visibleCustomsDebitNoteRows.slice(0, 8);
   const customsValidationErrors = visibleCustomsDocumentRows
     .filter((row) => row.displayMode === "ATTACHMENT_REQUIRED" && row.fileNames.length === 0)
@@ -5148,26 +5589,7 @@ export default function Page() {
     { label: "Loại", value: inlandTradeType === "import" ? "Import" : "Export" },
     { label: "Cập nhật gần nhất", value: "12/03/2026 - An Phạm" }
   ] as const;
-  const inlandDebitNoteListRows: Array<{ id: string; title: string; timestamp: string; status: CustomsDebitNoteListStatus }> = [
-    {
-      id: `${inlandTradeType}-debit-note-approved`,
-      title: "Debit Note 03 04 2025",
-      timestamp: "03 Apr 2025, 09:41",
-      status: "approved"
-    },
-    {
-      id: `${inlandTradeType}-debit-note-cancelled-1`,
-      title: "Debit Note 01 04 2025",
-      timestamp: "01 Apr 2025, 14:20",
-      status: "cancelled"
-    },
-    {
-      id: `${inlandTradeType}-debit-note-cancelled-2`,
-      title: "Debit Note 28 03 2025",
-      timestamp: "28 Mar 2025, 11:05",
-      status: "cancelled"
-    }
-  ];
+  const inlandDebitNoteListRows = inlandDebitNoteListRowsByType[inlandTradeType];
   const canCreateInlandDebitNote = inlandDebitNoteListRows.every((row) => row.status === "cancelled");
   const visibleInlandCostRows = inlandCostRowsByType[inlandTradeType];
   const visibleInlandDocumentRows = inlandDocumentRowsByType[inlandTradeType];
@@ -5244,8 +5666,8 @@ export default function Page() {
   const activeSearchGroupOptions = isCustomerContractsPage
     ? contractSearchGroupOptions
     : isCustomerShipmentListPage
-      ? shipmentSearchGroupOptions
-    : isCustomerServicesPage
+      ? []
+      : isCustomerServicesPage
       ? []
       : searchGroupOptions;
   const currentPageTitle = isCustomerPage
@@ -5294,6 +5716,7 @@ export default function Page() {
         ? overseaBreadcrumb
         : shipmentDetailsBreadcrumb;
   const shipmentDetailWorkflowSteps = ["Nháp", "Xác nhận", "Đang thực hiện", "Hoàn thành", "Hủy"] as const;
+  const customsWorkflowSteps = ["Chờ thực hiện", "Đang thực hiện", "Hoàn thành"] as const;
   const shipmentDetailStaffOptions: SelectOption[] = [
     { label: "Nguyen Van A — CS", value: "Nguyen Van A — CS" },
     { label: "An Phạm — CS", value: "An Phạm — CS" },
@@ -5614,6 +6037,7 @@ export default function Page() {
     total: `$${shipmentDetailCurrencyFormatter.format(shipmentDetailTotalValue)}`
   };
   const isCustomerSelectionMode = isCustomerListPage && selectedCustomerRowKeys.length > 0;
+  const isShipmentSelectionMode = isCustomerShipmentListPage && selectedShipmentRowKeys.length > 0;
   const customerCreateWorkflowSteps =
     isCustomerDetailsPage && selectedCustomerRow?.status === "locked"
       ? (["Nháp", "Đang hoạt động", "Đã khóa"] as const)
@@ -5961,6 +6385,13 @@ export default function Page() {
           total: visibleCustomerRows.length,
           setPage: setCustomerListPageNumber
         }
+      : isCustomerShipmentListPage
+        ? {
+            currentPage: customerShipmentPage,
+            pageCount: shipmentListPageCount,
+            total: shipmentListRows.length,
+            setPage: setCustomerShipmentPage
+          }
       : isCustomerContractsPage
         ? {
             currentPage: contractListPageNumber,
@@ -6597,6 +7028,21 @@ export default function Page() {
   }, [isCustomerBulkActionMenuOpen]);
 
   useEffect(() => {
+    if (!isShipmentBulkActionMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!shipmentBulkActionMenuRef.current?.contains(event.target as Node)) {
+        setIsShipmentBulkActionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isShipmentBulkActionMenuOpen]);
+
+  useEffect(() => {
     if (!isGlobalSearchMenuOpen) {
       return;
     }
@@ -6618,6 +7064,14 @@ export default function Page() {
       setIsCustomerBulkActionMenuOpen(false);
     }
   }, [isCustomerSelectionMode]);
+
+  useEffect(() => {
+    if (isShipmentSelectionMode) {
+      setIsGlobalSearchMenuOpen(false);
+    } else {
+      setIsShipmentBulkActionMenuOpen(false);
+    }
+  }, [isShipmentSelectionMode]);
 
   useEffect(() => {
     if (contractCreateTabs.length > 0 && !contractCreateTabs.some((tab) => tab.key === contractCreateWorkspaceTab)) {
@@ -7495,7 +7949,7 @@ export default function Page() {
     }
 
     if (targetRow.documentName === "Đề nghị thanh toán") {
-      setIsCustomsPaymentRequestOpen(true);
+      setIsCustomsPaymentRequestListOpen(true);
       return;
     }
 
@@ -7688,6 +8142,17 @@ export default function Page() {
     openCustomsDebitNote();
   };
 
+  const deleteCustomsDebitNoteListRow = (rowId: string) => {
+    setCustomsDebitNoteListRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((row) => row.id !== rowId)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã xóa Debit Note."
+    });
+  };
+
   const sendCustomsDebitNoteForConfirmation = () => {
     if (!customsDebitNoteDueDateByType[customsTradeType].trim()) {
       return;
@@ -7722,6 +8187,41 @@ export default function Page() {
     }));
   };
 
+  const deleteCustomsPaymentRequestListRow = (rowId: string) => {
+    setCustomsPaymentRequestListRowsByType((current) => ({
+      ...current,
+      [customsTradeType]: current[customsTradeType].filter((row) => row.id !== rowId)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã xóa Đề nghị thanh toán."
+    });
+  };
+
+  const createDebitNoteFromCustomsPaymentRequestList = () => {
+    setIsCustomsPaymentRequestListOpen(false);
+    openCustomsDebitNote();
+  };
+
+  const openCustomsPaymentRequestFromList = (row: CustomsPaymentRequestListRow) => {
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: row.status
+    }));
+    setCustomsPaymentRequestDueDateByType((current) => ({
+      ...current,
+      [customsTradeType]: row.dueDate
+    }));
+    if (row.status === "paid" && !customsPaymentRequestInvoiceNameByType[customsTradeType]) {
+      setCustomsPaymentRequestInvoiceNameByType((current) => ({
+        ...current,
+        [customsTradeType]: `Invoice-${shipmentDetailNumber}.pdf`
+      }));
+    }
+    setIsCustomsPaymentRequestListOpen(false);
+    setIsCustomsPaymentRequestOpen(true);
+  };
+
   const confirmCustomsPaymentRequest = () => {
     setCustomsPaymentRequestStatusByType((current) => ({
       ...current,
@@ -7741,6 +8241,26 @@ export default function Page() {
       ...current,
       [customsTradeType]: "paid"
     }));
+  };
+
+  const handleCustomsPaymentRequestInvoiceUpload = (files?: FileList | null) => {
+    setCustomsPaymentRequestInvoiceNameByType((current) => ({
+      ...current,
+      [customsTradeType]: files?.[0]?.name || `Invoice-${shipmentDetailNumber}.pdf`
+    }));
+    setCustomsPaymentRequestStatusByType((current) => ({
+      ...current,
+      [customsTradeType]: "paid"
+    }));
+    setIsCustomsPaymentRequestInvoiceModalOpen(false);
+    setToast({
+      kind: "success",
+      message: "Đã tải lên Invoice và cập nhật trạng thái Đề nghị thanh toán."
+    });
+  };
+
+  const completeCustomsPaymentRequestInvoiceUpload = () => {
+    handleCustomsPaymentRequestInvoiceUpload();
   };
 
   const markCustomsDebitNotePaid = () => {
@@ -8009,6 +8529,17 @@ export default function Page() {
     openInlandDebitNote();
   };
 
+  const deleteInlandDebitNoteListRow = (rowId: string) => {
+    setInlandDebitNoteListRowsByType((current) => ({
+      ...current,
+      [inlandTradeType]: current[inlandTradeType].filter((row) => row.id !== rowId)
+    }));
+    setToast({
+      kind: "success",
+      message: "Đã xóa Debit Note."
+    });
+  };
+
   const viewInlandDocumentFiles = (rowId: string) => {
     const targetRow = visibleInlandDocumentRows.find((row) => row.id === rowId);
     if (!targetRow) {
@@ -8081,6 +8612,26 @@ export default function Page() {
       ...current,
       [inlandTradeType]: "paid"
     }));
+  };
+
+  const handleInlandPaymentRequestInvoiceUpload = (files?: FileList | null) => {
+    setInlandPaymentRequestInvoiceNameByType((current) => ({
+      ...current,
+      [inlandTradeType]: files?.[0]?.name || `Invoice-${shipmentDetailNumber}.pdf`
+    }));
+    setInlandPaymentRequestStatusByType((current) => ({
+      ...current,
+      [inlandTradeType]: "paid"
+    }));
+    setIsInlandPaymentRequestInvoiceModalOpen(false);
+    setToast({
+      kind: "success",
+      message: "Đã tải lên Invoice và cập nhật trạng thái Đề nghị thanh toán."
+    });
+  };
+
+  const completeInlandPaymentRequestInvoiceUpload = () => {
+    handleInlandPaymentRequestInvoiceUpload();
   };
 
   const markInlandDebitNotePaid = () => {
@@ -9230,9 +9781,30 @@ export default function Page() {
     setSelectedShipmentCode(shipmentCode);
     const selectedRow = allBookingRows.find((row) => row.code === shipmentCode);
     if (selectedRow) {
+      const matchedCustomer = customerRows.find((row) => row.customer === selectedRow.customer);
+      const matchedPolOption =
+        shipmentDetailPolOptions.find((option) => option.label.includes(selectedRow.route.from)) ?? shipmentDetailPolOptions[0];
+      const matchedPodOption =
+        shipmentDetailPodOptions.find((option) => option.label.includes(selectedRow.route.to)) ?? shipmentDetailPodOptions[0];
+
       setShipmentDetailNumber(formatShipmentCodeFromBooking(selectedRow.code));
       setShipmentDetailCustomerName(selectedRow.customer);
+      setShipmentDetailCustomerContact(matchedCustomer?.contactName ?? "Ms. Tra");
+      setShipmentDetailAssignedStaff(
+        shipmentListAssignedStaffOptions[
+          parseShipmentSequence(selectedRow.code) % shipmentListAssignedStaffOptions.length
+        ] ??
+          "Nguyen Van A — CS"
+      );
+      setShipmentDetailDirection(getShipmentDirectionLabel(selectedRow) === "EXPORT" ? "export" : "import");
+      setShipmentDetailCargoType(getShipmentListCargoType(selectedRow));
+      setShipmentDetailServiceTypes(getShipmentEnabledServices(selectedRow));
+      setShipmentDetailPol(matchedPolOption.value);
+      setShipmentDetailPolSub(matchedPolOption.meta);
+      setShipmentDetailPod(matchedPodOption.value);
+      setShipmentDetailPodSub(matchedPodOption.meta);
       setShipmentDetailCommodity(selectedRow.packaging.toUpperCase());
+      setShipmentDetailCreatedAt(selectedRow.createdAt.split("/").reverse().join("-"));
     }
   };
 
@@ -10045,7 +10617,7 @@ export default function Page() {
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-[16px] font-semibold leading-[1.2] text-foreground">
-                          <span>{isCustomerPage ? "Quản lý khách hàng" : "Quản lý Shipment"}</span>
+                          <span>{isCustomerShipmentPage ? "Quản lý Shipment" : "Quản lý khách hàng"}</span>
                         </div>
                       </div>
                     )}
@@ -10074,10 +10646,15 @@ export default function Page() {
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[1fr_minmax(0,520px)_1fr] lg:items-center lg:gap-4">
                     <div className="flex flex-wrap items-center gap-2 lg:col-start-1 lg:justify-self-start">
-                      {isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage ? (
+                      {isCustomerListPage || isCustomerContractsPage || isCustomerServicesPage || isCustomerShipmentListPage ? (
                         <button
                           type="button"
                           onClick={() => {
+                            if (isCustomerShipmentListPage) {
+                              showCustomerShipments("details");
+                              return;
+                            }
+
                             if (isCustomerContractsPage) {
                               openCreateContract();
                               return;
@@ -10445,8 +11022,66 @@ export default function Page() {
                               ) : null}
                             </div>
                           </div>
+                        ) : isShipmentSelectionMode ? (
+                          <div className="relative z-30 flex items-center justify-center gap-2">
+                            <div className="inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground shadow-subtle">
+                              <span>{`${selectedShipmentRowKeys.length} đã chọn`}</span>
+                              <button
+                                type="button"
+                                aria-label="Clear selected shipment rows"
+                                className="inline-flex h-7 w-7 items-center justify-center rounded-full text-[#4A63B8] transition hover:bg-[rgba(74,99,184,0.08)]"
+                                onClick={() => setSelectedShipmentRowKeys([])}
+                              >
+                                <X className="h-4 w-4" strokeWidth={2.2} />
+                              </button>
+                            </div>
+                            <div ref={shipmentBulkActionMenuRef} className="relative">
+                              <button
+                                type="button"
+                                className="inline-flex h-10 items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base font-medium text-foreground transition hover:bg-[#fafafa] shadow-subtle"
+                                onClick={() => setIsShipmentBulkActionMenuOpen((current) => !current)}
+                              >
+                                <Settings className="h-4 w-4" strokeWidth={2.2} />
+                                <span>Tác vụ</span>
+                              </button>
+
+                              {isShipmentBulkActionMenuOpen ? (
+                                <div className="absolute left-0 top-full z-40 mt-1 w-[288px] overflow-hidden rounded-[12px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
+                                  {[
+                                    {
+                                      label: "Xóa",
+                                      icon: Trash2,
+                                      onClick: () => setIsShipmentBulkActionMenuOpen(false),
+                                    },
+                                    {
+                                      label: "Nhân bản",
+                                      icon: Copy,
+                                      onClick: () => setIsShipmentBulkActionMenuOpen(false),
+                                    },
+                                    {
+                                      label: "Export",
+                                      icon: Download,
+                                      onClick: () => setIsShipmentBulkActionMenuOpen(false),
+                                    },
+                                  ].map((item, itemIndex) => (
+                                    <button
+                                      key={item.label}
+                                      type="button"
+                                      onClick={item.onClick}
+                                      className={`flex w-full items-center gap-4 px-4 py-3 text-left text-base text-foreground transition-colors hover:bg-sidebar ${
+                                        itemIndex === 0 ? "" : "border-t border-[#E7E6E9]"
+                                      }`}
+                                    >
+                                      <item.icon className="h-5 w-5 text-foreground" strokeWidth={1.8} />
+                                      <span>{item.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
                         ) : null}
-                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode ? (
+                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode && !isShipmentSelectionMode ? (
                           <button
                             type="button"
                             aria-label="Close search overlay"
@@ -10457,7 +11092,7 @@ export default function Page() {
 
                         <label
                           className={`relative z-30 flex h-10 w-full items-center gap-2 rounded-full border-[0.5px] border-input bg-card px-4 text-base text-muted-foreground transition shadow-subtle ${
-                            isCustomerSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || (isCustomerShipmentPage && !isCustomerShipmentListPage) ? "hidden" : ""
+                            isCustomerSelectionMode || isShipmentSelectionMode || isCustomerCreateLikePage || isCustomerContractCreatePage || isContractDetailsPage || isServiceDetailsPage || (isCustomerShipmentPage && !isCustomerShipmentListPage) ? "hidden" : ""
                           }`}
                         >
                           <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
@@ -10481,7 +11116,7 @@ export default function Page() {
                           </button>
                         </label>
 
-                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode ? (
+                        {isGlobalSearchMenuOpen && !isCustomerSelectionMode && !isShipmentSelectionMode ? (
                           <div className="absolute left-1/2 top-full z-40 w-[130%] -translate-x-1/2 overflow-hidden rounded-[16px] border border-[#E7E6E9] bg-card shadow-[0_18px_40px_rgba(17,17,17,0.16)]">
                             <div className="grid gap-0 md:grid-cols-3">
                               <div className="border-b-[0.5px] border-[#E7E6E9] px-5 py-4 md:border-b-0 md:border-r-[0.5px]">
@@ -10489,64 +11124,219 @@ export default function Page() {
                                   <Filter className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={1.9} />
                                   <span>Bộ lọc</span>
                                 </div>
-                                <div className="mt-4 space-y-0">
-                                  {activeSearchFilterSections.map((section, sectionIndex) => {
-                                    return (
-                                      <div
-                                        key={section.title}
-                                        className={sectionIndex === 0 ? "" : "border-t-[0.5px] border-[#E7E6E9] pt-3"}
-                                      >
-                                        <div className={sectionIndex === activeSearchFilterSections.length - 1 ? "" : "pb-3"}>
-                                          <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
-                                            {section.title}
-                                          </div>
-                                          <div className="space-y-2 text-[14px] leading-5 text-foreground">
-                                            {section.items.map((item) => {
-                                              const isSelected = (selectedSearchFilters[section.title] ?? []).includes(item);
+                                {isCustomerShipmentListPage ? (
+                                  <div className="mt-4 space-y-4">
+                                    <div>
+                                      <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                        Trạng thái
+                                      </div>
+                                      <div className="space-y-2 text-[14px] leading-5 text-foreground">
+                                        {shipmentSearchFilterSections[0].items.map((item) => {
+                                          const isSelected = selectedShipmentStatusFilters.includes(item);
 
-                                              return (
-                                                <button
-                                                  key={item}
-                                                  type="button"
-                                                  className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
-                                                    isSelected ? "font-semibold" : ""
-                                                  }`}
-                                                  onClick={() =>
-                                                    setSelectedSearchFilters((current) => {
-                                                      const currentItems = current[section.title] ?? [];
-                                                      const nextItems = currentItems.includes(item)
-                                                        ? currentItems.filter((currentItem) => currentItem !== item)
-                                                        : [...currentItems, item];
+                                          return (
+                                            <button
+                                              key={item}
+                                              type="button"
+                                              className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                                isSelected ? "font-semibold" : ""
+                                              }`}
+                                              onClick={() =>
+                                                setSelectedSearchFilters((current) => {
+                                                  const currentItems = current["Trạng thái"] ?? [];
+                                                  const nextItems = currentItems.includes(item)
+                                                    ? currentItems.filter((currentItem) => currentItem !== item)
+                                                    : [...currentItems, item];
 
-                                                      return {
-                                                        ...current,
-                                                        [section.title]: nextItems,
-                                                      };
-                                                    })
-                                                  }
-                                                >
-                                                  <span>{item}</span>
-                                                  {isSelected ? (
-                                                    <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
-                                                  ) : null}
-                                                </button>
-                                              );
-                                            })}
-                                          </div>
+                                                  return {
+                                                    ...current,
+                                                    "Trạng thái": nextItems
+                                                  };
+                                                })
+                                              }
+                                            >
+                                              <span>{item}</span>
+                                              {isSelected ? (
+                                                <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                              ) : null}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="border-t-[0.5px] border-[#E7E6E9] pt-4">
+                                      <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                        Ngày tạo
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-2 text-[14px] text-foreground">
+                                        <span className="shrink-0">Từ</span>
+                                        <div className="min-w-[124px] rounded-[10px] border-[0.5px] border-[#DADCE3] bg-white px-3 py-1.5">
+                                          <InlineCompactDateField
+                                            value={shipmentCreatedDateRange.from}
+                                            onChange={(value) =>
+                                              setShipmentCreatedDateRange((current) => ({ ...current, from: value }))
+                                            }
+                                            placeholder="dd/mm/yyyy"
+                                            textSizeClass="text-[14px]"
+                                            heightClass="h-6"
+                                          />
+                                        </div>
+                                        <span className="shrink-0">đến</span>
+                                        <div className="min-w-[124px] rounded-[10px] border-[0.5px] border-[#DADCE3] bg-white px-3 py-1.5">
+                                          <InlineCompactDateField
+                                            value={shipmentCreatedDateRange.to}
+                                            onChange={(value) =>
+                                              setShipmentCreatedDateRange((current) => ({ ...current, to: value }))
+                                            }
+                                            placeholder="dd/mm/yyyy"
+                                            textSizeClass="text-[14px]"
+                                            heightClass="h-6"
+                                          />
                                         </div>
                                       </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
-                                  <button
-                                    type="button"
-                                    className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
-                                  >
-                                    <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
-                                    <span>Thêm bộ lọc</span>
-                                  </button>
-                                </div>
+                                    </div>
+
+                                    <div className="border-t-[0.5px] border-[#E7E6E9] pt-4">
+                                      <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                        Chiều vận chuyển
+                                      </div>
+                                      <div className="space-y-2 text-[14px] leading-5 text-foreground">
+                                        {shipmentSearchFilterSections[1].items.map((item) => {
+                                          const isSelected = selectedShipmentDirectionFilters.includes(item);
+
+                                          return (
+                                            <button
+                                              key={item}
+                                              type="button"
+                                              className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                                isSelected ? "font-semibold" : ""
+                                              }`}
+                                              onClick={() =>
+                                                setSelectedSearchFilters((current) => {
+                                                  const currentItems = current["Chiều vận chuyển"] ?? [];
+                                                  const nextItems = currentItems.includes(item)
+                                                    ? currentItems.filter((currentItem) => currentItem !== item)
+                                                    : [...currentItems, item];
+
+                                                  return {
+                                                    ...current,
+                                                    "Chiều vận chuyển": nextItems
+                                                  };
+                                                })
+                                              }
+                                            >
+                                              <span>{item}</span>
+                                              {isSelected ? (
+                                                <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                              ) : null}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    <div className="border-t-[0.5px] border-[#E7E6E9] pt-4">
+                                      <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                        Loại hàng
+                                      </div>
+                                      <div className="space-y-2 text-[14px] leading-5 text-foreground">
+                                        {shipmentSearchFilterSections[2].items.map((item) => {
+                                          const isSelected = selectedShipmentCargoTypes.includes(item);
+
+                                          return (
+                                            <button
+                                              key={item}
+                                              type="button"
+                                              className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                                isSelected ? "font-semibold" : ""
+                                              }`}
+                                              onClick={() =>
+                                                setSelectedSearchFilters((current) => {
+                                                  const currentItems = current["Loại hàng"] ?? [];
+                                                  const nextItems = currentItems.includes(item)
+                                                    ? currentItems.filter((currentItem) => currentItem !== item)
+                                                    : [...currentItems, item];
+
+                                                  return {
+                                                    ...current,
+                                                    "Loại hàng": nextItems
+                                                  };
+                                                })
+                                              }
+                                            >
+                                              <span>{item}</span>
+                                              {isSelected ? (
+                                                <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                              ) : null}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="mt-4 space-y-0">
+                                      {activeSearchFilterSections.map((section, sectionIndex) => {
+                                        return (
+                                          <div
+                                            key={section.title}
+                                            className={sectionIndex === 0 ? "" : "border-t-[0.5px] border-[#E7E6E9] pt-3"}
+                                          >
+                                            <div className={sectionIndex === activeSearchFilterSections.length - 1 ? "" : "pb-3"}>
+                                              <div className="mb-2 text-[13px] font-medium uppercase leading-5 tracking-[0.04em] text-muted-foreground">
+                                                {section.title}
+                                              </div>
+                                              <div className="space-y-2 text-[14px] leading-5 text-foreground">
+                                                {section.items.map((item) => {
+                                                  const isSelected = (selectedSearchFilters[section.title] ?? []).includes(item);
+
+                                                  return (
+                                                    <button
+                                                      key={item}
+                                                      type="button"
+                                                      className={`flex w-full items-center justify-between gap-3 text-left transition-colors hover:text-[#245698] ${
+                                                        isSelected ? "font-semibold" : ""
+                                                      }`}
+                                                      onClick={() =>
+                                                        setSelectedSearchFilters((current) => {
+                                                          const currentItems = current[section.title] ?? [];
+                                                          const nextItems = currentItems.includes(item)
+                                                            ? currentItems.filter((currentItem) => currentItem !== item)
+                                                            : [...currentItems, item];
+
+                                                          return {
+                                                            ...current,
+                                                            [section.title]: nextItems,
+                                                          };
+                                                        })
+                                                      }
+                                                    >
+                                                      <span>{item}</span>
+                                                      {isSelected ? (
+                                                        <Check className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2} />
+                                                      ) : null}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
+                                      <button
+                                        type="button"
+                                        className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
+                                      >
+                                        <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
+                                        <span>Thêm bộ lọc</span>
+                                      </button>
+                                    </div>
+                                  </>
+                                )}
                               </div>
 
                               <div className="border-b-[0.5px] border-[#E7E6E9] px-5 py-4 md:border-b-0 md:border-r-[0.5px]">
@@ -10580,16 +11370,21 @@ export default function Page() {
                                       </button>
                                     );
                                   })}
+                                  {activeSearchGroupOptions.length === 0 ? (
+                                    <div className="text-[14px] text-muted-foreground">Không có nhóm hiển thị.</div>
+                                  ) : null}
                                 </div>
-                                <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
-                                  <button
-                                    type="button"
-                                    className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
-                                  >
-                                    <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
-                                    <span>Thêm nhóm</span>
-                                  </button>
-                                </div>
+                                {activeSearchGroupOptions.length > 0 ? (
+                                  <div className="mt-4 border-t-[0.5px] border-[#E7E6E9] pt-3">
+                                    <button
+                                      type="button"
+                                      className="flex items-center gap-2 text-left text-[14px] leading-5 text-[#245698] transition-colors hover:text-[#1b467d]"
+                                    >
+                                      <Plus className="h-4 w-4 shrink-0 text-[#245698]" strokeWidth={2.2} />
+                                      <span>Thêm nhóm</span>
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
 
                               <div className="px-5 py-4">
@@ -15379,14 +16174,45 @@ export default function Page() {
                     className="grid shrink-0 border-b border-border bg-card"
                     style={{ gridTemplateColumns: shipmentListTableColumns }}
                   >
-                    {["Shipment ID", "Khách hàng", "Tuyến vận chuyển", "Loại hàng", "Đóng gói", "Ngày tạo"].map((label, index) => (
+                    {[
+                      { label: "", sortable: false },
+                      { label: "Số Shipment", key: "shipment" as const, sortable: true },
+                      { label: "Khách hàng", sortable: false },
+                      { label: "Loại hàng", sortable: false },
+                      { label: "Ngày tạo", key: "createdAt" as const, sortable: true },
+                      { label: "Nhân viên phụ trách", sortable: false },
+                      { label: "Trạng thái shipment", sortable: false },
+                      { label: "Dịch vụ", sortable: false }
+                    ].map((column, index) => (
                       <div
-                        key={`${label}-${index}`}
+                        key={`${column.label}-${index}`}
                         className={`flex h-11 w-full min-w-0 items-center justify-start text-left text-sm font-normal text-muted-foreground ${
-                          index === 0 ? "pl-6 pr-4" : "px-4"
+                          index === 0 ? "justify-center px-2" : index === 1 ? "pl-6 pr-4" : "px-4"
                         }`}
                       >
-                        {label}
+                        {column.sortable ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 text-left transition hover:text-foreground"
+                            onClick={() =>
+                              setShipmentListSort((current) => ({
+                                key: column.key as "shipment" | "createdAt",
+                                direction:
+                                  current.key === column.key && current.direction === "asc" ? "desc" : "asc"
+                              }))
+                            }
+                          >
+                            <span>{column.label}</span>
+                            <ChevronDown
+                              className={`h-4 w-4 transition-transform ${
+                                shipmentListSort.key === column.key && shipmentListSort.direction === "asc" ? "rotate-180" : ""
+                              }`}
+                              strokeWidth={1.8}
+                            />
+                          </button>
+                        ) : (
+                          column.label
+                        )}
                       </div>
                     ))}
                   </div>
@@ -15395,10 +16221,11 @@ export default function Page() {
                     {paginatedShipmentListRows.length > 0 ? (
                       paginatedShipmentListRows.map((row, index) => {
                         const isActiveShipmentRow = selectedShipmentCode === row.code;
+                        const isSelectedShipmentRow = selectedShipmentRowKeys.includes(row.code);
                         return (
                         <div
                           key={`shipment-list-${row.code}`}
-                          className={`grid cursor-pointer transition-colors hover:bg-[#B6E1FF] ${isActiveShipmentRow ? "bg-[#B6E1FF]" : "bg-card"}`}
+                          className={`grid cursor-pointer transition-colors hover:bg-[#B6E1FF] ${isSelectedShipmentRow || isActiveShipmentRow ? "bg-[#B6E1FF]" : "bg-card"}`}
                           style={{ gridTemplateColumns: shipmentListTableColumns }}
                           role="button"
                           tabIndex={0}
@@ -15410,23 +16237,94 @@ export default function Page() {
                             }
                           }}
                         >
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden pl-6 pr-4 text-left text-sm font-semibold text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <span className="block truncate whitespace-nowrap">{formatShipmentCodeFromBooking(row.code)}</span>
+                          <div className={`flex min-h-[68px] items-center justify-center px-2 ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <label
+                              className="-m-2 flex h-8 w-8 cursor-pointer items-center justify-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelectedShipmentRow}
+                                className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                aria-label={`Chọn ${row.shipmentCode}`}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setSelectedShipmentRowKeys((current) =>
+                                    checked ? [...current, row.code] : current.filter((key) => key !== row.code)
+                                  );
+                                }}
+                              />
+                            </label>
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <span className="block truncate whitespace-nowrap">{row.customer}</span>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden pl-6 pr-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <div className="min-w-0 space-y-1">
+                              <button
+                                type="button"
+                                className="block truncate whitespace-nowrap text-left text-sm font-bold text-foreground"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openShipmentWorkspace(row.code);
+                                }}
+                              >
+                                {row.shipmentCode}
+                              </button>
+                              <div className="truncate whitespace-nowrap text-[12px] text-muted-foreground">{row.routeSummary}</div>
+                            </div>
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <RouteCell {...row.route} />
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <div className="min-w-0 space-y-1">
+                              <span className="block truncate whitespace-nowrap">{row.customer}</span>
+                              <div className="truncate whitespace-nowrap text-[12px] text-muted-foreground">{row.customerContact}</div>
+                            </div>
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <span className="block truncate whitespace-nowrap">{row.cargoType}</span>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.cargoDisplay}</span>
                           </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
-                            <span className="block truncate whitespace-nowrap">{row.packaging}</span>
-                          </div>
-                          <div className={`flex h-12 w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
                             <span className="block truncate whitespace-nowrap">{row.createdAt}</span>
+                          </div>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className="block truncate whitespace-nowrap">{row.assignedStaff}</span>
+                          </div>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${row.statusClassName}`}>
+                              {row.statusLabel}
+                            </span>
+                          </div>
+                          <div className={`flex min-h-[68px] w-full min-w-0 items-center justify-start overflow-hidden px-4 text-left text-sm text-foreground ${index === paginatedShipmentListRows.length - 1 ? "" : "border-b border-[#cbcbcb]"}`}>
+                            <div className="flex flex-nowrap items-center gap-1.5">
+                              {([
+                                { label: "Customs", tab: "customs" as const },
+                                { label: "Inland", tab: "inland" as const },
+                                { label: "Oversea", tab: "oversea" as const }
+                              ] as const).map((service) => {
+                                const isEnabled = row.services.includes(service.label);
+                                return (
+                                  <button
+                                    key={service.label}
+                                    type="button"
+                                    disabled={!isEnabled}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      if (isEnabled) {
+                                        openShipmentWorkspace(row.code, service.tab);
+                                      }
+                                    }}
+                                    className={`inline-flex h-7 items-center gap-1 rounded-full px-[14px] py-[2px] text-[13px] font-medium transition ${
+                                      isEnabled
+                                        ? "border-[0.5px] border-[#D7DBE8] bg-white text-foreground hover:bg-[#F8F9FB]"
+                                        : "cursor-not-allowed border-[0.5px] border-[#E1E4EA] bg-[#F7F8FA] text-[#A1A8B8]"
+                                    }`}
+                                  >
+                                    <span className="whitespace-nowrap">{service.label}</span>
+                                    <ChevronRight
+                                      className={`h-3 w-3 shrink-0 ${isEnabled ? "text-muted-foreground" : "text-[#A1A8B8]"}`}
+                                      strokeWidth={2}
+                                    />
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
                       )})
@@ -15444,7 +16342,7 @@ export default function Page() {
                       paginatedShipmentListRows.map((row) => (
                         <article
                           key={`shipment-mobile-${row.code}`}
-                          className={`rounded-2xl border border-border p-4 transition-colors hover:bg-[#B6E1FF] ${selectedShipmentCode === row.code ? "bg-[#B6E1FF]" : "bg-card"}`}
+                          className={`rounded-2xl border border-border p-4 transition-colors hover:bg-[#B6E1FF] ${selectedShipmentCode === row.code || selectedShipmentRowKeys.includes(row.code) ? "bg-[#B6E1FF]" : "bg-card"}`}
                           role="button"
                           tabIndex={0}
                           onClick={() => openShipmentWorkspace(row.code)}
@@ -15455,26 +16353,92 @@ export default function Page() {
                             }
                           }}
                         >
-                          <div className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-                            {formatShipmentCodeFromBooking(row.code)}
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              className="text-left text-sm font-bold text-foreground"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openShipmentWorkspace(row.code);
+                              }}
+                            >
+                              {row.shipmentCode}
+                            </button>
+                            <label
+                              className="-m-2 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedShipmentRowKeys.includes(row.code)}
+                                className="h-4 w-4 rounded border-border text-[#245698] focus:ring-[#245698]"
+                                aria-label={`Chọn ${row.shipmentCode}`}
+                                onChange={(event) => {
+                                  const checked = event.target.checked;
+                                  setSelectedShipmentRowKeys((current) =>
+                                    checked ? [...current, row.code] : current.filter((key) => key !== row.code)
+                                  );
+                                }}
+                              />
+                            </label>
                           </div>
-                          <div className="mt-1 text-sm font-semibold text-foreground">{row.customer}</div>
+                          <div className="mt-1 text-[12px] text-muted-foreground">{row.routeSummary}</div>
+                          <div className="mt-2 text-sm font-semibold text-foreground">{row.customer}</div>
+                          <div className="text-[12px] text-muted-foreground">{row.customerContact}</div>
                           <div className="mt-3 space-y-2 text-sm text-foreground">
-                            <div className="flex items-start gap-2">
-                              <span className="text-muted-foreground">Tuyến vận chuyển:</span>
-                              <span className="min-w-0"><RouteCell {...row.route} className="text-sm" /></span>
-                            </div>
                             <div>
                               <span className="text-muted-foreground">Loại hàng: </span>
-                              {row.cargoType}
-                            </div>
-                            <div>
-                              <span className="text-muted-foreground">Đóng gói: </span>
-                              {row.packaging}
+                              {row.cargoDisplay}
                             </div>
                             <div>
                               <span className="text-muted-foreground">Ngày tạo: </span>
                               {row.createdAt}
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Nhân viên phụ trách: </span>
+                              {row.assignedStaff}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground">Trạng thái: </span>
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${row.statusClassName}`}>
+                                {row.statusLabel}
+                              </span>
+                            </div>
+                            <div className="pt-1">
+                              <div className="mb-2 text-muted-foreground">Dịch vụ:</div>
+                              <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
+                                {([
+                                  { label: "Customs", tab: "customs" as const },
+                                  { label: "Inland", tab: "inland" as const },
+                                  { label: "Oversea", tab: "oversea" as const }
+                                ] as const).map((service) => {
+                                  const isEnabled = row.services.includes(service.label);
+                                  return (
+                                    <button
+                                      key={service.label}
+                                      type="button"
+                                      disabled={!isEnabled}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        if (isEnabled) {
+                                          openShipmentWorkspace(row.code, service.tab);
+                                        }
+                                      }}
+                                      className={`inline-flex h-7 shrink-0 items-center gap-1 rounded-full px-[14px] py-[2px] text-[13px] font-medium transition ${
+                                        isEnabled
+                                          ? "border-[0.5px] border-[#D7DBE8] bg-white text-foreground hover:bg-[#F8F9FB]"
+                                          : "cursor-not-allowed border-[0.5px] border-[#E1E4EA] bg-[#F7F8FA] text-[#A1A8B8]"
+                                      }`}
+                                    >
+                                      <span className="whitespace-nowrap">{service.label}</span>
+                                      <ChevronRight
+                                        className={`h-3 w-3 shrink-0 ${isEnabled ? "text-muted-foreground" : "text-[#A1A8B8]"}`}
+                                        strokeWidth={2}
+                                      />
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
                         </article>
@@ -15708,6 +16672,21 @@ export default function Page() {
                               value={shipmentDetailCommodity}
                               onChange={setShipmentDetailCommodity}
                               variant="inlineUnderline"
+                            />
+                          </div>
+                          <div className="px-4 pt-3">
+                            <InlineDropdownField
+                              label="Loại dịch vụ sử dụng"
+                              values={shipmentDetailServiceTypes}
+                              options={shipmentDetailServiceTypeOptions}
+                              chipDisplay
+                              onToggle={(value) =>
+                                setShipmentDetailServiceTypes((current) =>
+                                  current.includes(value)
+                                    ? current.filter((item) => item !== value)
+                                    : [...current, value]
+                                )
+                              }
                             />
                           </div>
                           <div className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
@@ -16194,25 +17173,27 @@ export default function Page() {
                     event.currentTarget.value = "";
                   }}
                 />
+                <input
+                  ref={customsPaymentRequestInvoiceUploadInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => {
+                    handleCustomsPaymentRequestInvoiceUpload(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
                 <div className="space-y-0">
-                  <div className="flex items-center justify-start gap-3 pb-2">
-                    <div className="inline-flex items-center bg-white p-1">
-                      {[
-                        { key: "import" as const, label: "Import" },
-                        { key: "export" as const, label: "Export" }
-                      ].map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          onClick={() => setCustomsTradeType(tab.key)}
-                          className={`inline-flex h-8 items-center rounded-[8px] px-4 text-[13px] font-medium transition ${
-                            customsTradeType === tab.key
-                              ? "bg-[#2054a3] text-white"
-                              : "text-foreground hover:bg-[#F5F7FA]"
-                          }`}
+                  <div className="flex justify-end pb-3">
+                    <div className="flex flex-wrap items-center gap-0 overflow-hidden rounded-[6px]">
+                      {customsWorkflowSteps.map((step, index) => (
+                        <div
+                          key={step}
+                          className={`relative px-3 py-1.5 text-[13px] font-medium leading-none ${
+                            index === 1 ? "bg-[#2054a3] text-white" : "bg-[#EAF1FB] text-[#245698]"
+                          } ${index === 0 ? "" : "ml-[8px]"} [clip-path:polygon(0_0,calc(100%-10px)_0,100%_50%,calc(100%-10px)_100%,0_100%,10px_50%)]`}
                         >
-                          {tab.label}
-                        </button>
+                          {step}
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -16369,6 +17350,15 @@ export default function Page() {
                             </div>
                           </div>
                         </div>
+                        <div className="pt-3">
+                          <button
+                            type="button"
+                            onClick={saveCustomsDraft}
+                            className="inline-flex h-9 items-center rounded-full bg-[#2054a3] px-4 text-[14px] font-medium text-white transition hover:bg-[#1b467d]"
+                          >
+                            Lưu
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -16418,7 +17408,7 @@ export default function Page() {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={openCustomsDebitNote}
+                                          onClick={openCustomsDebitNotesList}
                                           className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
                                         >
                                           <Eye className="h-3.5 w-3.5" strokeWidth={2} />
@@ -16432,7 +17422,7 @@ export default function Page() {
                                           onClick={() =>
                                             row.documentName === "Tờ khai hải quan"
                                                 ? openCustomsDeclaration()
-                                                : viewCustomsDocumentFiles(row.id)
+                                                : setIsCustomsPaymentRequestOpen(true)
                                           }
                                           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                                         >
@@ -16448,6 +17438,15 @@ export default function Page() {
                                           <span>Xem</span>
                                         </button>
                                       </>
+                                    ) : row.documentName.startsWith("Các chứng từ khách hàng cung cấp") ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => viewCustomsDocumentFiles(row.id)}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                                      >
+                                        <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                                        <span>Tải lên</span>
+                                      </button>
                                     ) : (
                                       <>
                                         <button
@@ -16549,6 +17548,15 @@ export default function Page() {
                   className="hidden"
                   onChange={(event) => {
                     handleInlandDocumentUpload(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                />
+                <input
+                  ref={inlandPaymentRequestInvoiceUploadInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(event) => {
+                    handleInlandPaymentRequestInvoiceUpload(event.target.files);
                     event.currentTarget.value = "";
                   }}
                 />
@@ -16812,7 +17820,7 @@ export default function Page() {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={openInlandDebitNote}
+                                          onClick={openInlandDebitNotesList}
                                           className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
                                         >
                                           <Eye className="h-3.5 w-3.5" strokeWidth={2} />
@@ -17571,19 +18579,24 @@ export default function Page() {
 
             <div className="px-5 py-5">
               <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                <div className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                  {["Tên debit note", "Thời gian", "Trạng thái"].map((label) => (
+                <div className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                  {["Tên", "Trạng thái", "Hạn thanh toán", "Hành động"].map((label) => (
                     <div key={label} className="px-4 py-2.5">
                       {label}
                     </div>
                   ))}
                 </div>
                 {customsDebitNoteListRows.map((row) => {
-                  const isApproved = row.status === "approved";
+                  const statusMeta =
+                    row.status === "draft"
+                      ? customsDocumentStatusMeta.draft
+                      : row.status === "approved"
+                        ? getDebitNoteDocumentStatusMeta("pending_payment")
+                        : customsDocumentStatusMeta.cancelled;
                   return (
                     <div
                       key={row.id}
-                      className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                      className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
                     >
                       <div className="flex min-h-[52px] items-center px-4 py-2">
                         <button
@@ -17594,41 +18607,118 @@ export default function Page() {
                           {row.title}
                         </button>
                       </div>
-                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.timestamp}</div>
                       <div className="flex min-h-[52px] items-center px-4 py-2">
                         <span
-                          className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[13px] font-medium ${
-                            isApproved
-                              ? "bg-[#EEF6E7] text-[#4E8A14]"
-                              : "bg-[#F5F5F4] text-[#6B7280]"
-                          }`}
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${statusMeta.className}`}
                         >
-                          <span className={`h-2.5 w-2.5 rounded-full ${isApproved ? "bg-[#4E8A14]" : "bg-[#9CA3AF]"}`} />
-                          {isApproved ? "Đã duyệt" : "Đã hủy"}
+                          {statusMeta.label}
                         </span>
+                      </div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.dueDate}</div>
+                      <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
+                        {row.status === "draft" ? (
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomsDebitNoteListRow(row.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                            <span>Xóa</span>
+                          </button>
+                        ) : (
+                          <span className="text-[13px] text-muted-foreground">-</span>
+                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
-              <div className="mt-4">
+      {isCustomsPaymentRequestListOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsPaymentRequestListOpen(false)}
+        >
+          <div
+            className="w-full max-w-[880px] overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Đề nghị thanh toán</div>
               <button
                 type="button"
-                onClick={createCustomsDebitNoteFromList}
-                disabled={!canCreateCustomsDebitNote}
-                className={`inline-flex h-10 w-full items-center justify-center rounded-full border-[0.5px] px-4 text-[15px] font-medium transition ${
-                  canCreateCustomsDebitNote
-                    ? "border-[#CBCBCB] bg-white text-foreground hover:bg-[#fafafa]"
-                    : "cursor-not-allowed border-[#E5E7EB] bg-[#F7F7F8] text-[#9CA3AF]"
-                }`}
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsPaymentRequestListOpen(false)}
               >
-                + Tạo debit note mới
+                <X className="h-4 w-4" strokeWidth={1.8} />
               </button>
-              <div className="mt-3 text-center text-[14px] font-medium text-muted-foreground">
-                Chỉ có thể tạo mới khi tất cả debit note đã bị hủy
-              </div>
             </div>
+
+            <div className="px-5 py-5">
+              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                  {["Tên", "Trạng thái", "Hạn thanh toán", "Hành động"].map((label) => (
+                    <div key={label} className="px-4 py-2.5">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+                {customsPaymentRequestListRows.map((row) => {
+                  const statusMeta = customsDocumentStatusMeta[row.status];
+                  return (
+                    <div
+                      key={row.id}
+                      className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                    >
+                      <div className="flex min-h-[52px] items-center px-4 py-2">{row.title}</div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2">
+                        {row.status === "paid" ? (
+                          <button
+                            type="button"
+                            onClick={() => openCustomsPaymentRequestFromList(row)}
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium transition hover:opacity-90 ${statusMeta.className}`}
+                          >
+                            {statusMeta.label}
+                          </button>
+                        ) : (
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${statusMeta.className}`}>
+                            {statusMeta.label}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.dueDate}</div>
+                      <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
+                        {row.status === "draft" ? (
+                          <button
+                            type="button"
+                            onClick={() => deleteCustomsPaymentRequestListRow(row.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                            <span>Xóa</span>
+                          </button>
+                        ) : row.status === "paid" ? (
+                          <button
+                            type="button"
+                            onClick={createDebitNoteFromCustomsPaymentRequestList}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
+                          >
+                            <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                            <span>Tạo debit note</span>
+                          </button>
+                        ) : (
+                          <span className="text-[13px] text-muted-foreground">-</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -17657,19 +18747,24 @@ export default function Page() {
 
             <div className="px-5 py-5">
               <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                <div className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                  {["Tên debit note", "Thời gian", "Trạng thái"].map((label) => (
+                <div className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                  {["Tên", "Trạng thái", "Hạn thanh toán", "Hành động"].map((label) => (
                     <div key={label} className="px-4 py-2.5">
                       {label}
                     </div>
                   ))}
                 </div>
                 {inlandDebitNoteListRows.map((row) => {
-                  const isApproved = row.status === "approved";
+                  const statusMeta =
+                    row.status === "draft"
+                      ? customsDocumentStatusMeta.draft
+                      : row.status === "approved"
+                        ? getDebitNoteDocumentStatusMeta("pending_payment")
+                        : customsDocumentStatusMeta.cancelled;
                   return (
                     <div
                       key={row.id}
-                      className="grid grid-cols-[1.7fr_1.2fr_1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                      className="grid grid-cols-[2fr_1fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
                     >
                       <div className="flex min-h-[52px] items-center px-4 py-2">
                         <button
@@ -17680,38 +18775,31 @@ export default function Page() {
                           {row.title}
                         </button>
                       </div>
-                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.timestamp}</div>
                       <div className="flex min-h-[52px] items-center px-4 py-2">
                         <span
-                          className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[13px] font-medium ${
-                            isApproved ? "bg-[#EEF6E7] text-[#4E8A14]" : "bg-[#F5F5F4] text-[#6B7280]"
-                          }`}
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-[13px] font-medium ${statusMeta.className}`}
                         >
-                          <span className={`h-2.5 w-2.5 rounded-full ${isApproved ? "bg-[#4E8A14]" : "bg-[#9CA3AF]"}`} />
-                          {isApproved ? "Đã duyệt" : "Đã hủy"}
+                          {statusMeta.label}
                         </span>
+                      </div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">{row.dueDate}</div>
+                      <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
+                        {row.status === "draft" ? (
+                          <button
+                            type="button"
+                            onClick={() => deleteInlandDebitNoteListRow(row.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                            <span>Xóa</span>
+                          </button>
+                        ) : (
+                          <span className="text-[13px] text-muted-foreground">-</span>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-              </div>
-
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={createInlandDebitNoteFromList}
-                  disabled={!canCreateInlandDebitNote}
-                  className={`inline-flex h-10 w-full items-center justify-center rounded-full border-[0.5px] px-4 text-[15px] font-medium transition ${
-                    canCreateInlandDebitNote
-                      ? "border-[#CBCBCB] bg-white text-foreground hover:bg-[#fafafa]"
-                      : "cursor-not-allowed border-[#E5E7EB] bg-[#F7F7F8] text-[#9CA3AF]"
-                  }`}
-                >
-                  + Tạo debit note mới
-                </button>
-                <div className="mt-3 text-center text-[14px] font-medium text-muted-foreground">
-                  Chỉ có thể tạo mới khi tất cả debit note đã bị hủy
-                </div>
               </div>
             </div>
           </div>
@@ -17724,78 +18812,158 @@ export default function Page() {
           onClick={() => setIsCustomsDocumentFilesModalOpen(false)}
         >
           <div
-            className="w-full max-w-[760px] overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            className={`flex w-full flex-col overflow-hidden rounded-[20px] shadow-[0_24px_62px_rgba(17,17,17,0.22)] ${
+              isViewingCustomsCustomerDocuments
+                ? "max-h-[82vh] max-w-[980px] bg-card"
+                : "max-w-[760px] bg-card"
+            }`}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
-              <div className="text-[18px] font-semibold text-foreground">
-                {activeCustomsDocumentFilesRow?.documentName || "Danh sách chứng từ"}
+            <div
+              className={`flex items-center justify-between border-b-[0.5px] px-5 py-4 ${
+                isViewingCustomsImportCustomerDocuments ? "border-border" : "border-border"
+              }`}
+            >
+              <div className={`text-[18px] font-semibold ${isViewingCustomsImportCustomerDocuments ? "text-foreground" : "text-foreground"}`}>
+                {isViewingCustomsCustomerDocuments
+                  ? activeCustomsDocumentFilesRow?.documentName || "Danh sách chứng từ"
+                  : activeCustomsDocumentFilesRow?.documentName || "Danh sách chứng từ"}
               </div>
               <button
                 type="button"
                 aria-label="Đóng modal"
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                className={`rounded-full p-2 transition-colors ${
+                  isViewingCustomsCustomerDocuments
+                    ? "text-muted-foreground hover:bg-[#F7F7F5] hover:text-foreground"
+                    : "text-muted-foreground hover:bg-[#F7F7F5] hover:text-foreground"
+                }`}
                 onClick={() => setIsCustomsDocumentFilesModalOpen(false)}
               >
                 <X className="h-4 w-4" strokeWidth={1.8} />
               </button>
             </div>
 
-            <div className="px-5 py-5">
-              <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
-                <div className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
-                  {["Tên file", "Thời gian tải lên", "Hành động"].map((label) => (
-                    <div key={label} className="px-4 py-2.5">
-                      {label}
+            <div
+              className={`px-5 py-5 ${isViewingCustomsCustomerDocuments ? "min-h-0 flex-1 overflow-y-auto bg-card" : "bg-card"}`}
+            >
+              {isViewingCustomsCustomerDocuments ? (
+                <div className="space-y-2.5">
+                  {visibleCustomsCustomerDocumentCards.map((card, cardIndex) => (
+                    <div
+                      key={card.id}
+                      className="overflow-hidden rounded-[14px] border border-border bg-white"
+                    >
+                      <div className="flex items-center justify-between gap-3 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-[18px] font-semibold text-foreground">{`${cardIndex + 1}. ${card.title}`}</div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-3">
+                          <button
+                            type="button"
+                            className="flex h-[38px] items-center px-0 text-[15px] font-medium text-[#4A90E2] transition hover:text-[#245698]"
+                          >
+                            + Thêm file đính kèm
+                          </button>
+                        </div>
+                      </div>
+
+                        <div className="border-t-[0.5px] border-border px-4 py-3">
+                          {card.files.map((file) => (
+                            <div
+                              key={file.id}
+                              className="grid min-h-[60px] grid-cols-[1.8fr_1.1fr_0.7fr] items-center border-b border-border text-[14px] text-foreground"
+                            >
+                              <div className="flex items-center gap-3 py-2.5">
+                                <div className="inline-flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-[10px] bg-[#EEF3FF] text-[#245698]">
+                                  <FileText className="h-4 w-4" strokeWidth={1.8} />
+                                </div>
+                                <div>
+                                  <div className="text-[15px] font-semibold">{file.name}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-[14px] text-foreground">
+                                <Clock3 className="h-4 w-4 text-muted-foreground" strokeWidth={1.8} />
+                                <span>{file.uploadedAt}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  aria-label={`Xóa ${file.name}`}
+                                  onClick={() => deleteCustomsGeneratedDocumentFile(file.id)}
+                                  className="inline-flex h-[36px] w-[36px] items-center justify-center rounded-[10px] border border-[#E5E7EB] bg-white text-[#6B7280] transition hover:border-[#F3D0D0] hover:bg-[#FFF7F7] hover:text-[#C53B3B]"
+                                >
+                                  <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                    </div>
+                  ))}
+                  <div className="hidden">
+                    {customsImportCustomerDocumentRequirements.map((item) => (
+                      <div key={item.id}>{item.title}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-[10px] border border-[#E7E6E9] bg-white">
+                  <div className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] bg-[#F8F9FB] text-[15px] font-medium uppercase text-muted-foreground">
+                    {["Tên file", "Thời gian tải lên", "Hành động"].map((label) => (
+                      <div key={label} className="px-4 py-2.5">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  {visibleCustomsGeneratedDocumentFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
+                    >
+                      <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
+                        <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#EEF3FF] text-[#245698]">
+                          <FileText className="h-4 w-4" strokeWidth={1.8} />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setToast({
+                              kind: "success",
+                              message: `Đang mở ${file.name}.`
+                            })
+                          }
+                          className="truncate text-left font-medium text-[#245698] transition hover:text-[#1b467d] hover:underline"
+                        >
+                          {file.name}
+                        </button>
+                      </div>
+                      <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">
+                        {file.uploadedAt}
+                      </div>
+                      <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => replaceCustomsDocumentFile(file.id)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                        >
+                          <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+                          <span>Thay đổi file</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Xóa ${file.name}`}
+                          onClick={() => deleteCustomsGeneratedDocumentFile(file.id)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border-[0.5px] border-[#E5E7EB] bg-white text-[#6B7280] transition hover:border-[#F3D0D0] hover:bg-[#FFF7F7] hover:text-[#C53B3B]"
+                        >
+                          <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-                {visibleCustomsGeneratedDocumentFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="grid grid-cols-[1.8fr_1fr_1.1fr] border-b border-[#E7E6E9] text-[15px] text-foreground last:border-b-0"
-                  >
-                    <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
-                      <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#EEF3FF] text-[#245698]">
-                        <FileText className="h-4 w-4" strokeWidth={1.8} />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setToast({
-                            kind: "success",
-                            message: `Đang mở ${file.name}.`
-                          })
-                        }
-                        className="truncate text-left font-medium text-[#245698] transition hover:text-[#1b467d] hover:underline"
-                      >
-                        {file.name}
-                      </button>
-                    </div>
-                    <div className="flex min-h-[52px] items-center px-4 py-2 text-[#4B5563]">
-                      {file.uploadedAt}
-                    </div>
-                    <div className="flex min-h-[52px] items-center gap-2 px-4 py-2">
-                      <button
-                        type="button"
-                        onClick={() => replaceCustomsDocumentFile(file.id)}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
-                      >
-                        <Upload className="h-3.5 w-3.5" strokeWidth={2} />
-                        <span>Thay đổi file</span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Xóa ${file.name}`}
-                        onClick={() => deleteCustomsGeneratedDocumentFile(file.id)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border-[0.5px] border-[#E5E7EB] bg-white text-[#6B7280] transition hover:border-[#F3D0D0] hover:bg-[#FFF7F7] hover:text-[#C53B3B]"
-                      >
-                        <Trash2 className="h-4 w-4" strokeWidth={1.8} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -18601,6 +19769,7 @@ export default function Page() {
 
                 <div className="border-b border-[#1F2937] px-5 py-4 text-center">
                   <div className="text-[20px] font-bold uppercase text-foreground">Debit Note</div>
+                  <div className="mt-1 text-[14px] italic text-foreground">Phí dịch vụ</div>
                 </div>
 
                 <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
@@ -19144,6 +20313,7 @@ export default function Page() {
 
                 <div className="border-b border-[#1F2937] px-5 py-4 text-center">
                   <div className="text-[20px] font-bold uppercase text-foreground">Debit Note</div>
+                  <div className="mt-1 text-[14px] italic text-foreground">Phí dịch vụ</div>
                 </div>
 
                 <div className="grid grid-cols-[160px_1fr] border-b border-[#1F2937] text-[15px] text-foreground">
@@ -19447,6 +20617,7 @@ export default function Page() {
 
                 <div className="border-b border-[#1F2937] px-5 py-4 text-center">
                   <div className="text-[19px] font-bold uppercase text-foreground">Phiếu đề nghị thanh toán</div>
+                  <div className="mt-1 text-[14px] italic text-foreground">Phí trả hộ</div>
                   <div className="mt-1 px-6">
                     <input
                       value={customsPaymentRequestDateText}
@@ -19601,9 +20772,9 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={moveCustomsPaymentRequestBackToDraft}
-                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#F2C9C9] bg-white px-3 text-[13px] font-medium text-[#C53B3B] transition hover:bg-[#FFF7F7]"
                     >
-                      Đưa về nháp
+                      Từ chối
                     </button>
                     <button
                       type="button"
@@ -19615,16 +20786,34 @@ export default function Page() {
                   </>
                 ) : null}
                 {activeCustomsPaymentRequestStatus === "pending_payment" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomsPaymentRequestInvoiceModalOpen(true)}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-3 text-[13px] font-semibold text-white transition hover:bg-[#1b467d]"
+                    >
+                      Đã thanh toán
+                    </button>
+                  </>
+                ) : null}
+                {activeCustomsPaymentRequestStatus === "paid" ? (
                   <button
                     type="button"
-                    onClick={markCustomsPaymentRequestPaid}
+                    onClick={openCustomsDebitNote}
                     className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                   >
-                    Đã thanh toán
+                    <Plus className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />
+                    Tạo Debit Note
                   </button>
                 ) : null}
               </div>
             </div>
+            {activeCustomsPaymentRequestStatus === "paid" && customsPaymentRequestInvoiceNameByType[customsTradeType] ? (
+              <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-[#E7E6E9] bg-white px-3 py-2">
+                <FileText className="h-4 w-4 text-[#245698]" strokeWidth={1.8} />
+                <span className="text-[14px] font-medium text-foreground">{customsPaymentRequestInvoiceNameByType[customsTradeType]}</span>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -19709,6 +20898,7 @@ export default function Page() {
 
                 <div className="border-b border-[#1F2937] px-5 py-4 text-center">
                   <div className="text-[19px] font-bold uppercase text-foreground">Phiếu đề nghị thanh toán</div>
+                  <div className="mt-1 text-[14px] italic text-foreground">Phí trả hộ</div>
                   <div className="mt-1 px-6">
                     <input
                       value={inlandPaymentRequestDateText}
@@ -19861,9 +21051,9 @@ export default function Page() {
                     <button
                       type="button"
                       onClick={moveInlandPaymentRequestBackToDraft}
-                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#CBCBCB] bg-white px-3 text-[13px] font-medium text-foreground transition hover:bg-[#fafafa]"
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#F2C9C9] bg-white px-3 text-[13px] font-medium text-[#C53B3B] transition hover:bg-[#FFF7F7]"
                     >
-                      Đưa về nháp
+                      Từ chối
                     </button>
                     <button
                       type="button"
@@ -19875,15 +21065,107 @@ export default function Page() {
                   </>
                 ) : null}
                 {activeInlandPaymentRequestStatus === "pending_payment" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setIsInlandPaymentRequestInvoiceModalOpen(true)}
+                      className="inline-flex h-8 items-center rounded-full border-[0.5px] border-[#2054a3] bg-[#2054a3] px-3 text-[13px] font-semibold text-white transition hover:bg-[#1b467d]"
+                    >
+                      Đã thanh toán
+                    </button>
+                  </>
+                ) : null}
+                {activeInlandPaymentRequestStatus === "paid" ? (
                   <button
                     type="button"
-                    onClick={markInlandPaymentRequestPaid}
+                    onClick={openInlandDebitNote}
                     className="inline-flex h-8 items-center rounded-full bg-[#2054a3] px-3 text-[13px] font-medium text-white transition hover:bg-[#1b467d]"
                   >
-                    Đã thanh toán
+                    <Plus className="mr-1.5 h-3.5 w-3.5" strokeWidth={2} />
+                    Tạo Debit Note
                   </button>
                 ) : null}
               </div>
+            </div>
+            {activeInlandPaymentRequestStatus === "paid" && inlandPaymentRequestInvoiceNameByType[inlandTradeType] ? (
+              <div className="mt-3 flex items-center gap-2 rounded-[10px] border border-[#E7E6E9] bg-white px-3 py-2">
+                <FileText className="h-4 w-4 text-[#245698]" strokeWidth={1.8} />
+                <span className="text-[14px] font-medium text-foreground">{inlandPaymentRequestInvoiceNameByType[inlandTradeType]}</span>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {isCustomsPaymentRequestInvoiceModalOpen ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsCustomsPaymentRequestInvoiceModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[520px] overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Upload Invoice</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsCustomsPaymentRequestInvoiceModalOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <p className="text-[14px] leading-6 text-foreground">
+                Invoice là bắt buộc để Đề nghị thanh toán được chuyển sang trạng thái <span className="font-semibold">Đã thanh toán</span>.
+              </p>
+              <button
+                type="button"
+                onClick={completeCustomsPaymentRequestInvoiceUpload}
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-[#2054a3] px-4 text-[14px] font-medium text-white transition hover:bg-[#1b467d]"
+              >
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                <span>Upload Invoice</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isInlandPaymentRequestInvoiceModalOpen ? (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(17,17,17,0.42)] px-4"
+          onClick={() => setIsInlandPaymentRequestInvoiceModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-[520px] overflow-hidden rounded-[20px] bg-card shadow-[0_24px_62px_rgba(17,17,17,0.22)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b-[0.5px] border-border px-5 py-4">
+              <div className="text-[18px] font-semibold text-foreground">Upload Invoice</div>
+              <button
+                type="button"
+                aria-label="Đóng modal"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-[#F7F7F5] hover:text-foreground"
+                onClick={() => setIsInlandPaymentRequestInvoiceModalOpen(false)}
+              >
+                <X className="h-4 w-4" strokeWidth={1.8} />
+              </button>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <p className="text-[14px] leading-6 text-foreground">
+                Invoice là bắt buộc để Đề nghị thanh toán được chuyển sang trạng thái <span className="font-semibold">Đã thanh toán</span>.
+              </p>
+              <button
+                type="button"
+                onClick={completeInlandPaymentRequestInvoiceUpload}
+                className="inline-flex h-9 items-center gap-2 rounded-full bg-[#2054a3] px-4 text-[14px] font-medium text-white transition hover:bg-[#1b467d]"
+              >
+                <Upload className="h-4 w-4" strokeWidth={2} />
+                <span>Upload Invoice</span>
+              </button>
             </div>
           </div>
         </div>
